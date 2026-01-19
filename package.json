@@ -35,7 +35,7 @@
     "release:minor": "release-it minor",
     "release:major": "release-it major",
     "release:patch": "release-it patch",
-    "release:beta": "release-it --preRelease=beta",
+    "release:beta": "release-it --preRelease=beta --ci",
     "release:alpha": "release-it --preRelease=alpha",
     "prepare": "husky install",
     "postinstall": "bun run prepare"
