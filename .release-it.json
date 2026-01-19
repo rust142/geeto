@@ -6,8 +6,7 @@
   },
   "github": {
     "release": true,
-    "releaseName": "v${version}",
-    "releaseNotes": "auto-generate"
+    "releaseName": "v${version}"
   },
   "npm": {
     "publish": false,
