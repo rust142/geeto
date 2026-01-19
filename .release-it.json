@@ -10,7 +10,7 @@
     "releaseNotes": "auto-generate"
   },
   "npm": {
-    "publish": true,
+    "publish": false,
     "skipChecks": false
   },
   "plugins": {
