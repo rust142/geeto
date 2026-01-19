@@ -1,6 +1,6 @@
 {
   "name": "@geeto/core",
-  "version": "1.0.0",
+  "version": "1.1.0-beta.0",
   "description": "Git flow automation CLI tool with AI-powered branch naming using Gemini API",
   "author": "Your Name",
   "license": "MIT",
@@ -35,7 +35,7 @@
     "release:minor": "release-it minor",
     "release:major": "release-it major",
     "release:patch": "release-it patch",
-    "release:beta": "release-it --preRelease=beta",
+    "release:beta": "release-it --preRelease=beta --ci",
     "release:alpha": "release-it --preRelease=alpha",
     "prepare": "husky install",
     "postinstall": "bun run prepare"
@@ -64,6 +64,7 @@
     "eslint-plugin-promise": "^6.1.1",
     "eslint-plugin-security": "^2.1.1",
     "eslint-plugin-unicorn": "^51.0.1",
+    "@release-it/conventional-changelog": "^8.0.0",
     "husky": "^9.0.0",
     "markdownlint-cli": "^0.47.0",
     "prettier": "^3.2.5",
