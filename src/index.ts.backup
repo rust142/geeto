@@ -1,0 +1,1524 @@
+#!/usr/bin/env node
+/**
+ * Geeto - Git flow automation CLI tool with AI-powered branch naming
+ * Uses modular extracted components from utils, api, cli, core, types
+ */
+
+import { log, getCurrentBranch, getChangedFiles, getStagedFiles, exec, execSilent, saveState, loadState, clearState, handleBranchNaming, getRecommendedSeparator, validateBranchName, branchExists, remoteBranchExists, generateBranchSuggestions } from './utils'
+import { select, askQuestion, confirm, ProgressBar } from './cli'
+import { STEP, TASK_PLATFORMS } from './core/constants'
+import { getBranchStrategyConfig, saveBranchStrategyConfig, hasTrelloConfig } from './utils/config'
+import { fetchTrelloLists, fetchTrelloCards, generateBranchNameFromTrelloTitle } from './api/trello'
+import { generateBranchNameFromTitle } from './api/gemini'
+import { generateBranchNameFromTitle as generateBranchNameFromTitleCopilot, generateCommitMessage as generateCommitMessageCopilot } from './api/copilot'
+import { generateBranchNameFromTitle as generateBranchNameFromTitleOpenRouter, generateCommitMessage as generateCommitMessageOpenRouter } from './api/openrouter'
+import type { FreeModel as OpenRouterFreeModel } from './types'
+import type { GeetoState } from './types'
+
+const getBranchPrefix = (currentBranch: string): string => {
+  const branchMappings: Record<string, string> = {
+    development: 'dev',
+    develop: 'dev',
+    dev: 'dev',
+    main: 'release',
+    master: 'release',
+    staging: 'stage',
+    production: 'hotfix',
+    prod: 'hotfix',
+  }
+  return branchMappings[currentBranch.toLowerCase()] || 'dev'
+}
+
+const getStepName = (step: number): string => {
+  switch (step) {
+    case STEP.STAGED:
+      return 'Staging completed'
+    case STEP.BRANCH_CREATED:
+      return 'Branch created'
+    case STEP.COMMITTED:
+      return 'Commit completed'
+    case STEP.PUSHED:
+      return 'Push completed'
+    case STEP.MERGED:
+      return 'Merge completed'
+    case STEP.CLEANUP:
+      return 'Cleanup'
+    default:
+      return 'Unknown'
+  }
+}
+
+const showSettingsMenu = async () => {
+  while (true) {
+    log.info('\nSettings Menu\n')
+
+    const settingChoice = await select('Choose a setting to configure:', [
+      { label: 'Branch separator (hyphen/underscore)', value: 'separator' },
+      { label: 'Trello integration setup', value: 'trello' },
+      { label: 'OpenRouter AI setup', value: 'openrouter' },
+      { label: 'Back to main menu', value: 'back' },
+    ])
+
+    if (settingChoice === 'back') {
+      break
+    }
+
+    if (settingChoice === 'separator') {
+      const separatorChoice = await select('Choose branch name separator:', [
+        { label: 'Hyphen (kebab-case): my-branch-name', value: 'hyphen' },
+        { label: 'Underscore (snake_case): my_branch_name', value: 'underscore' },
+        { label: 'Back to settings menu', value: 'back' },
+      ])
+
+      if (separatorChoice === 'back') {
+        continue
+      }
+
+      const separator = separatorChoice === 'hyphen' ? '-' : '_'
+      const config = getBranchStrategyConfig()
+      if (config) {
+        config.separator = separator
+        saveBranchStrategyConfig(config)
+        log.success(`Branch separator set to: ${separator === '-' ? 'hyphen (-)' : 'underscore (_)'}`)
+      } else {
+        // Create new config if doesn't exist
+        saveBranchStrategyConfig({
+          separator: separator
+        })
+        log.success(`Branch separator set to: ${separator === '-' ? 'hyphen (-)' : 'underscore (_)'}`)
+      }
+    }
+
+    if (settingChoice === 'trello') {
+      const hasConfig = hasTrelloConfig()
+
+      if (!hasConfig) {
+        log.info('No Trello configuration found. Setting up Trello integration...')
+        // Import and run trello setup
+        const { setupTrelloConfigInteractive } = await import('./core/trello-setup')
+        await setupTrelloConfigInteractive()
+        log.success('Trello integration configured!')
+      } else {
+        const action = await select('Trello integration is already configured. What would you like to do?', [
+          { label: 'Reconfigure (replace existing config)', value: 'reconfigure' },
+          { label: 'Remove configuration', value: 'remove' },
+          { label: 'Back to settings menu', value: 'back' },
+        ])
+
+        if (action === 'reconfigure') {
+          log.info('Reconfiguring Trello integration...')
+          // Clear existing config first
+          const fs = require('fs')
+          const path = require('path')
+          const configDir = path.join(process.cwd(), '.geeto')
+          const trelloConfigPath = path.join(configDir, 'trello.toml')
+
+          if (fs.existsSync(trelloConfigPath)) {
+            fs.unlinkSync(trelloConfigPath)
+            log.info('Cleared existing Trello configuration')
+          }
+
+          // Setup new config
+          const { setupTrelloConfigInteractive } = await import('./core/trello-setup')
+          await setupTrelloConfigInteractive()
+          log.success('Trello integration reconfigured!')
+        } else if (action === 'remove') {
+          const confirmRemove = await confirm('Are you sure you want to remove Trello configuration?')
+          if (confirmRemove) {
+            const fs = require('fs')
+            const path = require('path')
+            const configDir = path.join(process.cwd(), '.geeto')
+            const trelloConfigPath = path.join(configDir, 'trello.toml')
+
+            if (fs.existsSync(trelloConfigPath)) {
+              fs.unlinkSync(trelloConfigPath)
+              log.success('Trello configuration removed!')
+            } else {
+              log.info('No Trello configuration found to remove')
+            }
+          }
+        }
+        // If 'back', just continue to next iteration
+      }
+    }
+
+    if (settingChoice === 'openrouter') {
+      const { hasOpenRouterConfig } = await import('./utils/config.js')
+
+      const hasConfig = hasOpenRouterConfig()
+
+      if (!hasConfig) {
+        log.info('No OpenRouter configuration found. Setting up OpenRouter integration...')
+        // Import and run openrouter setup
+        const { setupOpenRouterConfigInteractive } = await import('./core/openrouter-setup')
+        await setupOpenRouterConfigInteractive()
+        log.success('OpenRouter integration configured!')
+      } else {
+        const action = await select('OpenRouter integration is already configured. What would you like to do?', [
+          { label: 'Reconfigure (replace existing config)', value: 'reconfigure' },
+          { label: 'Remove configuration', value: 'remove' },
+          { label: 'Back to settings menu', value: 'back' },
+        ])
+
+        if (action === 'reconfigure') {
+          log.info('Reconfiguring OpenRouter integration...')
+          // Clear existing config first
+          const fs = require('fs')
+          const path = require('path')
+          const configDir = path.join(process.cwd(), '.geeto')
+          const openrouterConfigPath = path.join(configDir, 'openrouter.toml')
+
+          if (fs.existsSync(openrouterConfigPath)) {
+            fs.unlinkSync(openrouterConfigPath)
+            log.info('Cleared existing OpenRouter configuration')
+          }
+
+          // Setup new config
+          const { setupOpenRouterConfigInteractive } = await import('./core/openrouter-setup')
+          await setupOpenRouterConfigInteractive()
+          log.success('OpenRouter integration reconfigured!')
+        } else if (action === 'remove') {
+          const confirmRemove = await confirm('Are you sure you want to remove OpenRouter configuration?')
+          if (confirmRemove) {
+            const fs = require('fs')
+            const path = require('path')
+            const configDir = path.join(process.cwd(), '.geeto')
+            const openrouterConfigPath = path.join(configDir, 'openrouter.toml')
+
+            if (fs.existsSync(openrouterConfigPath)) {
+              fs.unlinkSync(openrouterConfigPath)
+              log.success('OpenRouter configuration removed!')
+            } else {
+              log.info('No OpenRouter configuration found to remove')
+            }
+          }
+        }
+        // If 'back', just continue to next iteration
+      }
+    }
+
+    // Ask if user wants to continue with settings
+    const continueSettings = await confirm('Configure another setting?')
+    if (!continueSettings) {
+      break
+    }
+  }
+}
+
+const getCommitTypes = () => [
+  { label: 'feat     - New feature', value: 'feat' },
+  { label: 'fix      - Bug fix', value: 'fix' },
+  { label: 'docs     - Documentation', value: 'docs' },
+  { label: 'style    - Code style', value: 'style' },
+  { label: 'refactor - Code refactor', value: 'refactor' },
+  { label: 'test     - Testing', value: 'test' },
+  { label: 'chore    - Maintenance', value: 'chore' },
+  { label: 'perf     - Performance', value: 'perf' },
+  { label: 'ci       - CI/CD', value: 'ci' },
+  { label: 'build    - Build', value: 'build' },
+  { label: 'revert   - Revert', value: 'revert' },
+]
+
+/**
+ * Get default commit tool based on AI provider
+ */
+const getDefaultCommitTool = (aiProvider: 'gemini' | 'copilot' | 'openrouter'): string => {
+  switch (aiProvider) {
+    case 'gemini':
+      return 'geminicommit'
+    case 'copilot':
+      return 'copilot'
+    case 'openrouter':
+      return 'openrouter'
+    default:
+      return 'manual'
+  }
+}
+
+const main = async () => {
+  try {
+    log.banner()
+
+    // Settings menu
+    const initialChoice = await select('Welcome to Geeto! What would you like to do?', [
+      { label: 'Start new workflow', value: 'start' },
+      { label: 'Settings', value: 'settings' },
+      { label: 'Exit', value: 'exit' },
+    ])
+
+    if (initialChoice === 'exit') {
+      log.info('Goodbye!')
+      process.exit(0)
+    }
+
+    if (initialChoice === 'settings') {
+      await showSettingsMenu()
+      // After settings, go back to main menu
+      return main()
+    }
+
+    // Check git repo first
+    try {
+      execSilent('git rev-parse --is-inside-work-tree')
+    } catch {
+      log.error('Not a git repository!')
+      process.exit(1)
+    }
+
+    // Load saved state early
+    let savedState = loadState()
+    let aiProvider: 'gemini' | 'copilot' | 'openrouter'
+    let copilotModel: 'claude-haiku-4.5' | 'gpt-5' | undefined
+    let openrouterModel: OpenRouterFreeModel | undefined
+    let shouldResume = false
+
+    if (savedState) {
+      log.warn(`Found saved checkpoint from: ${savedState.timestamp}`)
+      log.info(`Last step: ${getStepName(savedState.step)}`)
+      log.info(`Working branch: ${savedState.workingBranch}`)
+
+      const resumeChoice = await select('What would you like to do?', [
+        { label: 'Resume from checkpoint', value: 'resume' },
+        { label: 'Start fresh (discard checkpoint)', value: 'fresh' },
+        { label: 'Cancel', value: 'cancel' },
+      ])
+
+      if (resumeChoice === 'resume') {
+        shouldResume = true
+        // Use saved AI provider and model
+        aiProvider = savedState.aiProvider || 'gemini'
+        copilotModel = savedState.copilotModel
+        log.info(`AI Provider set to: ${aiProvider === 'gemini' ? 'Gemini AI' : aiProvider === 'copilot' ? 'GitHub Copilot' : 'OpenRouter'}`)
+        if (copilotModel) {
+          log.info(`Copilot Model set to: ${copilotModel}`)
+        }
+
+        // Verify AI provider setup is still valid
+        const { ensureAIProvider } = await import('./core/setup.js')
+        const aiReady = await ensureAIProvider(aiProvider)
+        if (!aiReady) {
+          log.warn(`${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup is no longer valid.`)
+          const fixSetup = confirm(`Fix ${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup now?`)
+          if (fixSetup) {
+            const setupSuccess = await ensureAIProvider(aiProvider)
+            if (!setupSuccess) {
+              log.warn(`Could not fix ${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup. Switching to manual mode.`)
+              aiProvider = 'gemini' // Keep gemini but will use manual fallback
+            }
+          } else {
+            log.warn(`${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup invalid. Will use manual mode for AI features.`)
+          }
+        }
+      } else if (resumeChoice === 'fresh') {
+        clearState()
+        log.info('Starting fresh...')
+
+        // Choose AI Provider with model selection loop
+        while (true) {
+          aiProvider = await select('Choose AI Provider for branch naming and commit messages:', [
+            { label: 'Gemini AI (Free - Rate Limited)', value: 'gemini' },
+            { label: 'GitHub Copilot (Requires Subscription)', value: 'copilot' },
+            { label: 'OpenRouter (Requires Credits)', value: 'openrouter' },
+          ]) as 'gemini' | 'copilot' | 'openrouter'
+
+          log.info(`Selected AI Provider: ${aiProvider === 'gemini' ? 'Gemini AI' : aiProvider === 'copilot' ? 'GitHub Copilot' : 'OpenRouter'}`)
+
+          // Choose Copilot Model if Copilot is selected
+          if (aiProvider === 'copilot') {
+            // Setup GitHub Copilot CLI first
+            const { ensureAIProvider } = await import('./core/setup.js')
+            const copilotReady = await ensureAIProvider('copilot')
+            if (!copilotReady) {
+              log.warn('GitHub Copilot is not set up.')
+              const setupChoice = await select('What would you like to do?', [
+                { label: 'Setup GitHub Copilot now', value: 'setup' },
+                { label: 'Use manual mode only', value: 'manual' },
+                { label: 'Back to AI provider selection', value: 'back' },
+              ])
+
+              if (setupChoice === 'back') {
+                continue // Go back to AI provider selection
+              }
+
+              if (setupChoice === 'setup') {
+                // Try to setup again (this will show installation/auth prompts)
+                const setupSuccess = await ensureAIProvider('copilot')
+                if (!setupSuccess) {
+                  log.warn('GitHub Copilot setup failed.')
+                  const useManual = confirm('Continue with manual mode?')
+                  if (!useManual) {
+                    continue // Go back to AI provider selection
+                  }
+                  // Force manual mode
+                  aiProvider = 'gemini' // Use gemini as fallback for manual operations
+                  copilotModel = undefined
+                  break // Exit the loop with manual mode
+                }
+                // If setup successful, continue with Copilot model selection
+              } else {
+                // Chose manual mode
+                aiProvider = 'gemini' // Use gemini as fallback for manual operations
+                copilotModel = undefined
+                break // Exit the loop with manual mode
+              }
+            }
+
+            const modelChoice = await select('Choose Copilot Model (cost-effective options):', [
+              { label: 'Claude Haiku 4.5 (Fastest & Cheapest - ~$0.10 input, ~$0.30 output)', value: 'claude-haiku-4.5' },
+              { label: 'GPT-5 (Balanced & Cost-Effective - ~$0.20 input, ~$0.60 output)', value: 'gpt-5' },
+              { label: 'Back to AI Provider selection', value: 'back' },
+            ]) as 'claude-haiku-4.5' | 'gpt-5' | 'back'
+
+            if (modelChoice === 'back') {
+              continue // Go back to AI provider selection
+            }
+
+            copilotModel = modelChoice
+            log.info(`Selected Copilot Model: ${copilotModel}`)
+          }
+
+          // Choose OpenRouter Model if OpenRouter is selected
+          if (aiProvider === 'openrouter') {
+            // Setup OpenRouter first
+            const { ensureAIProvider } = await import('./core/setup.js')
+            const openrouterReady = await ensureAIProvider('openrouter')
+            if (!openrouterReady) {
+              log.warn('OpenRouter is not set up.')
+              const setupChoice = await select('What would you like to do?', [
+                { label: 'Setup OpenRouter now', value: 'setup' },
+                { label: 'Use manual mode only', value: 'manual' },
+                { label: 'Back to AI provider selection', value: 'back' },
+              ])
+
+              if (setupChoice === 'back') {
+                continue // Go back to AI provider selection
+              }
+
+              if (setupChoice === 'setup') {
+                // Try to setup again
+                const setupSuccess = await ensureAIProvider('openrouter')
+                if (!setupSuccess) {
+                  log.warn('OpenRouter setup failed.')
+                  const useManual = confirm('Continue with manual mode?')
+                  if (!useManual) {
+                    continue // Go back to AI provider selection
+                  }
+                  // Force manual mode
+                  aiProvider = 'gemini' // Use gemini as fallback for manual operations
+                  openrouterModel = undefined
+                  break // Exit the loop with manual mode
+                }
+                // If setup successful, continue with OpenRouter model selection
+              } else {
+                // Chose manual mode
+                aiProvider = 'gemini' // Use gemini as fallback for manual operations
+                openrouterModel = undefined
+                break // Exit the loop with manual mode
+              }
+            }
+
+            const modelChoice = await select('Choose OpenRouter Model (cheapest options):', [
+              { label: 'Olmo 3.1 32B (AllenAI - Cheapest: $0.20 input, $0.60 output)', value: 'allenai/olmo-3.1-32b-instruct' },
+              { label: 'MiniMax M2.1 (MiniMax - $0.27 input, $1.12 output)', value: 'minimax/minimax-m2.1' },
+              { label: 'Llama 3.2 3B (Meta - $0.15 input, $0.15 output)', value: 'meta-llama/llama-3.2-3b-instruct:free' },
+              { label: 'Llama 3.1 8B (Meta - $0.22 input, $0.22 output)', value: 'meta-llama/llama-3.1-8b-instruct:free' },
+              { label: 'Back to AI Provider selection', value: 'back' },
+            ]) as OpenRouterFreeModel | 'back'
+
+            if (modelChoice === 'back') {
+              continue // Go back to AI provider selection
+            }
+
+            openrouterModel = modelChoice
+            log.info(`Selected OpenRouter Model: ${openrouterModel}`)
+          }
+
+          // If we get here, user has made their choice
+          break
+        }
+      } else {
+        process.exit(0)
+      }
+    } else {
+      // No saved state, choose AI provider fresh
+      while (true) {
+        aiProvider = await select('Choose AI Provider for branch naming and commit messages:', [
+          { label: 'Gemini AI (Free - Rate Limited)', value: 'gemini' },
+            { label: 'GitHub Copilot (Requires Subscription)', value: 'copilot' },
+            { label: 'OpenRouter (Requires Credits)', value: 'openrouter' },
+        ]) as 'gemini' | 'copilot' | 'openrouter'
+
+        log.info(`Selected AI Provider: ${aiProvider === 'gemini' ? 'Gemini AI' : aiProvider === 'copilot' ? 'GitHub Copilot' : 'OpenRouter'}`)
+
+        // Setup the selected AI provider
+        if (aiProvider === 'gemini') {
+          const { ensureAIProvider } = await import('./core/setup.js')
+          const geminiReady = await ensureAIProvider('gemini')
+          if (!geminiReady) {
+            log.warn('Gemini setup incomplete. You can continue, but AI features may not work.')
+            const continueAnyway = confirm('Continue anyway?')
+            if (!continueAnyway) {
+              continue // Go back to AI provider selection
+            }
+          }
+        }
+
+        // Choose Copilot Model if Copilot is selected
+        if (aiProvider === 'copilot') {
+           // Setup GitHub Copilot CLI first
+          const { ensureAIProvider } = await import('./core/setup.js')
+          const copilotReady = await ensureAIProvider('copilot')
+          if (!copilotReady) {
+            log.warn('GitHub Copilot is not set up.')
+            const setupChoice = await select('What would you like to do?', [
+              { label: 'Setup GitHub Copilot now', value: 'setup' },
+              { label: 'Use manual mode only', value: 'manual' },
+              { label: 'Back to AI provider selection', value: 'back' },
+            ])
+
+            if (setupChoice === 'back') {
+              continue // Go back to AI provider selection
+            }
+
+            if (setupChoice === 'setup') {
+              // Try to setup again (this will show installation/auth prompts)
+              const setupSuccess = await ensureAIProvider('copilot')
+              if (!setupSuccess) {
+                log.warn('GitHub Copilot setup failed.')
+                const useManual = confirm('Continue with manual mode?')
+                if (!useManual) {
+                  continue // Go back to AI provider selection
+                }
+                // Force manual mode
+                aiProvider = 'gemini' // Use gemini as fallback for manual operations
+                copilotModel = undefined
+                break // Exit the loop with manual mode
+              }
+              // If setup successful, continue with Copilot model selection
+            } else {
+              // Chose manual mode
+              aiProvider = 'gemini' // Use gemini as fallback for manual operations
+              copilotModel = undefined
+              break // Exit the loop with manual mode
+            }
+          }
+
+          const modelChoice = await select('Choose Copilot Model (cost-effective options):', [
+            { label: 'Claude Haiku 4.5 (Fastest & Cheapest - ~$0.10 input, ~$0.30 output)', value: 'claude-haiku-4.5' },
+            { label: 'GPT-5 (Balanced & Cost-Effective - ~$0.20 input, ~$0.60 output)', value: 'gpt-5' },
+            { label: 'Back to AI Provider selection', value: 'back' },
+          ]) as 'claude-haiku-4.5' | 'gpt-5' | 'back'
+
+          if (modelChoice === 'back') {
+            continue // Go back to AI provider selection
+          }
+
+          copilotModel = modelChoice
+          log.info(`Selected Copilot Model: ${copilotModel}`)
+        }
+
+        // Choose OpenRouter Model if OpenRouter is selected
+        if (aiProvider === 'openrouter') {
+          // Setup OpenRouter first
+          const { ensureAIProvider } = await import('./core/setup.js')
+          const openrouterReady = await ensureAIProvider('openrouter')
+          if (!openrouterReady) {
+            log.warn('OpenRouter is not set up.')
+            const setupChoice = await select('What would you like to do?', [
+              { label: 'Setup OpenRouter now', value: 'setup' },
+              { label: 'Use manual mode only', value: 'manual' },
+              { label: 'Back to AI provider selection', value: 'back' },
+            ])
+
+            if (setupChoice === 'back') {
+              continue // Go back to AI provider selection
+            }
+
+            if (setupChoice === 'setup') {
+              // Try to setup again
+              const setupSuccess = await ensureAIProvider('openrouter')
+              if (!setupSuccess) {
+                log.warn('OpenRouter setup failed.')
+                const useManual = confirm('Continue with manual mode?')
+                if (!useManual) {
+                  continue // Go back to AI provider selection
+                }
+                // Force manual mode
+                aiProvider = 'gemini' // Use gemini as fallback for manual operations
+                openrouterModel = undefined
+                break // Exit the loop with manual mode
+              }
+              // If setup successful, continue with OpenRouter model selection
+            } else {
+              // Chose manual mode
+              aiProvider = 'gemini' // Use gemini as fallback for manual operations
+              openrouterModel = undefined
+              break // Exit the loop with manual mode
+            }
+          }
+
+          const modelChoice = await select('Choose OpenRouter Model (cheapest options):', [
+            { label: 'Olmo 3.1 32B (AllenAI - Cheapest: $0.20 input, $0.60 output)', value: 'allenai/olmo-3.1-32b-instruct' },
+            { label: 'MiniMax M2.1 (MiniMax - $0.27 input, $1.12 output)', value: 'minimax/minimax-m2.1' },
+            { label: 'Llama 3.2 3B (Meta - $0.15 input, $0.15 output)', value: 'meta-llama/llama-3.2-3b-instruct:free' },
+            { label: 'Llama 3.1 8B (Meta - $0.22 input, $0.22 output)', value: 'meta-llama/llama-3.1-8b-instruct:free' },
+            { label: 'Back to AI Provider selection', value: 'back' },
+          ]) as OpenRouterFreeModel | 'back'
+
+          if (modelChoice === 'back') {
+            continue // Go back to AI provider selection
+          }
+
+          openrouterModel = modelChoice
+          log.info(`Selected OpenRouter Model: ${openrouterModel}`)
+        }
+
+        // If we get here, user has made their choice
+        break
+      }
+    }
+
+    let state: GeetoState = {
+      step: STEP.INIT,
+      workingBranch: '',
+      targetBranch: '',
+      currentBranch: getCurrentBranch(),
+      stagedFiles: [],
+      timestamp: new Date().toISOString(),
+      aiProvider: aiProvider,
+      copilotModel: copilotModel,
+      openrouterModel: openrouterModel,
+    }
+
+    if (shouldResume && savedState) {
+      state = savedState
+      log.info(`Resuming from step: ${getStepName(state.step)}`)
+    }
+
+    const currentBranch = savedState ? state.currentBranch : getCurrentBranch()
+    if (!savedState) {
+      state.currentBranch = currentBranch
+    }
+
+    // Use currentBranch as fallback if workingBranch is empty
+    let workingBranch = savedState ? state.workingBranch || state.currentBranch : currentBranch
+
+    // Ask about task management platform integration
+    let selectedPlatform: 'trello' | 'none' = 'none'
+
+    // Auto-detect configured platforms
+    if (hasTrelloConfig()) {
+      selectedPlatform = 'trello'
+      log.success('Trello platform configured ✓')
+    } else {
+      const wantTaskIntegration = confirm('Integrate with task management platform?')
+
+      if (wantTaskIntegration) {
+        // Show available platforms
+        const enabledPlatforms = TASK_PLATFORMS.filter((p) => p.enabled)
+
+        if (enabledPlatforms.length > 0) {
+          // Show selection menu
+          const platformOptions = [
+            ...enabledPlatforms.map((p) => ({ label: p.name, value: p.value })),
+            { label: 'Skip integration', value: 'none' },
+          ]
+
+          selectedPlatform = (await select(
+            'Select task management platform:',
+            platformOptions
+          )) as 'trello' | 'none'
+        }
+
+        // Setup selected platform if needed
+        if (selectedPlatform === 'trello' && !hasTrelloConfig()) {
+          // For now, just log that setup is needed
+          log.info('Trello setup needed - will be handled in branch creation')
+        }
+        // Future: Add setup for other platforms here
+      }
+    }
+
+    // STEP 1: Stage changes
+    if (state.step < STEP.STAGED) {
+      const changedFiles = getChangedFiles()
+
+      log.info(`Current branch: ${state.currentBranch}`)
+      log.info(`Changed files: ${changedFiles.length}`)
+
+      if (changedFiles.length === 0) {
+        log.warn('No changes detected!')
+        process.exit(0)
+      }
+
+      console.log('\nChanged files:')
+      changedFiles.forEach((file) => console.log(`  ${file}`))
+
+      log.step('Step 1: Stage Changes')
+
+      const stageChoice = await select('What to stage?', [
+        { label: 'Stage all changes', value: 'all' },
+        { label: 'Stage tracked files only', value: 'tracked' },
+        { label: 'Already staged', value: 'skip' },
+        { label: 'Cancel', value: 'cancel' },
+      ])
+
+      if (stageChoice === 'all') {
+        exec('git add -A')
+        log.success('All changes staged')
+      } else if (stageChoice === 'tracked') {
+        exec('git add -u')
+        log.success('Tracked files staged')
+      } else if (stageChoice === 'cancel') {
+        log.warn('Cancelled.')
+        process.exit(0)
+      }
+
+      const stagedFiles = getStagedFiles()
+      if (stagedFiles.length === 0) {
+        log.error('No staged files!')
+        process.exit(0)
+      }
+
+      state.stagedFiles = stagedFiles
+      state.step = STEP.STAGED
+      saveState(state)
+
+      console.log('\nStaged files:')
+      stagedFiles.forEach((file) => console.log(`  + ${file}`))
+    } else {
+      log.info(`✓ Staging already done (${state.stagedFiles.length} files)`)
+    }
+
+    // STEP 2: Create branch
+    if (state.step < STEP.BRANCH_CREATED) {
+      log.step('Step 2: Create Branch')
+
+      const defaultPrefix = getBranchPrefix(state.currentBranch)
+
+      const createNewBranch = confirm('Create new branch?')
+
+      // Load branch strategy config
+      const branchConfig = getBranchStrategyConfig()
+      let selectedNamingStrategy: 'title-full' | 'title-ai' | 'ai' | 'manual' = 'ai'
+      let selectedTrelloList = ''
+      let separator: '-' | '_' = branchConfig?.separator || '-'
+
+      if (createNewBranch) {
+        // Outer loop for entire branch creation flow (allows going back from any step)
+        let branchFlowComplete = false
+        let separatorSelected = false // Track if separator has been selected
+        let branchMenuShown = false // Track if branch naming menu has been shown
+        let trelloCardId = ''
+
+        // Check if separator is already saved (for resume scenarios)
+        const savedStrategy = getBranchStrategyConfig()
+        if (savedStrategy?.separator) {
+          separator = savedStrategy.separator
+          separatorSelected = true
+        }
+
+        while (!branchFlowComplete) {
+          // Loop for separator selection (so user can go back from list/card selection)
+          if (!separatorSelected) {
+            // Check if there's a saved preference first
+            const savedStrategy = getBranchStrategyConfig()
+            if (savedStrategy?.separator) {
+              // Use saved separator without showing menu
+              separator = savedStrategy.separator
+              separatorSelected = true
+            } else {
+              // No saved preference, show menu
+              while (!separatorSelected) {
+                const recommended = getRecommendedSeparator()
+
+                const separatorChoice = await select('Branch name separator:', [
+                  {
+                    label:
+                      recommended === '-'
+                        ? 'Hyphen (kebab-case): my-branch-name [Recommended]'
+                        : 'Hyphen (kebab-case): my-branch-name',
+                    value: '-',
+                  },
+                  {
+                    label:
+                      recommended === '_'
+                        ? 'Underscore (snake_case): my_branch_name [Recommended]'
+                        : 'Underscore (snake_case): my_branch_name',
+                    value: '_',
+                  },
+                ])
+
+                separator = separatorChoice as '-' | '_'
+
+                // Save the separator preference
+                saveBranchStrategyConfig({
+                  separator,
+                  lastNamingStrategy: savedStrategy?.lastNamingStrategy,
+                })
+
+                separatorSelected = true
+              }
+            }
+          }
+
+          // Loop for branch naming menu (so user can go back from Trello/AI selection)
+          if (!branchMenuShown) {
+            while (!branchMenuShown) {
+              // Now show branch naming strategy menu
+              const branchChoice = await select('Branch naming:', [
+                { label: 'Link to Trello Card', value: 'trello' },
+                { label: 'Generate with AI', value: 'ai' },
+                { label: 'Enter custom name', value: 'custom' },
+                { label: 'Back to separator selection', value: 'back-separator' },
+                { label: 'Cancel', value: 'cancel' },
+              ])
+
+              // Handle back to separator
+              if (branchChoice === 'back-separator') {
+                separatorSelected = false
+                branchMenuShown = false
+                break
+              }
+
+              if (branchChoice === 'cancel') {
+                log.warn('Branch creation cancelled.')
+                process.exit(0)
+              }
+
+              branchMenuShown = true
+
+              switch (branchChoice) {
+                case 'trello': {
+                  // Check if Trello is configured
+                  if (!hasTrelloConfig()) {
+                    log.warn('Trello not configured. Please setup Trello first.')
+                    separatorSelected = false
+                    continue
+                  }
+
+                  log.info('🔍 Checking Trello for tasks...')
+
+                  // First, fetch and select list
+                  const trelloLists = await fetchTrelloLists()
+
+                  if (trelloLists.length === 0) {
+                    log.warn('No Trello lists found on board')
+                    separatorSelected = false
+                    continue
+                  }
+
+                  // Loop for list selection
+                  let listSelected = false
+
+                  while (!listSelected) {
+                    // Ask user to select a list first
+                    const lastUsedListId = branchConfig?.lastTrelloList
+
+                    const listOptions = [
+                      ...trelloLists.map((list) => ({
+                        label:
+                          list.id === lastUsedListId
+                            ? `${list.name} ⭐ Last used`
+                            : `${list.name}`,
+                        value: list.id,
+                      })),
+                      { label: 'All lists (no filter)', value: 'all' },
+                      { label: 'Back to branch menu', value: 'back-menu' },
+                    ]
+
+                    const selectedListId = await select('Select Trello list:', listOptions)
+
+                    if (selectedListId === 'back-menu') {
+                      // Go back to branch menu
+                      branchMenuShown = false
+                      listSelected = true
+                      break
+                    }
+
+                    // Save the selected list preference
+                    if (selectedListId !== 'all') {
+                      const currentStrategy = getBranchStrategyConfig()
+                      saveBranchStrategyConfig({
+                        separator,
+                        lastNamingStrategy: currentStrategy?.lastNamingStrategy,
+                        lastTrelloList: selectedListId,
+                      })
+                    }
+
+                    const filterListId = selectedListId === 'all' ? undefined : selectedListId
+                    const trelloCards = await fetchTrelloCards(filterListId)
+
+                    if (trelloCards.length === 0) {
+                      log.warn('No cards found in selected list')
+                      // Loop back to list selection
+                    } else {
+                      // Loop for card selection and naming strategy
+                      let cardSelected = false
+
+                      while (!cardSelected) {
+                        const trelloOptions = [
+                          ...trelloCards.slice(0, 15).map((card) => {
+                            const branchPreview = generateBranchNameFromTrelloTitle(
+                              card.name,
+                              card.shortLink,
+                              separator
+                            )
+                            return {
+                              label: `${branchPreview}`,
+                              value: JSON.stringify({ id: card.shortLink, title: card.name }),
+                            }
+                          }),
+                          { label: 'Back to branch menu', value: 'back-menu' },
+                        ]
+
+                        const selectedCard = await select('Select Trello card:', trelloOptions)
+
+                        if (selectedCard === 'back-menu') {
+                          // Go back to branch menu
+                          branchMenuShown = false
+                          cardSelected = true
+                          listSelected = true
+                          break
+                        }
+
+                        if (selectedCard === 'skip') {
+                          // Skip Trello entirely
+                          cardSelected = true
+                          listSelected = true
+                          break
+                        }
+
+                        const cardData = JSON.parse(selectedCard) as { id: string; title: string }
+                        trelloCardId = cardData.id
+                        log.success(`Linked to Trello card ${trelloCardId}`)
+
+                        // Loop for naming strategy
+                        let namingSelected = false
+
+                        while (!namingSelected) {
+                          // Ask for naming strategy
+                          const namingChoice = await select('Branch naming strategy:', [
+                            {
+                              label: 'Use Trello title (full)',
+                              value: 'title-full',
+                            },
+                            {
+                              label: 'Use Trello title (AI shortened)',
+                              value: 'title-ai',
+                            },
+                            { label: 'Back to card selection', value: 'back' },
+                          ])
+
+                          if (namingChoice === 'back') {
+                            // Go back to card selection
+                            break
+                          }
+
+                          switch (namingChoice) {
+                            case 'title-full': {
+                              // Use full Trello title directly
+                              const branchSuffix = generateBranchNameFromTrelloTitle(
+                                cardData.title,
+                                cardData.id,
+                                separator
+                              )
+                              workingBranch = `${defaultPrefix}#${branchSuffix}`
+                              log.success(`Branch name: ${workingBranch}`)
+
+                              // Create the branch
+                              if (workingBranch && workingBranch !== state.currentBranch) {
+                                // Validate branch name
+                                const validation = validateBranchName(workingBranch)
+                                if (!validation.valid) {
+                                  log.error(`Invalid branch name: ${validation.reason}`)
+                                  separatorSelected = false
+                                  branchMenuShown = false
+                                  continue
+                                }
+
+                                // Check if branch already exists
+                                if (branchExists(workingBranch)) {
+                                  log.error(`Branch '${workingBranch}' already exists locally`)
+                                  separatorSelected = false
+                                  branchMenuShown = false
+                                  continue
+                                }
+
+                                log.info(`Creating branch: ${workingBranch}`)
+                                exec(`git checkout -b "${workingBranch}"`)
+                                log.success(`Branch created: ${workingBranch}`)
+                              }
+
+                              selectedNamingStrategy = 'title-full'
+                              state.workingBranch = workingBranch
+                              state.step = STEP.BRANCH_CREATED
+                              saveState(state)
+                              branchFlowComplete = true
+                              break
+                            }
+                            case 'title-ai': {
+                              // Use AI to shorten Trello title
+                              let correction = ''
+                              let shouldContinue = true
+
+                              while (shouldContinue) {
+                                log.ai(`Generating short branch name from Trello title using ${state.aiProvider === 'gemini' ? 'Gemini AI' : state.aiProvider === 'copilot' ? 'GitHub Copilot' : 'OpenRouter'}...`)
+                                const aiSuffix = state.aiProvider === 'gemini'
+                                  ? await generateBranchNameFromTitle(cardData.title, correction)
+                                  : state.aiProvider === 'copilot'
+                                  ? await generateBranchNameFromTitleCopilot(cardData.title, correction, state.copilotModel)
+                                  : await generateBranchNameFromTitleOpenRouter(cardData.title, correction, state.openrouterModel)
+
+                                if (!aiSuffix) {
+                                  log.warn('AI generation failed, using manual input')
+                                  const customName = askQuestion('Enter branch name: ')
+                                  workingBranch = `${defaultPrefix}#${trelloCardId}${separator}${customName}`
+                                  shouldContinue = false
+                                  break
+                                }
+
+                                const cleanSuffix = aiSuffix
+                                  .replace(/[^\w-]/gi, separator)
+                                  .replace(separator === '-' ? /-+/g : /_+/g, separator)
+                                  .replace(separator === '-' ? /^-|-$/g : /^_|_$/g, '')
+                                  .toLowerCase()
+
+                                workingBranch = `${defaultPrefix}#${trelloCardId}${separator}${cleanSuffix}`
+                                log.ai(`Suggested: ${workingBranch}`)
+
+                                const acceptChoice = await select('Accept this branch name?', [
+                                  { label: 'Yes, use it', value: 'accept' },
+                                  { label: 'Regenerate', value: 'regenerate' },
+                                  { label: 'Correct AI (give feedback)', value: 'correct' },
+                                  { label: 'Edit manually', value: 'edit' },
+                                  { label: 'Back to naming strategy', value: 'back' },
+                                ])
+
+                                switch (acceptChoice) {
+                                  case 'accept': {
+                                    shouldContinue = false
+                                    break
+                                  }
+                                  case 'regenerate': {
+                                    correction = ''
+                                    break
+                                  }
+                                  case 'correct': {
+                                    correction = askQuestion('What should be different? ')
+                                    break
+                                  }
+                                  case 'edit': {
+                                    const edited = askQuestion(`Edit branch (${workingBranch}): `)
+                                    workingBranch = edited || workingBranch
+                                    shouldContinue = false
+                                    break
+                                  }
+                                  case 'back': {
+                                    // Reset and go back to naming strategy selection
+                                    workingBranch = ''
+                                    shouldContinue = false
+                                    break
+                                  }
+                                }
+                              }
+
+                              // If user went back, don't create branch yet
+                              if (workingBranch) {
+                                // Create the branch
+                                if (workingBranch !== state.currentBranch) {
+                                  log.info(`Creating branch: ${workingBranch}`)
+                                  exec(`git checkout -b "${workingBranch}"`)
+                                  log.success(`Branch created: ${workingBranch}`)
+                                }
+
+                                selectedNamingStrategy = 'title-ai'
+                                state.workingBranch = workingBranch
+                                state.step = STEP.BRANCH_CREATED
+                                saveState(state)
+                                branchFlowComplete = true
+                              }
+                              break
+                            }
+                          }
+
+                          // Check if branch was created
+                          if (workingBranch && state.step === STEP.BRANCH_CREATED) {
+                            namingSelected = true
+                            cardSelected = true
+                            listSelected = true
+                            separatorSelected = true // Exit all loops
+                          }
+                        }
+                      }
+                    }
+                  }
+                  break
+                }
+                case 'ai': {
+                  // Use AI branch naming
+                  const namingResult = await handleBranchNaming(
+                    defaultPrefix,
+                    separator,
+                    trelloCardId,
+                    state.stagedFiles,
+                    state.currentBranch,
+                    state.aiProvider || 'gemini',
+                    state.aiProvider === 'copilot' ? state.copilotModel : undefined
+                  )
+
+                  if (namingResult.cancelled) {
+                    log.warn('Branch creation cancelled.')
+                    process.exit(0)
+                  }
+
+                  if (namingResult.shouldRestart) {
+                    branchMenuShown = false
+                    continue
+                  } else if (namingResult.workingBranch) {
+                    workingBranch = namingResult.workingBranch
+                    selectedNamingStrategy = 'ai'
+                    state.workingBranch = workingBranch
+                    state.step = STEP.BRANCH_CREATED
+                    saveState(state)
+                    branchFlowComplete = true
+                  }
+                  break
+                }
+                case 'custom': {
+                  // Manual branch name input with suggestions
+                  log.info('💡 Branch name suggestions based on your changes:')
+
+                  // Generate suggestions based on staged files
+                  const suggestions = generateBranchSuggestions(state.stagedFiles, defaultPrefix)
+
+                  suggestions.slice(0, 3).forEach((suggestion, index) => {
+                    log.info(`  ${index + 1}. ${suggestion}`)
+                  })
+
+                  log.info('  Or enter your own custom name.')
+
+                  let customName = ''
+                  while (!customName || customName.trim() === '') {
+                    customName = askQuestion('Enter branch name: ').trim()
+                    if (!customName) {
+                      log.error('Branch name cannot be empty!')
+                    }
+                  }
+
+                  workingBranch = customName
+                  log.success(`Branch name: ${workingBranch}`)
+
+                  // Create the branch
+                  if (workingBranch && workingBranch !== state.currentBranch) {
+                    // Validate branch name
+                    const validation = validateBranchName(workingBranch)
+                    if (!validation.valid) {
+                      log.error(`Invalid branch name: ${validation.reason}`)
+                      continue
+                    }
+
+                    // Check if branch already exists
+                    if (branchExists(workingBranch)) {
+                      log.error(`Branch '${workingBranch}' already exists locally`)
+                      continue
+                    }
+
+                    log.info(`Creating branch: ${workingBranch}`)
+                    exec(`git checkout -b "${workingBranch}"`)
+                    log.success(`Branch created: ${workingBranch}`)
+                  }
+
+                  selectedNamingStrategy = 'manual'
+                  state.workingBranch = workingBranch
+                  state.step = STEP.BRANCH_CREATED
+                  saveState(state)
+                  branchFlowComplete = true
+                  break
+                }
+              }
+
+              break // Exit separator loop
+            }
+          }
+        }
+      }
+
+      // Only mark branch creation step complete if a branch was actually created
+      if (workingBranch && state.step < STEP.BRANCH_CREATED) {
+        state.step = STEP.BRANCH_CREATED
+      }
+
+      saveState(state)
+
+      // Save branch strategy config
+      saveBranchStrategyConfig({
+        separator: separator || branchConfig?.separator || '-',
+        lastNamingStrategy: selectedNamingStrategy,
+        lastTrelloList: selectedTrelloList || branchConfig?.lastTrelloList,
+      })
+    } else {
+      workingBranch = state.workingBranch || state.currentBranch || currentBranch
+      // Ensure state.workingBranch is set when not creating a new branch
+      if (!state.workingBranch) {
+        state.workingBranch = workingBranch
+        saveState(state)
+      }
+      // Mark branch creation step as complete when not creating a new branch
+      if (state.step < STEP.BRANCH_CREATED) {
+        state.step = STEP.BRANCH_CREATED
+        saveState(state)
+      }
+      log.info(`✓ Branch already created: ${workingBranch}`)
+    }
+
+    // STEP 3: Commit
+    if (state.step < STEP.COMMITTED) {
+      log.step('Step 3: Commit')
+
+      // Auto-select commit tool based on chosen AI provider
+      const aiProvider = state.aiProvider || 'gemini'
+      let selectedTool = getDefaultCommitTool(aiProvider)
+
+      // Allow user to override if they want
+      const useAutoTool = confirm(`Use ${aiProvider === 'gemini' ? 'Gemini API' : aiProvider === 'copilot' ? 'GitHub Copilot' : 'OpenRouter'} for commit? (recommended)`)
+      if (!useAutoTool) {
+        const aiTools = [
+          { label: 'Gemini API (Free - Rate Limited)', value: 'gemini' },
+          { label: 'GitHub Copilot (Requires Subscription)', value: 'copilot' },
+          { label: 'OpenRouter (Requires Credits)', value: 'openrouter' },
+          { label: 'Manual commit', value: 'manual' }
+        ]
+        selectedTool = await select('Choose commit method:', aiTools)
+      }
+
+      let commitSuccess = false
+
+      if (selectedTool === 'gemini') {
+        log.ai('Running Gemini API...')
+
+        // Ensure Gemini is still properly configured
+        const { ensureAIProvider } = await import('./core/setup.js')
+        const geminiReady = await ensureAIProvider('gemini')
+        if (!geminiReady) {
+          log.warn('Gemini API setup issues detected!')
+          const fixSetup = confirm('Fix Gemini API setup now?')
+          if (fixSetup) {
+            const setupSuccess = await ensureAIProvider('gemini')
+            if (!setupSuccess) {
+              log.warn('Could not fix Gemini API setup. Falling back to manual commit.')
+              selectedTool = 'manual'
+            }
+          } else {
+            log.warn('Gemini API not available. Falling back to manual commit.')
+            selectedTool = 'manual'
+          }
+        }
+
+        try {
+          exec('geminicommit -y')
+          log.success('Committed with geminicommit ✓')
+          commitSuccess = true
+        } catch {
+          log.warn('Gemini API commit failed! Choose another method...')
+        }
+      }
+
+      if (selectedTool === 'copilot') {
+        log.ai('Running GitHub Copilot commit...')
+
+        // Ensure GitHub Copilot is still properly configured
+        const { ensureAIProvider } = await import('./core/setup.js')
+        const copilotReady = await ensureAIProvider('copilot')
+        if (!copilotReady) {
+          log.warn('GitHub Copilot setup issues detected!')
+          const fixSetup = confirm('Fix GitHub Copilot setup now?')
+          if (fixSetup) {
+            const setupSuccess = await ensureAIProvider('copilot')
+            if (!setupSuccess) {
+              log.warn('Could not fix GitHub Copilot setup. Falling back to manual commit.')
+              selectedTool = 'manual'
+            }
+          } else {
+            log.warn('GitHub Copilot not available. Falling back to manual commit.')
+            selectedTool = 'manual'
+          }
+        }
+
+        // Use GitHub Copilot to generate commit message
+        try {
+          log.info('Analyzing staged changes with GitHub Copilot...')
+
+          // Get diff summary for Copilot
+          const diffSummary = execSilent('git diff --cached --stat')
+          const commitMessage = await generateCommitMessageCopilot(diffSummary, undefined, state.copilotModel)
+
+          if (commitMessage) {
+            const useSuggestion = confirm(`Use Copilot suggestion: "${commitMessage}"?`)
+            if (useSuggestion) {
+              exec(`git commit -m "${commitMessage}"`)
+              log.success('Committed with GitHub Copilot ✓')
+              commitSuccess = true
+            }
+          } else {
+            log.warn('Could not generate commit message from Copilot')
+          }
+        } catch (error) {
+          log.warn('GitHub Copilot commit failed')
+        }
+      }
+
+      if (selectedTool === 'openrouter') {
+        log.ai('Running OpenRouter commit...')
+
+        // Ensure OpenRouter is still properly configured
+        const { ensureAIProvider } = await import('./core/setup.js')
+        const openrouterReady = await ensureAIProvider('openrouter')
+        if (!openrouterReady) {
+          log.warn('OpenRouter setup issues detected!')
+          const fixSetup = confirm('Fix OpenRouter setup now?')
+          if (fixSetup) {
+            const setupSuccess = await ensureAIProvider('openrouter')
+            if (!setupSuccess) {
+              log.warn('Could not fix OpenRouter setup. Falling back to manual commit.')
+              selectedTool = 'manual'
+            }
+          } else {
+            log.warn('OpenRouter not available. Falling back to manual commit.')
+            selectedTool = 'manual'
+          }
+        }
+
+        // Use OpenRouter to generate commit message
+        try {
+          log.info('Analyzing staged changes with OpenRouter...')
+
+          // Get diff summary for OpenRouter
+          const diffSummary = execSilent('git diff --cached --stat')
+          const commitMessage = await generateCommitMessageOpenRouter(diffSummary, undefined, state.openrouterModel)
+
+          if (commitMessage) {
+            const useSuggestion = confirm(`Use OpenRouter suggestion: "${commitMessage}"?`)
+            if (useSuggestion) {
+              exec(`git commit -m "${commitMessage}"`)
+              log.success('Committed with OpenRouter ✓')
+              commitSuccess = true
+            }
+          } else {
+            log.warn('Could not generate commit message from OpenRouter')
+          }
+        } catch (error) {
+          log.warn('OpenRouter commit failed')
+        }
+      }
+
+      if (!commitSuccess || selectedTool === 'manual') {
+        const commitType = await select('Select commit type:', getCommitTypes())
+
+        if (commitType === 'cancel') {
+          log.warn('Commit cancelled.')
+          process.exit(0)
+        }
+
+        const scope = askQuestion('Scope (optional, press Enter to skip): ').trim()
+        let description = ''
+
+        while (!description) {
+          description = askQuestion('Commit message: ').trim()
+          if (!description) {
+            log.error('Commit message cannot be empty!')
+          }
+        }
+
+        const commitMsg = scope ? `${commitType}(${scope}): ${description}` : `${commitType}: ${description}`
+
+        try {
+          exec(`git commit -m "${commitMsg}"`)
+          log.success(`Committed: ${commitMsg}`)
+        } catch {
+          log.error('Commit failed!')
+          process.exit(1)
+        }
+      }
+
+      state.step = STEP.COMMITTED
+      saveState(state)
+    } else {
+      log.info('✓ Commit already done')
+    }
+
+    // STEP 4: Push
+    if (state.step < STEP.PUSHED) {
+      log.step('Step 4: Push to Remote')
+
+      const workingBranch = state.workingBranch || getCurrentBranch()
+      const shouldPush = confirm(`Push ${workingBranch} to origin?`)
+
+      if (shouldPush) {
+        const progressBar = new ProgressBar(3, 'Pushing to remote')
+        progressBar.update(0)
+
+        // Check if remote exists
+        progressBar.update(1)
+        execSilent('git remote get-url origin')
+
+        // Push the branch
+        progressBar.update(2)
+        exec(`git push -u origin "${workingBranch}"`)
+
+        progressBar.complete()
+        log.success('Pushed to remote')
+      }
+
+      state.step = STEP.PUSHED
+      saveState(state)
+    } else {
+      log.info(`✓ Push already done: ${state.workingBranch}`)
+    }
+
+    // STEP 5: Merge
+    if (state.step < STEP.MERGED) {
+      const workingBranch = state.workingBranch
+      const currentBranch = state.currentBranch
+
+      if (workingBranch === currentBranch) {
+        log.info('✓ No new branch created, skipping merge step')
+        state.step = STEP.MERGED
+        saveState(state)
+      } else {
+        log.step('Step 5: Merge to Target Branch')
+
+        let targetBranch = askQuestion('Target branch to merge into (default: development): ').trim() || 'development'
+        state.targetBranch = targetBranch
+        saveState(state)
+
+        if (!branchExists(targetBranch)) {
+          log.warn(`Target branch '${targetBranch}' does not exist locally.`)
+
+          if (remoteBranchExists(targetBranch)) {
+            log.info(`Found '${targetBranch}' on remote. Fetching...`)
+            try {
+              exec(`git fetch origin ${targetBranch}:${targetBranch}`)
+              log.success(`Fetched ${targetBranch} from remote`)
+            } catch {
+              log.error(`Failed to fetch ${targetBranch} from remote`)
+              throw new Error(`Failed to fetch ${targetBranch}`)
+            }
+          }
+        }
+
+        const shouldMerge = confirm(`Merge ${workingBranch} into ${targetBranch}?`)
+
+        if (shouldMerge) {
+          const shouldSquash = askQuestion('Squash commits? (y/N): ').toLowerCase() === 'y'
+
+          if (shouldSquash) {
+            const squashProgress = new ProgressBar(4, 'Squashing commits')
+            squashProgress.update(0)
+
+            const lastCommitMsg = execSilent(`git log ${workingBranch} -1 --format=%s`)
+            const squashMessage = askQuestion(`Squash commit message (${lastCommitMsg}): `).trim() || lastCommitMsg
+
+            log.info('Squashing commits...')
+            squashProgress.update(1)
+            const mergeBase = execSilent(`git merge-base ${targetBranch} ${workingBranch}`)
+            squashProgress.update(2)
+            exec(`git reset --soft ${mergeBase}`)
+            squashProgress.update(3)
+            exec(`git commit -m "${squashMessage}"`)
+
+            try {
+              exec(`git push -f origin "${workingBranch}"`)
+            } catch {
+              log.warn('Could not force push squashed branch')
+            }
+            squashProgress.complete()
+          }
+
+          const mergeProgress = new ProgressBar(4, 'Merging branches')
+          mergeProgress.update(0)
+
+          // Checkout target branch
+          mergeProgress.update(1)
+          exec(`git checkout ${targetBranch}`)
+
+          // Pull latest changes
+          mergeProgress.update(2)
+          try {
+            exec(`git pull origin ${targetBranch}`)
+          } catch {
+            log.warn('Could not pull from origin, continuing...')
+          }
+
+          // Perform merge
+          mergeProgress.update(3)
+          exec(`git merge --no-ff "${workingBranch}" -m "Merge branch '${workingBranch}' into ${targetBranch}"`)
+
+          mergeProgress.complete()
+          log.success(`Merged into ${targetBranch}`)
+
+          if (confirm(`Push ${targetBranch} to origin?`)) {
+            const pushProgress = new ProgressBar(2, 'Pushing merged branch')
+            pushProgress.update(0)
+            pushProgress.update(1)
+            exec(`git push origin ${targetBranch}`)
+            pushProgress.complete()
+            log.success(`Pushed ${targetBranch}`)
+          }
+
+          state.step = STEP.MERGED
+          saveState(state)
+        }
+      }
+    } else {
+      log.info(`✓ Merge already done to: ${state.targetBranch}`)
+    }
+
+    // STEP 6: Cleanup
+    if (state.step < STEP.CLEANUP) {
+      log.step('Step 6: Cleanup')
+
+      const workingBranch = state.workingBranch
+      const targetBranch = state.targetBranch
+      const currentBranch = state.currentBranch
+
+      if (workingBranch && workingBranch !== targetBranch && workingBranch !== currentBranch) {
+        const deleteAnswer = askQuestion(`Delete branch '${workingBranch}'? (Y/n): `).toLowerCase()
+        const shouldDelete = deleteAnswer === '' || deleteAnswer === 'y'
+
+        if (shouldDelete) {
+          log.info(`Deleting remote branch: ${workingBranch}`)
+          try {
+            exec(`git push origin --delete "${workingBranch}"`)
+            log.success('Remote branch deleted')
+          } catch {
+            log.warn('Could not delete remote branch')
+          }
+
+          log.info(`Deleting local branch: ${workingBranch}`)
+          try {
+            exec(`git branch -D "${workingBranch}"`)
+            log.success('Local branch deleted')
+          } catch {
+            log.warn('Could not delete local branch')
+          }
+        }
+      }
+
+      state.step = STEP.CLEANUP
+      saveState(state)
+    }
+
+    clearState()
+    console.log(`\n✅ Git flow complete!\n`)
+  } catch (error) {
+    if (error instanceof Error) {
+      log.error(error.message)
+    } else {
+      log.error('Unknown error occurred')
+    }
+    process.exit(1)
+  }
+}
+
+main()

@@ -1,0 +1,11 @@
+node_modules
+src
+*.map
+tsconfig.json
+.git
+.gitignore
+.github
+test
+example
+.DS_Store
+*.tgz

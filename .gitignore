@@ -1,0 +1,64 @@
+# Dependencies
+node_modules/
+bun.lockb
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Build output
+lib/
+dist/
+build/
+out/
+
+# State files
+.geeto/
+geeto-linux
+geeto-mac
+geeto-windows.exe
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+coverage/
+.nyc_output/
+junit.xml
+*.lcov
+
+# Logs
+*.log
+logs/
+report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
+
+# Temporary
+.temp/
+tmp/
+*.tgz
+.env.test.local
+.env.production.local
+.env.local
+
+# caches
+.eslintcache
+.cache
+*.tsbuildinfo
+
+# IntelliJ based IDEs
+.idea
+
+# Finder (MacOS) folder config
+.DS_Store
+
+# Snyk Security Extension - AI Rules (auto-generated)
+.github/instructions/snyk_rules.instructions.md
