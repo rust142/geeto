@@ -189,6 +189,26 @@ export const main = async (): Promise<void> => {
     // Use currentBranch as fallback if workingBranch is empty
     let workingBranch = savedState ? (state.workingBranch ?? state.currentBranch) : currentBranch
 
+    // Validate working branch (skip if in detached HEAD)
+    if (!workingBranch || workingBranch.trim() === '') {
+      try {
+        // Try to get current branch again
+        const retryBranch = getCurrentBranch()
+        if (retryBranch && retryBranch.trim() !== '') {
+          workingBranch = retryBranch
+          state.currentBranch = retryBranch
+        } else {
+          log.warn('Unable to determine current branch (possibly detached HEAD). Using fallback.')
+          workingBranch = 'detached-head'
+          state.currentBranch = workingBranch
+        }
+      } catch {
+        log.warn('Unable to determine current branch. Using fallback.')
+        workingBranch = 'unknown-branch'
+        state.currentBranch = workingBranch
+      }
+    }
+
     // Ask about task management platform integration
     let selectedPlatform: 'trello' | 'none' = 'none'
 

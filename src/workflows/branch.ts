@@ -427,6 +427,10 @@ export const handleBranchCreationWorkflow = async (state: GeetoState): Promise<s
         }
       }
     }
+  } else {
+    // User chose not to create new branch, use current branch
+    workingBranch = state.currentBranch
+    log.info(`Using current branch: ${workingBranch}`)
   }
 
   // Only mark branch creation step complete if a branch was actually created
