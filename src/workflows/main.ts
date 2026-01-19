@@ -340,7 +340,7 @@ export const main = async (): Promise<void> => {
     if (state.step < STEP.PUSHED) {
       log.step('Step 4: Push to Remote')
 
-      const shouldPush = confirm(`Push ${workingBranch} to origin?`)
+      const shouldPush = confirm(`Push ${getCurrentBranch()} to origin?`)
 
       if (shouldPush) {
         const progressBar = new ProgressBar(3, 'Pushing to remote')
@@ -352,7 +352,7 @@ export const main = async (): Promise<void> => {
 
         // Push the branch
         progressBar.update(2)
-        exec(`git push -u origin "${workingBranch}"`)
+        exec(`git push -u origin "${getCurrentBranch()}"`)
 
         progressBar.complete()
         log.success('Pushed to remote')
