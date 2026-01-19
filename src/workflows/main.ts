@@ -368,33 +368,26 @@ export const main = async (): Promise<void> => {
     if (state.step < STEP.MERGED) {
       const targetBranch = 'development'
 
-      if (workingBranch === targetBranch) {
-        log.info('✓ No new branch created, skipping merge step')
-        state.targetBranch = targetBranch
-        state.step = STEP.MERGED
-        saveState(state)
-      } else {
-        log.step('Step 5: Merge to Target Branch')
+      log.step('Step 5: Merge to Target Branch')
 
-        const shouldMerge = confirm(`Merge ${workingBranch} into ${targetBranch}?`)
+      const shouldMerge = confirm(`Merge ${workingBranch} into ${targetBranch}?`)
 
-        if (shouldMerge) {
-          exec(`git checkout ${targetBranch}`)
-          exec(`git merge --no-ff ${workingBranch}`)
-          log.success(`Merged ${workingBranch} into ${targetBranch}`)
+      if (shouldMerge) {
+        exec(`git checkout ${targetBranch}`)
+        exec(`git merge --no-ff ${workingBranch}`)
+        log.success(`Merged ${workingBranch} into ${targetBranch}`)
 
-          // Push the updated target branch back to remote
-          const shouldPushTarget = confirm(`Push ${targetBranch} to origin?`)
-          if (shouldPushTarget) {
-            exec(`git push origin ${targetBranch}`)
-            log.success(`Pushed ${targetBranch} to remote`)
-          }
+        // Push the updated target branch back to remote
+        const shouldPushTarget = confirm(`Push ${targetBranch} to origin?`)
+        if (shouldPushTarget) {
+          exec(`git push origin ${targetBranch}`)
+          log.success(`Pushed ${targetBranch} to remote`)
         }
-
-        state.targetBranch = targetBranch
-        state.step = STEP.MERGED
-        saveState(state)
       }
+
+      state.targetBranch = targetBranch
+      state.step = STEP.MERGED
+      saveState(state)
     } else {
       log.info(`✓ Merge already done to: ${state.targetBranch}`)
     }
