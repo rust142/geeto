@@ -370,6 +370,7 @@ export const main = async (): Promise<void> => {
 
       if (workingBranch === targetBranch) {
         log.info('✓ No new branch created, skipping merge step')
+        state.targetBranch = targetBranch
         state.step = STEP.MERGED
         saveState(state)
       } else {
@@ -379,8 +380,15 @@ export const main = async (): Promise<void> => {
 
         if (shouldMerge) {
           exec(`git checkout ${targetBranch}`)
-          exec(`git merge ${workingBranch}`)
+          exec(`git merge --no-ff ${workingBranch}`)
           log.success(`Merged ${workingBranch} into ${targetBranch}`)
+
+          // Push the updated target branch back to remote
+          const shouldPushTarget = confirm(`Push ${targetBranch} to origin?`)
+          if (shouldPushTarget) {
+            exec(`git push origin ${targetBranch}`)
+            log.success(`Pushed ${targetBranch} to remote`)
+          }
         }
 
         state.targetBranch = targetBranch
@@ -395,11 +403,7 @@ export const main = async (): Promise<void> => {
     if (state.step < STEP.CLEANUP) {
       log.step('Step 6: Cleanup')
 
-      if (
-        workingBranch &&
-        workingBranch !== state.targetBranch &&
-        workingBranch !== state.currentBranch
-      ) {
+      if (workingBranch && workingBranch !== state.targetBranch) {
         const deleteAnswer = confirm(`Delete branch '${workingBranch}'?`)
         if (deleteAnswer) {
           exec(`git branch -d ${workingBranch}`)
