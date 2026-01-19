@@ -372,6 +372,14 @@ export const main = async (): Promise<void> => {
         if (deleteAnswer) {
           exec(`git branch -d ${workingBranch}`)
           log.success(`Branch '${workingBranch}' deleted`)
+          
+          // Also delete remote branch if it exists
+          try {
+            exec(`git push origin --delete ${workingBranch}`, true)
+            log.success(`Remote branch '${workingBranch}' deleted`)
+          } catch {
+            // Remote branch might not exist, ignore error
+          }
         }
       }
 
