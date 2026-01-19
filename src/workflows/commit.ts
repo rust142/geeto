@@ -88,7 +88,7 @@ export const handleCommitWorkflow = async (state: GeetoState): Promise<boolean> 
 
     try {
       exec('geminicommit -y')
-      log.success('Committed with geminicommit ✓')
+      log.success('Committed with geminicommit')
       commitSuccess = true
     } catch {
       log.warn('Gemini API commit failed! Choose another method...')
@@ -132,7 +132,7 @@ export const handleCommitWorkflow = async (state: GeetoState): Promise<boolean> 
         const useSuggestion = confirm(`Use Copilot suggestion: "${commitMessage}"?`)
         if (useSuggestion) {
           exec(`git commit -m "${commitMessage}"`)
-          log.success('Committed with GitHub Copilot ✓')
+          log.success('Committed with GitHub Copilot')
           commitSuccess = true
         }
       } else {
@@ -180,7 +180,7 @@ export const handleCommitWorkflow = async (state: GeetoState): Promise<boolean> 
         const useSuggestion = confirm(`Use OpenRouter suggestion: "${commitMessage}"?`)
         if (useSuggestion) {
           exec(`git commit -m "${commitMessage}"`)
-          log.success('Committed with OpenRouter ✓')
+          log.success('Committed with OpenRouter')
           commitSuccess = true
         }
       } else {
