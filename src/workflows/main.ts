@@ -188,6 +188,7 @@ export const main = async (): Promise<void> => {
 
     // Use currentBranch as fallback if workingBranch is empty
     let workingBranch = savedState ? (state.workingBranch ?? state.currentBranch) : currentBranch
+    let featureBranch = ''
 
     // Validate working branch (skip if in detached HEAD)
     if (!workingBranch || workingBranch.trim() === '') {
@@ -370,12 +371,26 @@ export const main = async (): Promise<void> => {
 
       log.step('Step 5: Merge to Target Branch')
 
-      const shouldMerge = confirm(`Merge ${workingBranch} into ${targetBranch}?`)
+      featureBranch = getCurrentBranch()
+      const shouldMerge = confirm(`Merge ${featureBranch} into ${targetBranch}?`)
 
       if (shouldMerge) {
+        const mergeType = await select('How to merge?', [
+          { label: 'Merge (preserve history)', value: 'merge' },
+          { label: 'Squash and merge', value: 'squash' },
+        ])
+
         exec(`git checkout ${targetBranch}`)
-        exec(`git merge --no-ff ${workingBranch}`)
-        log.success(`Merged ${workingBranch} into ${targetBranch}`)
+
+        if (mergeType === 'merge') {
+          exec(`git merge --no-ff ${featureBranch}`)
+          log.success(`Merged ${featureBranch} into ${targetBranch}`)
+        } else {
+          exec(`git merge --squash ${featureBranch}`)
+          const lastCommitMessage = exec(`git log -1 --pretty=%B ${featureBranch}`, true).trim()
+          exec('git commit --no-verify -m "' + lastCommitMessage.replaceAll('"', '\\"') + '"')
+          log.success(`Squashed and merged ${featureBranch} into ${targetBranch}`)
+        }
 
         // Push the updated target branch back to remote
         const shouldPushTarget = confirm(`Push ${targetBranch} to origin?`)
@@ -396,16 +411,16 @@ export const main = async (): Promise<void> => {
     if (state.step < STEP.CLEANUP) {
       log.step('Step 6: Cleanup')
 
-      if (workingBranch && workingBranch !== state.targetBranch) {
-        const deleteAnswer = confirm(`Delete branch '${workingBranch}'?`)
+      if (featureBranch && featureBranch !== state.targetBranch) {
+        const deleteAnswer = confirm(`Delete branch '${featureBranch}'?`)
         if (deleteAnswer) {
-          exec(`git branch -d ${workingBranch}`)
-          log.success(`Branch '${workingBranch}' deleted`)
+          exec(`git branch -d ${featureBranch}`)
+          log.success(`Branch '${featureBranch}' deleted`)
 
           // Also delete remote branch if it exists
           try {
-            exec(`git push origin --delete ${workingBranch}`, true)
-            log.success(`Remote branch '${workingBranch}' deleted`)
+            exec(`git push origin --delete ${featureBranch}`, true)
+            log.success(`Remote branch '${featureBranch}' deleted`)
           } catch {
             // Remote branch might not exist, ignore error
           }
