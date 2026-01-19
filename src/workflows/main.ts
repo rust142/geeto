@@ -174,6 +174,18 @@ export const main = async (): Promise<void> => {
       state.currentBranch = currentBranch
     }
 
+    // Check if branch changed since last session - reset state if so
+    if (savedState && currentBranch !== state.currentBranch) {
+      log.warn(
+        `Branch changed from '${state.currentBranch}' to '${currentBranch}', resetting workflow state`
+      )
+      // Reset to initial state
+      state.step = STEP.INIT
+      state.workingBranch = currentBranch
+      state.currentBranch = currentBranch
+      saveState(state)
+    }
+
     // Use currentBranch as fallback if workingBranch is empty
     let workingBranch = savedState ? (state.workingBranch ?? state.currentBranch) : currentBranch
 
@@ -372,7 +384,7 @@ export const main = async (): Promise<void> => {
         if (deleteAnswer) {
           exec(`git branch -d ${workingBranch}`)
           log.success(`Branch '${workingBranch}' deleted`)
-          
+
           // Also delete remote branch if it exists
           try {
             exec(`git push origin --delete ${workingBranch}`, true)
