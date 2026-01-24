@@ -35,7 +35,7 @@ export const setupTrelloConfigInteractive = (): boolean => {
   }
 
   const tokenUrl = `https://trello.com/1/authorize?expiration=never&name=Geeto&scope=read,write&response_type=token&key=${apiKey}`
-  log.info(`\n📋 Open this URL to get your token:`)
+  log.info(`Open this URL to get your token:`)
   log.info(`${tokenUrl}\n`)
 
   const token = askQuestion('Enter Trello Token (after authorizing): ').trim()
