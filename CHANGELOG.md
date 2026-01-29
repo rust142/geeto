@@ -1,3 +1,19 @@
+
+
+# 1.1.0-beta.0 (2026-01-19)
+
+
+### Bug Fixes
+
+* add --ci flag to release scripts for non-interactive mode ([f5ccb72](https://github.com/rust142/geeto/commit/f5ccb72140e8f9dde46ec50fa59c1ffb866b73fc))
+* disable npm publish for GitHub-only releases ([3914830](https://github.com/rust142/geeto/commit/3914830ccab81ebbb5b53b7804e8429a56813a96))
+* remove invalid releaseNotes config ([027eb9f](https://github.com/rust142/geeto/commit/027eb9f3cb0cfde2bb9cddb78defc5eaf744d3c5))
+
+
+### Features
+
+* initial commit ([f268e9c](https://github.com/rust142/geeto/commit/f268e9c638bf587816450a600962ff3cb4f6d888))
+
 # Changelog
 
 All notable changes to this project will be documented in this file.

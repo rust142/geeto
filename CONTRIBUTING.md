@@ -1,6 +1,6 @@
 # Contributing Guide
 
-Thank you for wanting to contribute to @geeto/core!
+Thank you for wanting to contribute to geeto!
 This guide helps you set up the development environment and create high-quality contributions.
 
 ## Prerequisites
@@ -8,7 +8,6 @@ This guide helps you set up the development environment and create high-quality 
 - Node.js >= 18.0.0
 - Bun >= 1.0.0
 - Git >= 2.0
-- Go >= 1.16 (for geminicommit integration)
 
 ## Project Status
 
@@ -26,7 +25,7 @@ Geeto is a production-ready Git workflow automation CLI with the following curre
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/geeto/core.git
+git clone https://github.com/geeto.git
 cd geeto
 
 # 2. Install dependencies
@@ -147,7 +146,7 @@ bun run clean
 ### TypeScript
 
 - Use strict TypeScript mode (already configured)
-- Use type-only imports: `import type { X } from '@/...'`
+- Use type-only imports: `import type { X } from '/...'`
 - Add JSDoc comments for public APIs
 - Use meaningful variable names
 
@@ -359,9 +358,9 @@ Our GitHub Actions CI runs the following automated checks:
 
 - **Quality Checks**: ESLint, TypeScript, formatting, and build across multiple Node.js versions
 - **Commit Message Validation**: Conventional commits validation on PRs
-- **Security Scanning**: Dependency vulnerability checks
-- **Cross-platform Testing**: Builds for Linux, macOS, and Windows
-- **Automated Releases**: release-it integration for version management
+- **Security Scanning**: Automated vulnerability checks with Snyk and CodeQL analysis
+- **Cross-platform Testing**: Builds and tests for Linux, macOS, and Windows
+- **Automated Releases**: release-it integration for version management and publishing
 
 All checks must pass before a PR can be merged.
 
@@ -415,6 +414,29 @@ Automated releases are handled by release-it:
 - Use efficient algorithms
 - Avoid deep recursion
 
+### Rules
+
+1. Always use lowercase
+2. Use hyphens for separation (replace spaces)
+3. Be descriptive but concise (aim for 3–5 words)
+4. Start with `dev#`
+
+### PR checklist
+
+Before opening a PR, please ensure:
+
+- [ ] Branch follows naming convention
+- [ ] Commit messages follow Conventional Commits
+- [ ] Linting passes locally: `bun run lint`
+- [ ] Type check passes: `bun run typecheck`
+- [ ] Build succeeds: `bun run build`
+- [ ] Add/update tests for new functionality (if applicable)
+- [ ] Update `CHANGELOG.md` or release notes (if applicable)
+- [ ] Link the related issue and provide a clear description
+- [ ] Include screenshots or a short screencast for UI changes
+- [ ] Ensure no secrets are committed
+- [ ] Run `bun run format` before pushing
+
 ## Documentation
 
 When adding features:
@@ -440,7 +462,7 @@ Geeto uses [release-it](https://github.com/release-it/release-it) for automated 
 
 ### Release Prerequisites
 
-- Ensure you have NPM publish access to `@geeto/core`
+- Ensure you have NPM publish access to `geeto`
 - GitHub repository access with write permissions
 - All changes committed and pushed
 
@@ -486,20 +508,21 @@ The release process is configured in `.release-it.json` and includes:
 
 Recent improvements include:
 
+- **CI/CD Pipeline**: Complete GitHub Actions workflow with automated quality checks, security scanning, and releases
 - **ESLint Integration**: Zero-warning codebase with strict linting rules
 - **Type Safety**: Full TypeScript strict mode compliance
 - **Cross-Platform**: Native binaries for Linux, macOS, and Windows
 - **AI Integration**: Support for Gemini, GitHub Copilot, and OpenRouter
 - **Trello Integration**: Seamless task management workflow
+- **Security Scanning**: Automated vulnerability detection with Snyk and CodeQL
 - **Code Quality**: Professional standards with comprehensive tooling
 
 ## Future Goals
 
-- Add comprehensive test suite
-- Implement CI/CD pipeline
-- Expand AI provider support
+- Add comprehensive test suite with unit and integration tests
 - Add more Git workflow automations
 - Improve performance and user experience
+- Add interactive mode for complex operations
 
 ## Code Review Process
 

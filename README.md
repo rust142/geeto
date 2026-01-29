@@ -1,63 +1,95 @@
 # Geeto
 
-> **Git Flow Automation CLI** with AI-powered branch naming and Trello integration
+> The Next-Gen Git Flow Automation CLI
 
 [![npm version](https://badge.fury.io/js/%40geeto%2Fcore.svg)](https://badge.fury.io/js/%40geeto%2Fcore)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![codecov](https://codecov.io/gh/geeto/core/branch/main/graph/badge.svg)](https://codecov.io/gh/geeto/core)
-[![GitHub issues](https://img.shields.io/github/issues/geeto/core)](https://github.com/geeto/core/issues)
-[![GitHub pull requests](https://img.shields.io/github/issues-pr/geeto/core)](https://github.com/geeto/core/pulls)
-[![GitHub contributors](https://img.shields.io/github/contributors/geeto/core)](https://github.com/geeto/core/graphs/contributors)
-[![GitHub last commit](https://img.shields.io/github/last-commit/geeto/core)](https://github.com/geeto/core/commits/main)
-[![npm downloads](https://img.shields.io/npm/dm/@geeto/core)](https://www.npmjs.com/package/@geeto/core)
-
-A production-ready command-line tool for automating Git workflows with intelligent branch naming, Trello integration, and checkpoint recovery.
+[![GitHub issues](https://img.shields.io/github/issues/rust142/geeto)](https://github.com/rust142/geeto/issues)
+[![GitHub pull requests](https://img.shields.io/github/issues-pr/rust142/geeto)](https://github.com/rust142/geeto/pulls)
+[![GitHub contributors](https://img.shields.io/github/contributors/rust142/geeto)](https://github.com/rust142/geeto/graphs/contributors)
+[![GitHub last commit](https://img.shields.io/github/last-commit/rust142/geeto)](https://github.com/rust142/geeto/commits/main)
+[![npm downloads](https://img.shields.io/npm/dm/@geeto/core)](https://www.npmjs.com/package/@geeto)
 
 ## Features
 
-- **Multiple AI Providers**: Google Gemini, GitHub Copilot, or OpenRouter
-- **Trello Integration**: Link branches to Trello cards automatically
-- **Checkpoint Recovery**: Resume interrupted workflows from any step
-- **Smart Commits**: AI-generated conventional commit messages
-- **Beautiful CLI**: Fun ASCII art with intuitive navigation
-- **Cross-Platform**: Works on macOS, Linux, and Windows
+A production-ready command-line tool for automating Git workflows with intelligent branch naming, Trello integration, and checkpoint recovery.
+
+- **Multiple AI Providers**
+  Supports Google Gemini, GitHub Copilot, and OpenRouter.
+
+- **Provider & Model Switching**
+  Change AI provider or model directly from branch/commit accept menus and instantly regenerate suggestions.
+
+- **Model Sync & Custom Lists**: Reset model configurations to factory defaults for Gemini, OpenRouter, and Copilot providers. Customize model selection menus by editing `.geeto/*-model.json` files or use the Settings menu to reset models.
+
+- **Smart Branch History Detection**
+  Automatically detects branch separators from history (e.g. `dev/feature-name` or `dev#feature-name`) and reuses the most consistent format.
+
+- **Trello Integration**
+  Automatically link branches to Trello cards.
+
+- **Smart Commits**
+  AI-generated Conventional Commit messages.
+
+- **Checkpoint Recovery**
+  Resume interrupted workflows from any step, with compact staged-files preview and detection of externally staged files.
+
+- **AI Retry & Fallback**: Automatically retry generation using a different AI model or provider on failure.
+
+- **Connection Retry**: Automatically retry when AI requests fail due to connection or network errors.
+
+- **Auto Merge**: Automatically merge completed branches into `development` or any configured target branch.
+
+- **Auto Squash & Cleanup**: Automatically squash commits, preserve a clean history graph, and delete merged branches.
+
+- **Cross-Platform Support**
+  Works on macOS, Linux, and Windows.
 
 ## Installation
 
 ```bash
-npm install -g @geeto/core
+npm install -g geeto
 # or
-bun install -g @geeto/core
+bun install -g geeto
 ```
+
+**Note**: Geeto v0.0.1-beta.0 is currently in beta. For the latest stable release, check the [GitHub releases](https://github.com/rust142/geeto/releases).
 
 ## Quick Start
 
 ### 1. Choose AI Provider
 
-#### OpenRouter (Cheapest - Recommended)
+#### OpenRouter
 
-```bash
-# Sign up at https://openrouter.ai/
-geeto
-# Navigate: Settings → OpenRouter Setup
+If you plan to use OpenRouter, configure Geeto with a project-local `.geeto/openrouter.toml` file containing your API key:
+
+```toml
+# .geeto/openrouter.toml
+openrouter_api_key = "YOUR_API_KEY"
 ```
 
-#### Gemini API (Free with limits)
+#### Gemini API
 
-```bash
-go install github.com/tfkhdyt/geminicommit@latest
-geminicommit config key set YOUR_API_KEY
+If you plan to use Google's Gemini API, configure Geeto with a project-local `.geeto/gemini.toml` file containing your API key:
+
+```toml
+# .geeto/gemini.toml
+gemini_api_key = "YOUR_API_KEY"
 ```
 
-#### GitHub Copilot (Requires subscription)
+#### GitHub Copilot
 
-```bash
-curl -fsSL https://gh.io/copilot-install | bash
-github-copilot-cli auth
-```
+Geeto automatically installs and configures the GitHub Copilot CLI during first use. The setup process:
 
-### 2. Run Geeto
+1. **Automatically installs GitHub CLI** if not present (using the best method for your platform)
+2. **Handles authentication** through GitHub CLI's OAuth flow
+3. **Installs Copilot CLI** and verifies the installation
+4. **Sets up model configurations** automatically
+
+No manual installation or authentication steps are required - Geeto handles everything interactively during the first run.
+
+### 3. Run Geeto
 
 ```bash
 geeto
@@ -76,16 +108,9 @@ Geeto guides you through a 6-step Git automation process:
 5. **Merge** - Merge to target branch
 6. **Cleanup** - Remove temporary branches
 
-### AI Model Pricing
+### AI model selection
 
-| Provider | Model | Input Cost | Output Cost | Notes |
-| ---------- | ------- | ------------ | ------------- | -------- |
-| OpenRouter | Olmo 3.1 32B | $0.20/M | $0.60/M | Cheapest |
-| OpenRouter | MiniMax M2.1 | $0.27/M | $1.12/M | Balanced |
-| Copilot | Claude Haiku | ~$0.10/M | ~$0.30/M | Fastest |
-| Gemini | Free API | Rate limited | Rate limited | No cost |
-
-*Pricing information is approximate and subject to change. Check provider documentation for current rates.*
+Model labels in selection menus were simplified to make choices easier to scan; pricing details are intentionally omitted from the interactive menus. Check provider docs for current rates if cost is a concern.
 
 ## Roadmap
 
@@ -96,19 +121,20 @@ Geeto guides you through a 6-step Git automation process:
 - ✅ Multiple AI provider support (Gemini, GitHub Copilot, OpenRouter)
 - ✅ Trello integration
 - ✅ Checkpoint recovery
+- ✅ State file migration to `.geeto/` directory
+- ✅ Intelligent rate limit management
 - ✅ Cross-platform builds (Linux, macOS, Windows)
-- ✅ Comprehensive linting and type checking
-- ✅ Professional code quality standards
+- ✅ Simplified Copilot CLI setup with automatic GitHub CLI installation
 
 ### Future Development
 
 Geeto is focused on core Git workflow automation. Future enhancements will be driven by community feedback and real user needs.
 
-Have a feature idea? [Open an issue](https://github.com/geeto/core/issues) or submit a pull request!
+Have a feature idea? [Open an issue](https://github.com/rust142/geeto/issues) or submit a pull request!
 
 ```bash
 # Clone repository
-git clone https://github.com/geeto/core.git
+git clone https://github.com/rust142/geeto.git
 cd geeto
 
 # Install dependencies
@@ -124,36 +150,17 @@ bun run test
 ## Requirements
 
 - **Node.js**: >= 18.0.0
-- **Bun**: >= 1.0.0 (optional)
+- **Bun**: >= 1.0.0 (optional, recommended for development)
 - **Git**: >= 2.0
+- **Operating System**: macOS, Linux, or Windows
 
-## Contributing
+## Development
 
-We welcome contributions! Geeto is an ambitious project with lots of exciting features planned. Here's how you can help:
-
-### Ways to Contribute
-
-1. **Bug Reports** - Found a bug? [Open an issue](https://github.com/geeto/core/issues)
-2. **Feature Requests** - Have ideas? Check our roadmap above or suggest new features
-3. **Code Contributions** - Help implement features from our roadmap
-4. **Documentation** - Improve docs, tutorials, or examples
-5. **Testing** - Help test new features and report issues
-
-### Commit Conventions
-
-This project uses [Conventional Commits](https://conventionalcommits.org/) for consistent commit messages. Please follow the format:
-
-```text
-type(scope): description
-```
-
-Common types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
-
-### Development Setup
+### Quick Setup
 
 ```bash
 # Clone repository
-git clone https://github.com/geeto/core.git
+git clone https://github.com/rust142/geeto.git
 cd geeto
 
 # Install dependencies
@@ -162,55 +169,71 @@ bun install
 # Build project
 bun run build
 
-# Run linting
-bun run lint
-
-# Run type checking
-bun run typecheck
+# Run development version
+bun run dev
 ```
 
-### Releases
+### Available Scripts
 
-Geeto uses [release-it](https://github.com/release-it/release-it) for automated versioning and publishing.
+| Command                  | Description                      |
+|--------------------------|----------------------------------|
+| `bun run build`          | Compile TypeScript to JavaScript |
+| `bun run dev`            | Run development version with Bun |
+| `bun run start`          | Run compiled version             |
+| `bun run lint`           | Run ESLint code linting          |
+| `bun run lint:fix`       | Auto-fix ESLint issues           |
+| `bun run format`         | Format code with Prettier        |
+| `bun run typecheck`      | Run TypeScript type checking     |
+| `bun run geeto:build:all`| Build binaries for all platforms |
+| `bun run release:beta`   | Create beta release              |
 
-```bash
-# Interactive release (recommended)
-bun run release
+### Quality Assurance
 
-# Direct release types
-bun run release:patch    # 1.0.0 -> 1.0.1
-bun run release:minor    # 1.0.0 -> 1.1.0
-bun run release:major    # 1.0.0 -> 2.0.0
-```
+Geeto maintains high code quality standards with:
 
-Release-it automatically:
+- **ESLint**: Code linting and style enforcement
+- **Prettier**: Automated code formatting
+- **TypeScript**: Static type checking
+- **Husky**: Pre-commit hooks for quality gates
+- **Commitlint**: Conventional commit message validation
+- **Markdownlint**: Documentation formatting
 
-- Updates version numbers
-- Generates changelogs
-- Creates GitHub releases
-- Publishes to NPM
-- Builds cross-platform binaries
+### Cross-Platform Binaries
 
-### Feature Implementation Priority
+Pre-built executables are available for:
 
-Looking to contribute code? Here are some areas that could use improvement:
+- **Linux** (`geeto-linux`)
+- **macOS** (`geeto-mac`)
+- **Windows** (`geeto-windows.exe`)
 
-- **Bug fixes** - Help stabilize existing features
-- **Documentation** - Improve docs and examples
-- **Testing** - Add comprehensive test coverage
-- **Performance** - Optimize CLI responsiveness
-- **UI/UX** - Enhance the user interface
-- **AI Integration** - Add support for new AI providers
-- **Platform Support** - Improve cross-platform compatibility
+Build all platforms with: `bun run geeto:build:all`
 
-See our [Contributing Guide](CONTRIBUTING.md) for detailed instructions.
+### CI/CD Pipeline
+
+Geeto uses GitHub Actions for automated quality assurance:
+
+- **Quality Checks**: Linting, formatting, and type checking
+- **Security Scanning**: Snyk vulnerability scanning and CodeQL analysis
+- **Cross-Platform Testing**: Tests on Node.js 18.x and 20.x
+- **Commit Validation**: Conventional commit message linting
+- **Auto-labeling**: Automatic PR labeling based on commit types
+
+### Dependency Management
+
+- **Dependabot**: Automated dependency updates (weekly)
+- **Audit**: Regular security audits with `bun audit`
+- **Lockfiles**: Both `bun.lock` and `yarn.lock` for compatibility
+
+## Contributing
+
+For contribution guidelines and templates, please see the CONTRIBUTING.md file in this repository: [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## Community & Support
 
 - **Documentation**: [Contributing Guide](CONTRIBUTING.md)
-- **Bug Reports**: [GitHub Issues](https://github.com/geeto/core/issues)
-- **Feature Requests**: [GitHub Discussions](https://github.com/geeto/core/discussions)
-- **Discussions**: [GitHub Discussions](https://github.com/geeto/core/discussions)
+- **Bug Reports**: [GitHub Issues](https://github.com/rust142/geeto/issues)
+- **Feature Requests**: [GitHub Discussions](https://github.com/rust142/geeto/discussions)
+- **Discussions**: [GitHub Discussions](https://github.com/rust142/geeto/discussions)
 - **Security**: [Security Policy](SECURITY.md)
 - **Code of Conduct**: [Code of Conduct](CODE_OF_CONDUCT.md)
 
@@ -219,8 +242,8 @@ See our [Contributing Guide](CONTRIBUTING.md) for detailed instructions.
 If you need help or have questions:
 
 1. Check the [documentation](CONTRIBUTING.md)
-2. Search existing [issues](https://github.com/geeto/core/issues) and [discussions](https://github.com/geeto/core/discussions)
-3. Create a new [issue](https://github.com/geeto/core/issues/new/choose) or [discussion](https://github.com/geeto/core/discussions/new)
+2. Search existing [issues](https://github.com/rust142/geeto/issues) and [discussions](https://github.com/rust142/geeto/discussions)
+3. Create a new [issue](https://github.com/rust142/geeto/issues/new/choose) or [discussion](https://github.com/rust142/geeto/discussions/new)
 
 ## License
 

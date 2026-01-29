@@ -1,27 +1,28 @@
-/**
- * Main workflow - orchestrates the entire Geeto workflow
- */
+/** Main workflow for the Geeto CLI. */
 
-import type { FreeModel, GeetoState } from '../types'
+import type { CopilotModel } from '../api/copilot.js'
+import type { GeminiModel } from '../api/gemini.js'
+import type { OpenRouterModel } from '../api/openrouter.js'
+import type { GeetoState } from '../types/index.js'
 
-import { handleAIProviderSelection } from './ai-provider'
-import { handleBranchCreationWorkflow } from './branch'
-import { handleCommitWorkflow } from './commit'
-import { showSettingsMenu } from './settings'
+import { handleAIProviderSelection } from './ai-provider.js'
+import { showAuthorTools } from './author.js'
+import { handleBranchCreationWorkflow } from './branch.js'
+import { handleCommitWorkflow } from './commit.js'
+import { handleCleanup, handleMerge, handlePush } from './main-steps.js'
+import { showSettingsMenu } from './settings.js'
 
-import { confirm, ProgressBar, select } from '../cli'
-import { STEP, TASK_PLATFORMS } from '../core/constants'
-import {
-  clearState,
-  exec,
-  getChangedFiles,
-  getCurrentBranch,
-  getStagedFiles,
-  loadState,
-  log,
-  saveState,
-} from '../utils'
-import { hasTrelloConfig } from '../utils/config'
+import { select } from '../cli/menu.js'
+import { closeInput } from '../cli/input.js'
+import { STEP, TASK_PLATFORMS } from '../core/constants.js'
+import { loadState, saveState, preserveProviderState } from '../utils/state.js'
+import { formatTimestampLocale } from '../utils/time.js'
+import { colors } from '../utils/colors.js'
+import path from 'node:path'
+import { hasTrelloConfig, getTrelloConfig, DEFAULT_GEMINI_MODEL } from '../utils/config.js'
+import { log } from '../utils/logging.js'
+import { exec } from '../utils/exec.js'
+import { getChangedFiles, getCurrentBranch, getStagedFiles } from '../utils/git.js'
 
 const getStepName = (step: number): string => {
   switch (step) {
@@ -49,26 +50,115 @@ const getStepName = (step: number): string => {
   }
 }
 
-export const main = async (): Promise<void> => {
+const displayCurrentProviderStatus = async (): Promise<void> => {
+  // Get git user and remote info for display
+  let gitUser = { name: '', email: '' }
+  let remoteUrl = ''
+  let upstream = ''
+  try {
+    const utils = await import('../utils/exec.js')
+    gitUser.name = utils.exec('git config user.name', true).trim()
+    gitUser.email = utils.exec('git config user.email', true).trim()
+  } catch {
+    gitUser = { name: '', email: '' }
+  }
+  try {
+    const utils = await import('../utils/exec.js')
+    remoteUrl = utils.exec('git remote get-url origin', true).trim()
+  } catch {
+    remoteUrl = ''
+  }
+  try {
+    const utils = await import('../utils/exec.js')
+    upstream = utils.exec('git rev-parse --abbrev-ref --symbolic-full-name @{u}', true).trim()
+  } catch {
+    upstream = ''
+  }
+
+  // Trello board id if configured
+  const trelloConfig = getTrelloConfig()
+
+  console.log(
+    `${colors.cyan}┌─ Git Information ───────────────────────────────────────┐${colors.reset}`
+  )
+
+  if (gitUser) {
+    console.log(
+      `${colors.cyan}│${colors.reset} Username: ${colors.cyan}${gitUser.name}${colors.reset}`
+    )
+    console.log(
+      `${colors.cyan}│${colors.reset} Email: ${colors.cyan}${gitUser.email}${colors.reset}`
+    )
+  }
+  if (remoteUrl) {
+    console.log(`${colors.cyan}│${colors.reset} Remote: ${colors.cyan}${remoteUrl}${colors.reset}`)
+  }
+  if (upstream) {
+    console.log(
+      `${colors.cyan}│${colors.reset} Remote branch: ${colors.cyan}${upstream}${colors.reset}`
+    )
+  }
+  if (trelloConfig.boardId) {
+    console.log(
+      `${colors.cyan}│${colors.reset} Trello board: ${colors.cyan}${trelloConfig.boardId}${colors.reset}`
+    )
+  }
+
+  // Only show git-related info in this box (provider/model are shown in Resume Status)
+
+  console.log(
+    `${colors.cyan}└─────────────────────────────────────────────────────────┘${colors.reset}`
+  )
+  // Header now shows Git info only
+}
+
+export const main = async (opts?: {
+  startAt?: 'commit' | 'merge' | 'branch' | 'stage' | 'push'
+  fresh?: boolean
+  resume?: boolean
+}): Promise<void> => {
   try {
     log.banner()
 
-    // Settings menu
-    const initialChoice = await select('Welcome to Geeto! What would you like to do?', [
-      { label: 'Start new workflow', value: 'start' },
-      { label: 'Settings', value: 'settings' },
-      { label: 'Exit', value: 'exit' },
-    ])
-
-    if (initialChoice === 'exit') {
-      log.info('Goodbye!')
-      throw new Error('User exited')
+    // Try to load saved state to show current provider status
+    const initialSavedState = loadState()
+    if (initialSavedState?.aiProvider) {
+      // If there's a saved checkpoint, avoid duplicating the configured model
+      // in the 'Current AI Setup' box since the resume flow will show it.
+      await displayCurrentProviderStatus()
     }
 
-    if (initialChoice === 'settings') {
+    const suppressLogs = !!opts?.startAt
+
+    if (opts?.startAt) {
+      log.info(`Shortcut: starting at step -> ${opts.startAt}`)
+    }
+
+    // Settings menu
+    const initialChoice = opts?.startAt
+      ? 'start'
+      : await select('Welcome to Geeto! What would you like to do?', [
+          { label: 'Start new workflow', value: 'start' },
+          { label: 'About author', value: 'author' },
+          { label: 'Settings', value: 'settings' },
+          { label: 'Exit', value: 'exit' },
+        ])
+
+    if (!opts?.startAt && initialChoice === 'exit') {
+      log.info('Goodbye!')
+      return
+    }
+
+    if (!opts?.startAt && initialChoice === 'settings') {
       await showSettingsMenu()
       // After settings, go back to main menu
-      return main()
+      await main()
+      return
+    }
+
+    if (!opts?.startAt && initialChoice === 'author') {
+      await showAuthorTools()
+      return
     }
 
     // Check git repo first
@@ -81,101 +171,314 @@ export const main = async (): Promise<void> => {
 
     // Load saved state early
     const savedState = loadState()
-    let aiProvider: 'gemini' | 'copilot' | 'openrouter'
-    let copilotModel: 'claude-haiku-4.5' | 'gpt-5' | undefined
-    let openrouterModel: FreeModel | undefined
+    let aiProvider: 'gemini' | 'copilot' | 'openrouter' | 'manual'
+    let copilotModel: CopilotModel | undefined
+    let openrouterModel: OpenRouterModel | undefined
+    let geminiModel: GeminiModel | undefined
     let shouldResume = false
+    let suppressStagingDoneMessage = false
 
     if (savedState) {
-      log.warn(`Found saved checkpoint from: ${savedState.timestamp}`)
+      // Format saved checkpoint timestamp using system locale when available.
+      const formattedTimestamp = formatTimestampLocale(savedState.timestamp)
+      log.warn(`Found saved checkpoint from: ${formattedTimestamp}`)
       log.info(`Last step: ${getStepName(savedState.step)}`)
-      log.info(`Working branch: ${savedState.workingBranch}`)
 
-      const resumeChoice = await select('What would you like to do?', [
-        { label: 'Resume from checkpoint', value: 'resume' },
-        { label: 'Start fresh (discard checkpoint)', value: 'fresh' },
-        { label: 'Cancel', value: 'cancel' },
-      ])
+      // Use the real git branch at startup so manual `git checkout` is reflected
+      const actualCurrentBranch = getCurrentBranch()
+      const displayedWorking =
+        actualCurrentBranch || savedState.workingBranch || savedState.currentBranch || 'unknown'
+      log.info(`Working branch: ${colors.cyan}${displayedWorking}${colors.reset}`)
+
+      let resumeChoice: string
+      if (opts?.fresh) {
+        resumeChoice = 'fresh'
+      } else if (opts?.resume === true || opts?.startAt) {
+        // Auto-resume without prompt
+        resumeChoice = 'resume'
+      } else {
+        // Avoid accidental immediate acceptance from previous Enter key press
+        await new Promise((resolve) => setTimeout(resolve, 80))
+        resumeChoice = await select('What would you like to do?', [
+          { label: 'Resume from checkpoint', value: 'resume' },
+          { label: 'Start fresh (discard checkpoint)', value: 'fresh' },
+          { label: 'Cancel', value: 'cancel' },
+        ])
+      }
+
+      // If startAt provided, ensure the saved checkpoint step is compatible
+      switch (opts?.startAt) {
+        case 'commit': {
+          savedState.step = Math.max(savedState.step, STEP.BRANCH_CREATED)
+          if (!suppressLogs) {
+            log.info('Auto-start: commit')
+          }
+          break
+        }
+        case 'merge': {
+          savedState.step = Math.max(savedState.step, STEP.PUSHED)
+          if (!suppressLogs) {
+            log.info('Auto-start: merge')
+          }
+          break
+        }
+        case 'branch': {
+          savedState.step = Math.max(savedState.step, STEP.STAGED)
+          if (!suppressLogs) {
+            log.info('Auto-start: branch')
+          }
+          break
+        }
+        case 'stage': {
+          savedState.step = Math.max(savedState.step, STEP.INIT)
+          if (!suppressLogs) {
+            log.info('Auto-start: stage')
+          }
+          break
+        }
+        case 'push': {
+          savedState.step = Math.max(savedState.step, STEP.COMMITTED)
+          if (!suppressLogs) {
+            log.info('Auto-start: push')
+          }
+          break
+        }
+      }
 
       if (resumeChoice === 'resume') {
         shouldResume = true
+        // When resuming from a checkpoint that already completed staging,
+        // avoid duplicating the staged-files summary message later.
+        suppressStagingDoneMessage = savedState.step >= STEP.STAGED
         // Use saved AI provider and model
         aiProvider = savedState.aiProvider ?? 'gemini'
         copilotModel = savedState.copilotModel
         openrouterModel = savedState.openrouterModel
-        log.info(`Resuming previous session with ${aiProvider} provider`)
-        if (copilotModel) {
-          log.info(`Copilot Model set to: ${copilotModel}`)
+        geminiModel = savedState.geminiModel
+
+        // Show a compact resume status box separate from the full "Current AI Setup"
+        const gitUtils = await import('../utils/git-ai.js')
+        const providerShort = gitUtils.getAIProviderShortName(aiProvider)
+        let modelToShow: string | undefined
+        if (aiProvider === 'copilot') {
+          modelToShow = copilotModel
+        } else if (aiProvider === 'openrouter') {
+          modelToShow = openrouterModel
+        } else {
+          modelToShow = geminiModel ?? DEFAULT_GEMINI_MODEL
         }
 
-        // Verify AI provider setup is still valid
-        const { ensureAIProvider } = await import('../core/setup.js')
-        const aiReady = await ensureAIProvider(aiProvider)
-        if (!aiReady) {
-          log.warn(
-            `${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup is no longer valid.`
+        if (!opts?.startAt) {
+          console.log(
+            `${colors.cyan}┌─ Checkpoint Summary ────────────────────────────────────┐${colors.reset}`
           )
-          const fixSetup = confirm(
-            `Fix ${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup now?`
-          )
-          if (fixSetup) {
-            const setupSuccess = await ensureAIProvider(aiProvider)
-            if (!setupSuccess) {
-              log.warn(
-                `Could not fix ${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup. Switching to manual mode.`
-              )
-              aiProvider = 'gemini' // Keep gemini but will use manual fallback
-            }
-          } else {
-            log.warn(
-              `${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup invalid. Will use manual mode for AI features.`
+          if (aiProvider === 'manual') {
+            console.log(
+              `${colors.cyan}│${colors.reset} Provider: ${colors.cyan}Manual (manual mode)${colors.reset}`
             )
+          } else {
+            console.log(
+              `${colors.cyan}│${colors.reset} Provider: ${colors.cyan}${providerShort}${colors.reset}`
+            )
+            if (modelToShow) {
+              console.log(
+                `${colors.cyan}│${colors.reset} Model: ${colors.cyan}${modelToShow}${colors.reset}`
+              )
+            }
+          }
+          console.log(
+            `${colors.cyan}│${colors.reset} Resuming from: ${colors.cyan}${getStepName(savedState.step)}${colors.reset}`
+          )
+          // Show staged files preview
+          const currentStaged = getStagedFiles()
+
+          if (currentStaged.length > 0) {
+            // Compute overflow count for preview
+            const moreCount = Math.max(0, currentStaged.length - 2)
+            const more = moreCount > 0 ? ` (+${moreCount} more)` : ''
+
+            // Display staged count (live or checkpoint)
+            const shownCount = currentStaged.length
+            const stagedLine = `${colors.cyan}│${colors.reset} Staged: ${colors.cyan}${shownCount} files${colors.reset}`
+            console.log(stagedLine)
+            console.log(
+              `${colors.cyan}│${colors.reset} Files: ${colors.cyan}${currentStaged
+                .splice(0, 2)
+                .map((f) => path.basename(f))
+                .join(', ')}${more}${colors.reset}`
+            )
+          }
+          console.log(
+            `${colors.cyan}└─────────────────────────────────────────────────────────┘${colors.reset}`
+          )
+        }
+
+        // Verify AI provider setup is still valid (skip for manual mode)
+        if (!opts?.startAt && aiProvider !== 'manual') {
+          const { ensureAIProvider } = await import('../core/setup.js')
+          const aiReady = await ensureAIProvider(aiProvider)
+          if (!aiReady) {
+            log.warn(
+              `${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup is no longer valid.`
+            )
+            const fixSetup = confirm(
+              `Fix ${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup now?`
+            )
+            if (fixSetup) {
+              const setupSuccess = await ensureAIProvider(aiProvider)
+              if (!setupSuccess) {
+                log.warn(
+                  `Could not fix ${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup. Switching to manual mode.`
+                )
+                aiProvider = 'gemini' // Keep gemini but will use manual fallback
+              }
+            } else {
+              log.warn(
+                `${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup invalid. Will use manual mode for AI features.`
+              )
+            }
           }
         }
       } else if (resumeChoice === 'fresh') {
-        clearState()
+        preserveProviderState(savedState)
         log.info('Starting fresh...')
 
-        // Choose AI Provider
-        const aiSelection = await handleAIProviderSelection()
-        aiProvider = aiSelection.aiProvider
-        copilotModel = aiSelection.copilotModel
-        openrouterModel = aiSelection.openrouterModel
+        // Keep the currently configured provider and model from the saved checkpoint.
+        aiProvider = savedState.aiProvider ?? 'gemini'
+        copilotModel = savedState.copilotModel
+        openrouterModel = savedState.openrouterModel
+        geminiModel = savedState.geminiModel
+
+        // Display current provider status (Git info only)
+        await displayCurrentProviderStatus()
       } else {
         process.exit(0)
       }
     } else {
       // No saved state, choose AI provider fresh
-      const aiSelection = await handleAIProviderSelection()
-      aiProvider = aiSelection.aiProvider
-      copilotModel = aiSelection.copilotModel
-      openrouterModel = aiSelection.openrouterModel
+      if (opts?.startAt) {
+        // For startAt flags, use default provider without prompting
+        aiProvider = 'gemini'
+        geminiModel = DEFAULT_GEMINI_MODEL
+        log.info('Using default AI provider (Gemini) for quick start')
+      } else {
+        const aiSelection = await handleAIProviderSelection()
+        aiProvider = aiSelection.aiProvider
+        copilotModel = aiSelection.copilotModel
+        openrouterModel = aiSelection.openrouterModel
+        geminiModel = aiSelection.geminiModel
+      }
+
+      // Display current provider status (Git info only)
+      await displayCurrentProviderStatus()
     }
+
+    // Determine actual current branch and staged files at startup
+    const actualBranch = getCurrentBranch()
 
     let state: GeetoState = {
       step: STEP.INIT,
       workingBranch: '',
       targetBranch: '',
-      currentBranch: getCurrentBranch(),
-      stagedFiles: [],
+      currentBranch: actualBranch,
       timestamp: new Date().toISOString(),
       aiProvider,
       copilotModel,
       openrouterModel,
+      geminiModel,
     }
 
     if (shouldResume && savedState) {
-      state = savedState
-      log.info(`Resuming from step: ${getStepName(state.step)}`)
-    }
-
-    const currentBranch = savedState ? state.currentBranch : getCurrentBranch()
-    if (!savedState) {
-      state.currentBranch = currentBranch
+      // If actual branch equals saved working branch, resume from the saved step.
+      const savedBranch = savedState.currentBranch ?? ''
+      if (savedBranch && savedBranch !== actualBranch) {
+        log.warn(
+          `Branch changed from '${savedBranch}' to '${actualBranch}', resetting workflow state`
+        )
+        state = {
+          ...savedState,
+          step: STEP.INIT,
+          workingBranch: actualBranch,
+          currentBranch: actualBranch,
+        }
+        saveState(state)
+      } else {
+        // Resume but refresh current branch and staged files from git
+        state = {
+          ...savedState,
+          currentBranch: actualBranch,
+        }
+      }
     }
 
     // Use currentBranch as fallback if workingBranch is empty
-    let workingBranch = savedState ? (state.workingBranch ?? state.currentBranch) : currentBranch
+    let workingBranch = state.workingBranch ?? state.currentBranch ?? actualBranch
+    let featureBranch = ''
+
+    // If startAt override was provided, adjust the initial step so the workflow
+    // begins at the requested stage (commit/merge/branch).
+    switch (opts?.startAt) {
+      case 'commit': {
+        // Start at branch-created so commit flow will run
+        state.step = STEP.BRANCH_CREATED
+        if (!suppressLogs) {
+          log.info('Starting at commit step (skipping earlier steps)')
+        }
+        break
+      }
+      case 'merge': {
+        // Mark as pushed so merge flow will run while push is skipped
+        state.step = STEP.PUSHED
+        if (!suppressLogs) {
+          log.info('Starting at merge step (skipping earlier steps)')
+        }
+        break
+      }
+      case 'branch': {
+        // Mark as staged so branch flow will run while staging is skipped
+        state.step = STEP.STAGED
+        if (!suppressLogs) {
+          log.info('Starting at branch step (skipping earlier steps)')
+        }
+        break
+      }
+      case 'stage': {
+        // Start from init so staging flow will run
+        state.step = STEP.INIT
+        if (!suppressLogs) {
+          log.info('Starting at stage step (skipping earlier steps)')
+        }
+        break
+      }
+      case 'push': {
+        // Mark as committed so push flow will run while earlier steps are skipped
+        state.step = STEP.COMMITTED
+        if (!suppressLogs) {
+          log.info('Starting at push step (skipping earlier steps)')
+        }
+        break
+      }
+    }
+
+    // Validate working branch (skip if in detached HEAD)
+    if (!workingBranch || workingBranch.trim() === '') {
+      try {
+        // Try to get current branch again
+        const retryBranch = getCurrentBranch()
+        if (retryBranch && retryBranch.trim() !== '') {
+          workingBranch = retryBranch
+          state.currentBranch = retryBranch
+        } else {
+          log.warn('Unable to determine current branch (possibly detached HEAD). Using fallback.')
+          workingBranch = 'detached-head'
+          state.currentBranch = workingBranch
+        }
+      } catch {
+        log.warn('Unable to determine current branch. Using fallback.')
+        workingBranch = 'unknown-branch'
+        state.currentBranch = workingBranch
+      }
+    }
 
     // Ask about task management platform integration
     let selectedPlatform: 'trello' | 'none' = 'none'
@@ -183,7 +486,9 @@ export const main = async (): Promise<void> => {
     // Auto-detect configured platforms
     if (hasTrelloConfig()) {
       selectedPlatform = 'trello'
-      log.success('Trello platform configured ✓')
+      if (!opts?.startAt) {
+        log.success('Trello platform configured')
+      }
     } else {
       const wantTaskIntegration = confirm('Integrate with task management platform?')
 
@@ -206,9 +511,13 @@ export const main = async (): Promise<void> => {
         // Setup selected platform if needed
         if (selectedPlatform === 'trello' && !hasTrelloConfig()) {
           log.info('Setting up Trello integration...')
-          const { setupTrelloConfigInteractive } = await import('../core/trello-setup')
-          setupTrelloConfigInteractive()
-          log.success('Trello integration configured!')
+          const { setupTrelloConfigInteractive } = await import('../core/trello-setup.js')
+          const trelloSetupSuccess = setupTrelloConfigInteractive()
+          if (trelloSetupSuccess) {
+            log.success('Trello integration configured!')
+          } else {
+            log.warn('Trello setup failed or cancelled.')
+          }
         }
         // Future: Add setup for other platforms here
       }
@@ -222,166 +531,206 @@ export const main = async (): Promise<void> => {
       log.info(`Changed files: ${changedFiles.length}`)
 
       if (changedFiles.length === 0) {
-        log.warn('No changes detected!')
-        process.exit(0)
-      }
-
-      console.log('\nChanged files:')
-      for (const file of changedFiles) {
-        console.log(`  ${file}`)
-      }
-
-      log.step('Step 1: Stage Changes')
-
-      const stageChoice = await select('What to stage?', [
-        { label: 'Stage all changes', value: 'all' },
-        { label: 'Stage tracked files only', value: 'tracked' },
-        { label: 'Already staged', value: 'skip' },
-        { label: 'Cancel', value: 'cancel' },
-      ])
-
-      switch (stageChoice) {
-        case 'all': {
-          exec('git add -A')
-          log.success('All changes staged')
-
-          break
-        }
-        case 'tracked': {
-          exec('git add -u')
-          log.success('Tracked files staged')
-
-          break
-        }
-        case 'cancel': {
+        // No file changes detected — allow the user to continue without
+        // staging (useful for push/merge workflows) or cancel.
+        const noChangesChoice = await select(
+          'No changes detected. How would you like to proceed?',
+          [
+            { label: 'Continue without staging', value: 'without' },
+            { label: 'Cancel', value: 'cancel' },
+          ]
+        )
+        if (noChangesChoice === 'cancel') {
           log.warn('Cancelled.')
           process.exit(0)
-
-          break
         }
-        // No default
-      }
+      } else {
+        console.log('\nChanged files:')
+        for (const file of changedFiles) {
+          console.log(`  ${file}`)
+        }
 
-      const stagedFiles = getStagedFiles()
-      if (stagedFiles.length === 0) {
-        log.error('No staged files!')
-        process.exit(0)
-      }
+        if (!suppressLogs) {
+          log.step('Step 1: Stage Changes')
+        }
 
-      state.stagedFiles = stagedFiles
-      state.step = STEP.STAGED
-      saveState(state)
+        const stageChoice = await select('What to stage?', [
+          { label: 'Stage all changes', value: 'all' },
+          { label: 'Already staged', value: 'skip' },
+          { label: 'Continue without staging', value: 'without' },
+          { label: 'Cancel', value: 'cancel' },
+        ])
 
-      console.log('\nStaged files:')
-      for (const file of stagedFiles) {
-        console.log(`  + ${file}`)
+        switch (stageChoice) {
+          case 'all': {
+            exec('git add -A')
+            log.success('All changes staged')
+            break
+          }
+          case 'without': {
+            log.info('Continuing without staging')
+            break
+          }
+          case 'cancel': {
+            log.warn('Cancelled.')
+            process.exit(0)
+          }
+          // 'skip' intentionally falls through to stagedFiles check below
+        }
+
+        const stagedFiles = getStagedFiles()
+        // If the user explicitly chose to continue without staging, don't treat
+        // an empty staged set as a fatal error here — allow the workflow to
+        // continue and re-check staging status right before committing.
+        if (stagedFiles.length === 0 && stageChoice !== 'without') {
+          log.error('No staged files!')
+          process.exit(0)
+        }
+
+        // Only mark staging as completed when there are actually staged files.
+        if (stagedFiles.length > 0) {
+          state.step = STEP.STAGED
+          saveState(state)
+          console.log('\nStaged files:')
+          for (const file of stagedFiles) {
+            console.log(`  + ${file}`)
+          }
+        }
       }
     } else {
-      log.info(`✓ Staging already done (${state.stagedFiles.length} files)`)
+      const stagedFiles = getStagedFiles()
+      if (suppressStagingDoneMessage) {
+        if (!suppressLogs) {
+          log.info('Staging previously completed')
+        }
+      } else {
+        log.success(`Staging already done (${stagedFiles.length} files)`)
+      }
     }
 
     // STEP 2: Create branch
     if (state.step < STEP.BRANCH_CREATED) {
-      const branchName = await handleBranchCreationWorkflow(state)
+      const { branchName, created } = await handleBranchCreationWorkflow(state, {
+        suppressStep: !!opts?.startAt,
+        suppressConfirm: !!opts?.startAt,
+      })
+      // handleBranchCreationWorkflow returns { branchName, created }
       state.workingBranch = branchName
-      state.step = STEP.BRANCH_CREATED
+      if (created) {
+        state.step = STEP.BRANCH_CREATED
+        state.currentBranch = branchName
+      }
       saveState(state)
     } else {
-      workingBranch = state.workingBranch ?? state.currentBranch ?? currentBranch
+      workingBranch = state.workingBranch ?? state.currentBranch ?? actualBranch
       if (!state.workingBranch) {
         state.workingBranch = workingBranch
         saveState(state)
       }
-      log.info(`✓ Branch already created: ${workingBranch}`)
+      if (!suppressLogs) {
+        log.success(`Branch already created: ${colors.cyan}${workingBranch}${colors.reset}`)
+      }
     }
 
     // STEP 3: Commit
     if (state.step < STEP.COMMITTED) {
-      await handleCommitWorkflow(state)
-      state.step = STEP.COMMITTED
-      saveState(state)
-    } else {
-      log.info('✓ Commit already done')
-    }
+      // Refresh staged files from git in real-time. The staging step is
+      // optional and only helps the user; commits must always verify the
+      // current staged files from git so external changes are respected.
+      const liveStaged = getStagedFiles()
 
-    // STEP 4: Push
-    if (state.step < STEP.PUSHED) {
-      log.step('Step 4: Push to Remote')
+      if (liveStaged.length === 0) {
+        let noStageChoice: string
+        if (opts?.startAt === 'commit' || opts?.startAt === 'stage') {
+          noStageChoice = 'stageNow'
+        } else {
+          noStageChoice = await select('No staged files detected. How would you like to proceed?', [
+            { label: 'Stage all changes now', value: 'stageNow' },
+            { label: 'Skip commit and continue', value: 'skipCommit' },
+            { label: 'Cancel', value: 'cancel' },
+          ])
+        }
 
-      const shouldPush = confirm(`Push ${workingBranch} to origin?`)
+        if (noStageChoice === 'cancel') {
+          log.warn('Cancelled.')
+          process.exit(0)
+        }
 
-      if (shouldPush) {
-        const progressBar = new ProgressBar(3, 'Pushing to remote')
-        progressBar.update(0)
-
-        // Check if remote exists
-        progressBar.update(1)
-        exec('git remote get-url origin')
-
-        // Push the branch
-        progressBar.update(2)
-        exec(`git push -u origin "${workingBranch}"`)
-
-        progressBar.complete()
-        log.success('Pushed to remote')
+        if (noStageChoice === 'skipCommit') {
+          state.skippedCommit = true
+          state.step = STEP.COMMITTED
+          saveState(state)
+        } else if (noStageChoice === 'stageNow') {
+          let doStageAll: boolean
+          if (opts?.startAt === 'commit' || opts?.startAt === 'stage') {
+            doStageAll = true
+          } else {
+            doStageAll = confirm('Stage all changes now?')
+          }
+          if (doStageAll) {
+            exec('git add -A')
+            const newlyStaged = getStagedFiles()
+            if (newlyStaged.length === 0) {
+              log.error('No files staged after running git add.')
+              process.exit(1)
+            }
+            state.step = STEP.STAGED
+            saveState(state)
+          } else {
+            log.warn('Skipping staging. Commit will be skipped.')
+            state.skippedCommit = true
+            state.step = STEP.COMMITTED
+            saveState(state)
+          }
+        }
       }
 
-      state.step = STEP.PUSHED
-      saveState(state)
+      if (!state.skippedCommit) {
+        await handleCommitWorkflow(state, {
+          suppressStep: !!opts?.startAt,
+          suppressConfirm: false,
+        })
+        state.step = STEP.COMMITTED
+        saveState(state)
+      }
     } else {
-      log.info(`✓ Push already done: ${state.workingBranch}`)
+      // If commit was explicitly skipped earlier, don't print "already done" messages
+      if (!state.skippedCommit && !suppressLogs) {
+        log.success('Commit already done')
+      }
+    }
+
+    // STEP 4: Push — ask user before pushing in interactive mode
+    if (opts?.startAt) {
+      // Non-interactive startAt flags preserve current behavior
+      handlePush(state, { suppressStep: !!opts?.startAt, suppressLogs })
+    } else {
+      // Interactive: ask before pushing
+      const currentBranch = state.workingBranch || getCurrentBranch()
+      const wantPush = confirm(`Push ${currentBranch} to origin now?`)
+      if (wantPush) {
+        // We already confirmed, so suppress further confirm inside handlePush
+        handlePush(state, { suppressStep: false, suppressLogs: true })
+      } else {
+        log.info('Skipping push as per user request')
+      }
     }
 
     // STEP 5: Merge (simplified)
-    if (state.step < STEP.MERGED) {
-      const targetBranch = 'development'
-
-      if (workingBranch === targetBranch) {
-        log.info('✓ No new branch created, skipping merge step')
-        state.step = STEP.MERGED
-        saveState(state)
-      } else {
-        log.step('Step 5: Merge to Target Branch')
-
-        const shouldMerge = confirm(`Merge ${workingBranch} into ${targetBranch}?`)
-
-        if (shouldMerge) {
-          exec(`git checkout ${targetBranch}`)
-          exec(`git merge ${workingBranch}`)
-          log.success(`Merged ${workingBranch} into ${targetBranch}`)
-        }
-
-        state.targetBranch = targetBranch
-        state.step = STEP.MERGED
-        saveState(state)
-      }
-    } else {
-      log.info(`✓ Merge already done to: ${state.targetBranch}`)
-    }
+    featureBranch = await handleMerge(state, { suppressStep: !!opts?.startAt, suppressLogs })
 
     // STEP 6: Cleanup (simplified)
-    if (state.step < STEP.CLEANUP) {
-      log.step('Step 6: Cleanup')
+    handleCleanup(featureBranch, state)
 
-      if (
-        workingBranch &&
-        workingBranch !== state.targetBranch &&
-        workingBranch !== state.currentBranch
-      ) {
-        const deleteAnswer = confirm(`Delete branch '${workingBranch}'?`)
-        if (deleteAnswer) {
-          exec(`git branch -d ${workingBranch}`)
-          log.success(`Branch '${workingBranch}' deleted`)
-        }
-      }
-
-      state.step = STEP.CLEANUP
-      saveState(state)
-    }
-
-    clearState()
     console.log(`\n✅ Git flow complete!\n`)
-    return undefined
+    // Close any interactive input resources and exit to ensure the CLI terminates
+    try {
+      closeInput()
+    } catch {
+      /* ignore */
+    }
+    process.exit(0)
+
   } catch (error) {
     if (error instanceof Error) {
       log.error(error.message)

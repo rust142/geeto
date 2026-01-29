@@ -5,6 +5,8 @@
 import { spawnSync } from 'node:child_process'
 import os from 'node:os'
 import readline from 'node:readline'
+import fs from 'node:fs'
+import path from 'node:path'
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -132,6 +134,30 @@ export const confirm = (question: string): boolean => {
     return true
   }
   return answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes'
+}
+
+/**
+ * Edit multi-line content in the user's editor (from $EDITOR).
+ * Writes initialText to a temp file, opens $EDITOR, and returns the edited content.
+ */
+export const editInEditor = (initialText = '', filenameHint = 'geeto-commit.txt'): string => {
+  const tmpDir = os.tmpdir()
+  const tmpPath = path.join(tmpDir, `${Date.now()}-${filenameHint}`)
+  try {
+    fs.writeFileSync(tmpPath, initialText, { encoding: 'utf8' })
+  } catch {
+    return initialText
+  }
+
+  const editor = process.env.EDITOR || (process.platform === 'win32' ? 'notepad' : 'vi')
+  try {
+    spawnSync(editor, [tmpPath], { stdio: 'inherit' })
+    const edited = fs.readFileSync(tmpPath, { encoding: 'utf8' })
+    return edited.trim()
+  } catch {
+    // On failure, return initial text
+    return initialText
+  }
 }
 
 /**

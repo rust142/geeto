@@ -12,6 +12,17 @@ import { log } from '../utils/logging.js'
  * Setup OpenRouter config interactively
  */
 export const setupOpenRouterConfigInteractive = (): boolean => {
+  const configPath = getOpenRouterConfigPath()
+  // If config already exists, nothing to do
+  try {
+    if (fs.existsSync(configPath)) {
+      log.success('OpenRouter API configuration is ready!')
+      return true
+    }
+  } catch {
+    // fall through to interactive setup
+  }
+
   log.info('OpenRouter integration is not configured for this project.\n')
 
   log.info('OpenRouter provides access to various AI models through a single API key.')
@@ -20,8 +31,9 @@ export const setupOpenRouterConfigInteractive = (): boolean => {
     'Note: Even models marked as "free" may require account verification or limited credits.'
   )
   log.info('Supported models include: Llama, Mistral, Gemma, WizardLM, and many more.')
-  log.info('\nYou need an OpenRouter API key to use this service.')
+  log.info('You need an OpenRouter API key to use this service.')
   log.info('Visit https://openrouter.ai/ to create an account and get your API key.\n')
+  log.info(`The OpenRouter API key will be saved to: ${getOpenRouterConfigPath()}`)
 
   const shouldSetup = confirm('Setup OpenRouter integration now?')
   if (!shouldSetup) {
@@ -65,6 +77,7 @@ openrouter_api_key = "${openrouterKey}"
   try {
     fs.writeFileSync(path, configContent, 'utf8')
     log.success(`OpenRouter config saved to: ${path}`)
+
     return true
   } catch (error) {
     log.error(`Failed to save config: ${(error as Error).message}`)
