@@ -292,6 +292,10 @@ export const handleBranchCreationWorkflow = async (
                 log.warn('AI generation failed. Trying interactive fallback...')
 
                 const diff = execGit('git diff --cached', true)
+                if (!diff || !diff.trim()) {
+                  log.warn('No staged changes found. Cannot generate a branch name from empty diff. Aborting.')
+                  process.exit(0)
+                }
 
                 const aiSuffix = await interactiveAIFallback(
                   null,

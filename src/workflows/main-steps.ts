@@ -25,7 +25,7 @@ export function handlePush(
       // For startAt flags, auto push without confirm
       shouldPush = true
     } else {
-      shouldPush = confirm(`Push ${getCurrentBranch()} to origin?`)
+      shouldPush = confirm(`Push ${getCurrentBranch()} to origin?`, false)
     }
 
     if (shouldPush) {
@@ -233,7 +233,7 @@ export async function handleMerge(
       }
 
       // Push the updated target branch back to remote
-      const shouldPushTarget = confirm(`Push ${targetBranch} to origin?`)
+      const shouldPushTarget = confirm(`Push ${targetBranch} to origin?`, false)
       if (shouldPushTarget) {
         // Show a small progress indicator for merge push to match user expectations
         console.log('')
@@ -273,16 +273,22 @@ export function handleCleanup(featureBranch: string, state: GeetoState): void {
     log.info(`Current branch: ${getCurrentBranch()}`)
 
     if (featureBranch && featureBranch !== state.targetBranch) {
-      const deleteAnswer = confirm(`Delete branch '${featureBranch}'?`)
-      if (deleteAnswer) {
-        exec(`git branch -d ${featureBranch}`)
+      // Protect canonical branches from accidental deletion
+      const protectedBranches = new Set(['development', 'develop', 'dev'])
+      if (protectedBranches.has(featureBranch.toLowerCase())) {
+        log.info(`Skipping deletion of protected branch '${featureBranch}'`)
+      } else {
+        const deleteAnswer = confirm(`Delete branch '${featureBranch}'?`)
+        if (deleteAnswer) {
+          exec(`git branch -d ${featureBranch}`)
 
-        // Also delete remote branch if it exists
-        try {
-          pushWithRetry(`git push origin --delete ${featureBranch}`, true)
-          log.success(`Remote branch '${featureBranch}' deleted`)
-        } catch {
-          // Remote branch might not exist, ignore error
+          // Also delete remote branch if it exists
+          try {
+            pushWithRetry(`git push origin --delete ${featureBranch}`, true)
+            log.success(`Remote branch '${featureBranch}' deleted`)
+          } catch {
+            // Remote branch might not exist, ignore error
+          }
         }
       }
     }

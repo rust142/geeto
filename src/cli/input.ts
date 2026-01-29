@@ -128,10 +128,11 @@ export const highlightDiff = (diff: string): string => {
 /**
  * Ask a yes/no confirmation question
  */
-export const confirm = (question: string): boolean => {
-  const answer = askQuestion(`${question} (Y/n): `)
+export const confirm = (question: string, defaultYes: boolean = true): boolean => {
+  const suffix = defaultYes ? ' (Y/n): ' : ' (y/N): '
+  const answer = askQuestion(`${question}${suffix}`)
   if (answer === '') {
-    return true
+    return defaultYes
   }
   return answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes'
 }

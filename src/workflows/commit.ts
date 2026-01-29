@@ -282,6 +282,47 @@ export const handleCommitWorkflow = async (
     | 'manual'
   let selectedTool = getDefaultCommitTool(aiProvider)
 
+  // Helper: attempt to run git commit; on failure present concise options (edit/retry/no-verify/abort)
+  const attemptCommit = async (titleStr: string, bodyStr?: string | null): Promise<boolean> => {
+    const commitArgs = bodyStr ? `-m "${titleStr}" -m "${bodyStr}"` : `-m "${titleStr}"`
+    try {
+      exec(`git commit ${commitArgs}`)
+      return true
+    } catch {
+      log.error('Commit failed due to commit hook or invalid message.')
+
+      const action = await select('Commit failed. Choose an action:', [
+        { label: 'Edit commit message and retry', value: 'edit' },
+        { label: 'Commit with --no-verify (skip hooks)', value: 'no-verify' },
+        { label: 'Abort', value: 'abort' },
+      ])
+
+      if (action === 'edit') {
+        const edited = editInEditor(`${titleStr}\n\n${bodyStr ?? ''}`, 'geeto-commit.txt')
+        if (!edited || !edited.trim()) {
+          return false
+        }
+
+        const normalized = normalizeAIOutput(edited.trim())
+        const newTitle = extractCommitTitle(normalized) ?? edited.split('\n').find((l) => l.trim()) ?? ''
+        const newBody = newTitle ? extractCommitBody(normalized, newTitle) : null
+        return attemptCommit(newTitle as string, newBody)
+      }
+
+      if (action === 'no-verify') {
+        try {
+          exec(`git commit --no-verify ${commitArgs}`)
+          return true
+        } catch {
+          log.error('Commit with --no-verify failed. See git output for details.')
+          return false
+        }
+      }
+
+      return false
+    }
+  }
+
   const aiTools = [
     { label: 'Gemini', value: 'gemini' },
     { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
@@ -329,6 +370,10 @@ export const handleCommitWorkflow = async (
   const commitSuccess = false
 
   const diff = execGit('git diff --cached', true)
+  if (!diff || !diff.trim()) {
+    log.warn('No staged changes found. Cannot generate a commit message from empty diff. Aborting.')
+    return false
+  }
   log.info(`Git diff size: ${diff.length} chars`)
   console.log('')
 
@@ -419,6 +464,7 @@ export const handleCommitWorkflow = async (
 
   if (selectedTool !== 'manual') {
     let correction = ''
+
 
     // Try generating commit message via AI
     let initialAiResult: string | null = null
@@ -727,13 +773,12 @@ export const handleCommitWorkflow = async (
             title = firstLine?.trim() ?? normalizedOutput
           }
 
-          if (body) {
-            exec(`git commit -m "${title}" -m "${body}"`)
-          } else {
-            exec(`git commit -m "${title}"`)
+          const committed = await attemptCommit(title, body)
+          if (committed) {
+            return true
           }
-
-          return true
+          // If commit did not complete (user aborted or editing cancelled), continue loop
+          continue
         }
         case 'regenerate': {
           correction = ''
@@ -873,13 +918,12 @@ export const handleCommitWorkflow = async (
               title = firstLine?.trim() ?? normalizedOutput
             }
 
-            if (body) {
-              exec(`git commit -m "${title}" -m "${body}"`)
-            } else {
-              exec(`git commit -m "${title}"`)
+            const committed = await attemptCommit(title, body)
+            if (committed) {
+              return true
             }
-
-            return true
+            // If commit didn't happen, continue the loop to allow later actions
+            continue
           }
           // If no edit provided, continue the loop
           continue
@@ -914,18 +958,16 @@ export const handleCommitWorkflow = async (
         }
       }
 
-      try {
-        exec(`git commit -m "${message}"`)
+      const committed = await attemptCommit(message)
+      if (committed) {
         log.success(`Committed: ${colors.cyan}${message}${colors.reset}`)
-      } catch {
-        log.error('Commit failed!')
-        process.exit(1)
+        return true
       }
 
-      return true
+      log.error('Commit failed or aborted.')
+      process.exit(1)
     }
 
-    // Conventional commit flow (unchanged)
     const commitType = await select('Select commit type:', getCommitTypes())
 
     if (commitType === 'cancel') {
@@ -966,11 +1008,11 @@ export const handleCommitWorkflow = async (
       ? `${commitType}(${scope}): ${description}`
       : `${commitType}: ${description}`
 
-    try {
-      exec(`git commit -m "${commitMsg}"`)
+    const committed = await attemptCommit(commitMsg)
+    if (committed) {
       log.success(`Committed: ${colors.cyan}${commitMsg}${colors.reset}`)
-    } catch {
-      log.error('Commit failed!')
+    } else {
+      log.error('Commit failed or aborted.')
       process.exit(1)
     }
   }
