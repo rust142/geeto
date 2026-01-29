@@ -669,7 +669,7 @@ export const main = async (opts?: {
         handlePush(state, { suppressStep: true, suppressLogs })
       } else {
         const currentBranch = state.workingBranch || getCurrentBranch()
-        const wantPush = confirm(`Push ${currentBranch} to origin now?`, false)
+        const wantPush = confirm(`Push ${currentBranch} to origin now?`)
         if (wantPush) {
           handlePush(state, { suppressStep: !!opts?.startAt, suppressLogs: true })
         } else {
@@ -680,7 +680,7 @@ export const main = async (opts?: {
       // Interactive: ask before pushing
       const currentBranch = state.workingBranch || getCurrentBranch()
       // For safety, default NO to avoid accidental pushes on Enter
-      const wantPush = confirm(`Push ${currentBranch} to origin now?`, false)
+      const wantPush = confirm(`Push ${currentBranch} to origin now?`)
       if (wantPush) {
         // We already confirmed, so suppress further confirm inside handlePush
         handlePush(state, { suppressStep: false, suppressLogs: true })
