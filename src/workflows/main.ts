@@ -670,6 +670,7 @@ export const main = async (opts?: {
         // intentionally skip push prompt here; merge step will validate push status
       } else {
         const currentBranch = state.workingBranch || getCurrentBranch()
+        console.log('');
         const wantPush = confirm(`Push ${currentBranch} to origin now?`)
         if (wantPush) {
           handlePush(state, { suppressStep: !!opts?.startAt, suppressLogs: true })
@@ -680,6 +681,7 @@ export const main = async (opts?: {
     } else {
       // Interactive: ask before pushing
       const currentBranch = state.workingBranch || getCurrentBranch()
+      console.log('');
       // For safety, default NO to avoid accidental pushes on Enter
       const wantPush = confirm(`Push ${currentBranch} to origin now?`)
       if (wantPush) {
