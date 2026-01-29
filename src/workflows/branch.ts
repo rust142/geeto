@@ -3,22 +3,28 @@
  */
 
 import type { CopilotModel } from '../api/copilot.js'
-import type { OpenRouterModel } from '../api/openrouter.js'
 import type { GeminiModel } from '../api/gemini.js'
-import { DEFAULT_GEMINI_MODEL } from '../utils/config.js'
+import type { OpenRouterModel } from '../api/openrouter.js'
 import type { GeetoState } from '../types/index.js'
 
 import { handleTrelloCase } from './branch-helpers.js'
 import { createBranch, promptManualBranch } from './branch-utils.js'
-
 import { askQuestion, confirm } from '../cli/input.js'
-import { STEP } from '../core/constants.js'
-import { exec, execGit } from '../utils/exec.js'
-import { getBranchStrategyConfig, saveBranchStrategyConfig } from '../utils/config.js'
-import { getBranchPrefix, handleBranchNaming } from '../utils/git.js'
-import { interactiveAIFallback, isContextLimitFailure } from '../utils/git.js'
-import { log } from '../utils/logging.js'
 import { select } from '../cli/menu.js'
+import { STEP } from '../core/constants.js'
+import {
+  DEFAULT_GEMINI_MODEL,
+  getBranchStrategyConfig,
+  saveBranchStrategyConfig,
+} from '../utils/config.js'
+import { exec, execGit } from '../utils/exec.js'
+import {
+  getBranchPrefix,
+  handleBranchNaming,
+  interactiveAIFallback,
+  isContextLimitFailure,
+} from '../utils/git.js'
+import { log } from '../utils/logging.js'
 import { saveState } from '../utils/state.js'
 
 export const handleBranchCreationWorkflow = async (
@@ -195,10 +201,10 @@ export const handleBranchCreationWorkflow = async (
               // If user previously chose manual, ask which AI provider to use now
               if (!state.aiProvider || state.aiProvider === 'manual') {
                 const prov = await select('Choose AI provider for branch generation:', [
-                                { label: 'Gemini', value: 'gemini' },
-                                { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
-                                { label: 'OpenRouter', value: 'openrouter' },
-                                { label: 'Back to suggested branch selection', value: 'cancel-prov' },
+                  { label: 'Gemini', value: 'gemini' },
+                  { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
+                  { label: 'OpenRouter', value: 'openrouter' },
+                  { label: 'Back to suggested branch selection', value: 'cancel-prov' },
                 ])
 
                 if (prov === 'cancel-prov') {
@@ -292,8 +298,10 @@ export const handleBranchCreationWorkflow = async (
                 log.warn('AI generation failed. Trying interactive fallback...')
 
                 const diff = execGit('git diff --cached', true)
-                if (!diff || !diff.trim()) {
-                  log.warn('No staged changes found. Cannot generate a branch name from empty diff. Aborting.')
+                if (!diff?.trim()) {
+                  log.warn(
+                    'No staged changes found. Cannot generate a branch name from empty diff. Aborting.'
+                  )
                   process.exit(0)
                 }
 
@@ -451,22 +459,30 @@ export const handleBranchCreationWorkflow = async (
 
                         state.aiProvider = prov as 'gemini' | 'copilot' | 'openrouter'
                         switch (prov) {
-                          case 'copilot':
+                          case 'copilot': {
                             state.copilotModel = chosen as unknown as CopilotModel
                             state.openrouterModel = undefined
                             state.geminiModel = undefined
                             break
-                          case 'openrouter':
+                          }
+                          case 'openrouter': {
                             state.openrouterModel = chosen as unknown as OpenRouterModel
                             state.copilotModel = undefined
                             state.geminiModel = undefined
                             break
-                          case 'gemini':
-                          default:
+                          }
+                          case 'gemini': {
                             state.geminiModel = chosen as unknown as GeminiModel
                             state.copilotModel = undefined
                             state.openrouterModel = undefined
                             break
+                          }
+                          default: {
+                            state.geminiModel = chosen as unknown as GeminiModel
+                            state.copilotModel = undefined
+                            state.openrouterModel = undefined
+                            break
+                          }
                         }
 
                         saveState(state)

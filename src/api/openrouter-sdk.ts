@@ -2,10 +2,11 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/ban-ts-comment */
+import { OpenRouter } from '@openrouter/sdk'
+
+import { GeminiModel } from './gemini.js'
 import { getOpenRouterConfig } from '../utils/config.js'
 import { log } from '../utils/logging.js'
-import { OpenRouter } from '@openrouter/sdk'
-import { GeminiModel } from './gemini.js'
 
 // OpenRouter SDK wrapper (lazy-load, optional)
 
@@ -111,10 +112,10 @@ fetching. Updates .gitignore for geeto binaries.`
   try {
     const content = completion?.choices[0]?.message?.content as string
     const cleaned = String(content)
-      .replace(/```[\s\S]*?```/g, '')
-      .replace(/^"+|"+$/g, '')
+      .replaceAll(/```[\S\s]*?```/g, '')
+      .replaceAll(/^"+|"+$/g, '')
       .trim()
-    const normalized = cleaned.replace(/\n\s*\n+/g, '\n\n').trim()
+    const normalized = cleaned.replaceAll(/\n\s*\n+/g, '\n\n').trim()
     return normalized && normalized.length >= 8 ? normalized : null
   } catch (error) {
     log.error('OpenRouter Error: ' + String(error))

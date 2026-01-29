@@ -3,10 +3,10 @@
  */
 
 import { spawnSync } from 'node:child_process'
-import os from 'node:os'
-import readline from 'node:readline'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
+import readline from 'node:readline'
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -150,7 +150,7 @@ export const editInEditor = (initialText = '', filenameHint = 'geeto-commit.txt'
     return initialText
   }
 
-  const editor = process.env.EDITOR || (process.platform === 'win32' ? 'notepad' : 'vi')
+  const editor = process.env.EDITOR ?? (process.platform === 'win32' ? 'notepad' : 'vi')
   try {
     spawnSync(editor, [tmpPath], { stdio: 'inherit' })
     const edited = fs.readFileSync(tmpPath, { encoding: 'utf8' })

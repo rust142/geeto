@@ -2,9 +2,8 @@
  * State management for checkpoint recovery
  */
 
-import type { GeetoState } from '../types/index.js'
-
 import fs from 'node:fs'
+import type { GeetoState } from '../types/index.js'
 
 import { ensureGeetoIgnored } from './config.js'
 import { STEP } from '../core/constants.js'

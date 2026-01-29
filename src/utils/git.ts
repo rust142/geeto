@@ -1,17 +1,17 @@
 /** Git helpers */
 
 import { exec, execSilent } from './exec.js'
-import { log } from './logging.js'
-import { askQuestion, confirm } from '../cli/input.js'
 import {
   generateBranchNameWithProvider,
   getAIProviderDisplayName,
   getAIProviderShortName,
   getModelDisplayName,
   interactiveAIFallback,
-  isTransientAIFailure,
   isContextLimitFailure,
+  isTransientAIFailure,
 } from './git-ai.js'
+import { log } from './logging.js'
+import { askQuestion, confirm } from '../cli/input.js'
 
 export {
   generateBranchNameWithProvider,

@@ -1,5 +1,5 @@
-import type { GeminiModel } from '../api/gemini.js'
 import type { CopilotModel } from '../api/copilot.js'
+import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 
 export interface SelectOption {

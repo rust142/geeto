@@ -2,13 +2,13 @@
  * Gemini integration for AI-powered branch naming and commit messages
  */
 
-import { log } from '../utils/logging.js'
 import {
   generateBranchName as sdkGenerateBranchName,
   generateCommitMessage as sdkGenerateCommitMessage,
-  isAvailable as sdkIsAvailable,
   getAvailableModelChoices as sdkGetAvailableModels,
+  isAvailable as sdkIsAvailable,
 } from './gemini-sdk.js'
+import { log } from '../utils/logging.js'
 
 // Supported models on Gemini
 export type GeminiModel = string

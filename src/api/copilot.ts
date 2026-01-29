@@ -2,13 +2,13 @@
  * GitHub Copilot integration for AI-powered branch naming and commit messages
  */
 
-import { log } from '../utils/logging.js'
 import {
   generateBranchName as sdkGenerateBranchName,
   generateCommitMessage as sdkGenerateCommitMessage,
-  isAvailable as sdkIsAvailable,
   getAvailableModelChoices as sdkGetAvailableModels,
+  isAvailable as sdkIsAvailable,
 } from './copilot-sdk.js'
+import { log } from '../utils/logging.js'
 
 // Supported models on GitHub Copilot
 export type CopilotModel = string

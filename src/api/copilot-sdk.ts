@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
-import { CopilotClient } from '@github/copilot-sdk'
-import { log } from '../utils/logging.js'
 import type { CopilotClient as _CopilotClient, Session } from '@github/copilot-sdk'
+import { CopilotClient } from '@github/copilot-sdk'
+
+import { log } from '../utils/logging.js'
 
 // Copilot SDK wrapper (lazy-load, optional)
 
@@ -152,10 +153,10 @@ fetching. Updates .gitignore for geeto binaries.`
       const content = response?.data?.content ?? ''
       // Normalize full response: remove fenced blocks, trim surrounding quotes, collapse extra blank lines
       const cleaned = String(content)
-        .replace(/```[\s\S]*?```/g, '')
-        .replace(/^"+|"+$/g, '')
+        .replaceAll(/```[\S\s]*?```/g, '')
+        .replaceAll(/^"+|"+$/g, '')
         .trim()
-      const normalized = cleaned.replace(/\n\s*\n+/g, '\n\n').trim()
+      const normalized = cleaned.replaceAll(/\n\s*\n+/g, '\n\n').trim()
       return normalized && normalized.length >= 8 ? normalized : null
     } catch (error) {
       log.error('Copilot Error: ' + String(error))

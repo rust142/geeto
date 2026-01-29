@@ -12,9 +12,9 @@ module.exports = {
   arrowParens: 'always',
   printWidth: 100,
   plugins: [
-    // '@ianvs/prettier-plugin-sort-imports'
+    '@ianvs/prettier-plugin-sort-imports'
   ],
-  importOrderParserPlugins: ['decorators-legacy'],
+  importOrderParserPlugins: ['typescript', 'decorators-legacy', 'jsx'],
   importOrder: [
     '^node:',
     '<TYPES>',

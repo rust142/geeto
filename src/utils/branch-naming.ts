@@ -1,6 +1,6 @@
 import type { CopilotModel } from '../api/copilot.js'
-import type { OpenRouterModel } from '../api/openrouter.js'
 import type { GeminiModel } from '../api/gemini.js'
+import type { OpenRouterModel } from '../api/openrouter.js'
 
 import { execGit } from './exec.js'
 
@@ -36,7 +36,7 @@ export const handleBranchNaming = async (
 
   const diff = execGit('git diff --cached', true)
   // If there are no staged changes, abort early with a helpful message
-  if (!diff || !diff.trim()) {
+  if (!diff?.trim()) {
     log.warn('No staged changes found. Cannot generate a branch name from empty diff. Aborting.')
     result.cancelled = true
     return result
@@ -187,7 +187,10 @@ export const handleBranchNaming = async (
         case 'change-model': {
           // change only the current provider's model — use centralized helper
           const provKey = (aiProvider ?? 'gemini') as 'gemini' | 'copilot' | 'openrouter' | string
-          const provider = (provKey === 'manual' ? 'gemini' : provKey) as 'gemini' | 'copilot' | 'openrouter'
+          const provider = (provKey === 'manual' ? 'gemini' : provKey) as
+            | 'gemini'
+            | 'copilot'
+            | 'openrouter'
           const chosen = await chooseModelForProvider(
             provider,
             'Choose model:',
@@ -209,9 +212,9 @@ export const handleBranchNaming = async (
         case 'change-provider': {
           const prov = await select('Choose AI provider:', [
             { label: 'Gemini', value: 'gemini' },
-              { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
-              { label: 'OpenRouter', value: 'openrouter' },
-              { label: 'Back to suggested branch selection', value: 'cancel-prov' },
+            { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
+            { label: 'OpenRouter', value: 'openrouter' },
+            { label: 'Back to suggested branch selection', value: 'cancel-prov' },
           ])
           if (prov === 'cancel-prov') {
             // User chose the contextual "Back" option — don't regenerate, return to previous menu
@@ -219,7 +222,6 @@ export const handleBranchNaming = async (
             continue
           }
           // Centralized provider/model selection helper
-          const { chooseModelForProvider } = await import('./git-ai.js')
           const chosen = await chooseModelForProvider(
             prov as 'gemini' | 'copilot' | 'openrouter',
             'Choose model:',
@@ -251,7 +253,7 @@ export const handleBranchNaming = async (
         }
         case 'edit': {
           const edited = askQuestion(`Edit branch (${currentSuggestion}): `)
-          result.workingBranch = edited || currentSuggestion
+          result.workingBranch = edited ?? currentSuggestion
           break
         }
         case 'back': {
