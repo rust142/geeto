@@ -10,9 +10,9 @@ import { select } from '../cli/menu.js'
 
 export function handlePush(
   state: GeetoState,
-  opts?: { suppressStep?: boolean; suppressLogs?: boolean }
+  opts?: { suppressStep?: boolean; suppressLogs?: boolean, force?: boolean }
 ): void {
-  if (state.step < STEP.PUSHED) {
+  if (state.step < STEP.PUSHED || opts?.force) {
     if (!opts?.suppressStep) {
       log.step('Step 4: Push to Remote')
     }
@@ -250,31 +250,24 @@ export async function handleMerge(
           log.info(`Pushing ${targetBranch} to remote`)
         }
 
+        console.log('')
+        const progressBar = new ProgressBar(2, `Pushing ${targetBranch} to remote`)
+
         try {
           // Show a lightweight progress bar while the push runs so the user sees activity
-          const progressBar = new ProgressBar(20, `Pushing ${targetBranch} to remote`)
           progressBar.update(0)
-          const progressInterval = setInterval(() => {
-            try {
-              progressBar.increment(1)
-            } catch {
-              /* ignore */
-            }
-          }, 150)
+
+          // Perform push silently to avoid interleaving git progress output
+          progressBar.update(1)
 
           // Run push allowing git to print its own output as well
           pushWithRetry(`git push origin ${targetBranch}`, false)
 
-          clearInterval(progressInterval)
           progressBar.complete()
           console.log('')
           log.success(`Pushed ${targetBranch} to remote`)
         } catch (err) {
-          try {
-            clearInterval((global as any).__geeto_progress_interval)
-          } catch {
-            /* ignore */
-          }
+          progressBar.complete()
           console.log('')
           log.error(`Failed to push ${targetBranch} to remote`)
           throw err

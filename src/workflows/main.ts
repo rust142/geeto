@@ -663,10 +663,11 @@ export const main = async (opts?: {
 
     // STEP 4: Push — ask user before pushing in interactive mode
     if (opts?.startAt) {
-      // For startAt mode, still **ask** before pushing unless the user explicitly
-      // started at 'push' (where push is the desired operation)
+      // Non-interactive: only push automatically if starting at push
       if (opts.startAt === 'push') {
         handlePush(state, { suppressStep: true, suppressLogs })
+      } else if (opts.startAt === 'merge') {
+        // intentionally skip push prompt here; merge step will validate push status
       } else {
         const currentBranch = state.workingBranch || getCurrentBranch()
         const wantPush = confirm(`Push ${currentBranch} to origin now?`)
@@ -690,6 +691,39 @@ export const main = async (opts?: {
     }
 
     // STEP 5: Merge (simplified)
+    // If the current branch has commits that are not pushed, ask the user to push
+    const branchToCheck = state.workingBranch || getCurrentBranch()
+    try {
+      let hasCommitsToPush = false
+      try {
+        const remoteRef = exec(`git ls-remote --heads origin "${branchToCheck}"`, true).trim()
+        if (!remoteRef) {
+          hasCommitsToPush = true
+        } else {
+          const commitsAhead = exec(
+            `git rev-list HEAD...origin/"${branchToCheck}" --count`,
+            true
+          ).trim()
+          hasCommitsToPush = commitsAhead !== '0' && commitsAhead !== ''
+        }
+      } catch {
+        hasCommitsToPush = true
+      }
+
+      if (hasCommitsToPush) {
+        // Default NO to avoid accidental push; if user declines, abort merge
+        console.log('');
+        log.info(
+          `Branch ${branchToCheck} has commits not pushed to origin.`
+        )
+        handlePush(state, { suppressStep: false, suppressLogs: false, force: true } )
+      }
+    } catch {
+      // On any error checking remote status, be conservative and abort the merge
+      log.warn('Could not determine remote push status; aborting merge for safety.')
+      return
+    }
+
     featureBranch = await handleMerge(state, { suppressStep: !!opts?.startAt, suppressLogs })
 
     // STEP 6: Cleanup (simplified)
