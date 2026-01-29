@@ -235,18 +235,27 @@ export async function handleMerge(
       // Push the updated target branch back to remote
       const shouldPushTarget = confirm(`Push ${targetBranch} to origin?`, false)
       if (shouldPushTarget) {
-        // Show a small progress indicator for merge push to match user expectations
+        // Provide visible push progress by allowing git to print progress to terminal
         console.log('')
-        const progressBar = new ProgressBar(2, `Pushing ${targetBranch} to remote`)
-        progressBar.update(0)
-        progressBar.update(1)
+        // Get remote URL silently for a nicer message
+        let remoteUrl = ''
         try {
-          pushWithRetry(`git push origin ${targetBranch}`)
-          progressBar.complete()
+          remoteUrl = exec('git remote get-url origin', true)
+        } catch {
+          /* ignore */
+        }
+        if (remoteUrl) {
+          log.info(`Pushing ${targetBranch} to: ${remoteUrl}`)
+        } else {
+          log.info(`Pushing ${targetBranch} to remote`)
+        }
+
+        try {
+          // Allow git to show its progress output to the terminal so the user sees activity
+          pushWithRetry(`git push origin ${targetBranch}`, false)
           console.log('')
           log.success(`Pushed ${targetBranch} to remote`)
         } catch (err) {
-          progressBar.complete()
           console.log('')
           log.error(`Failed to push ${targetBranch} to remote`)
           throw err
