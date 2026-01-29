@@ -25,7 +25,6 @@ export function handlePush(
       // For startAt flags, auto push without confirm
       shouldPush = true
     } else {
-      // console.log('');
       shouldPush = confirm(`Push ${getCurrentBranch()} to origin?`)
     }
 
