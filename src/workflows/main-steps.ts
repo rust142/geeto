@@ -25,7 +25,7 @@ export function handlePush(
       // For startAt flags, auto push without confirm
       shouldPush = true
     } else {
-      shouldPush = confirm(`Push ${getCurrentBranch()} to origin?`, false)
+      shouldPush = confirm(`Push ${getCurrentBranch()} to origin?`)
     }
 
     if (shouldPush) {
@@ -233,7 +233,7 @@ export async function handleMerge(
       }
 
       // Push the updated target branch back to remote
-      const shouldPushTarget = confirm(`Push ${targetBranch} to origin?`, false)
+      const shouldPushTarget = confirm(`Push ${targetBranch} to origin?`)
       if (shouldPushTarget) {
         // Provide visible push progress by allowing git to print progress to terminal
         console.log('')
