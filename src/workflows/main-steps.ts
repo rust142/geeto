@@ -252,26 +252,44 @@ export async function handleMerge(
 
         console.log('')
         const progressBar = new ProgressBar(2, `Pushing ${targetBranch} to remote`)
+        progressBar.update(0)
 
+        // Perform push silently to avoid interleaving git progress output
+        progressBar.update(1)
         try {
-          // Show a lightweight progress bar while the push runs so the user sees activity
-          progressBar.update(0)
+          // Check if remote branch exists; if not, treat as commits to push
+          let hasCommitsToPush = false
+          try {
+            const remoteRef = exec(`git ls-remote --heads origin "${getCurrentBranch()}"`, true).trim()
+            if (!remoteRef) {
+              // remote branch doesn't exist yet
+              hasCommitsToPush = true
+            } else {
+              const commitsAhead = exec(
+                `git rev-list HEAD...origin/"${getCurrentBranch()}" --count`,
+                true
+              ).trim()
+              hasCommitsToPush = commitsAhead !== '0' && commitsAhead !== ''
+            }
+          } catch {
+            // If any of the checks fail, assume there are commits to push
+            hasCommitsToPush = true
+          }
 
-          // Perform push silently to avoid interleaving git progress output
-          progressBar.update(1)
-          console.log('')
-
-          // Run push allowing git to print its own output as well
-          pushWithRetry(`git push origin ${targetBranch}`, false)
-
+          exec(`git push -u origin "${getCurrentBranch()}"`, true)
           progressBar.complete()
           console.log('')
-          log.success(`Pushed ${targetBranch} to remote`)
-        } catch (err) {
+
+          if (hasCommitsToPush) {
+            log.success(`Pushed ${getCurrentBranch()} to remote`)
+          } else {
+            log.info(`Branch ${getCurrentBranch()} is already up to date with remote`)
+          }
+        } catch (error) {
           progressBar.complete()
           console.log('')
-          log.error(`Failed to push ${targetBranch} to remote`)
-          throw err
+          log.error('Push failed; see git output for details')
+          throw error
         }
       }
     }
