@@ -53,17 +53,26 @@ jobs:
     - name: Build project
       run: bun run build
 
+    - name: Build release binaries
+      run: bun run geeto:build:all
+
+    - name: Show build artifacts
+      run: ls -la
+
     - name: Upload build artifacts
+      if: success()
       uses: actions/upload-artifact@v4
       with:
         name: geeto-binaries-${{ matrix.node-version }}
         path: |
+          geeto
           geeto-linux
           geeto-linux-arm64
           geeto-windows.exe
           geeto-mac
           geeto-mac-arm64
         retention-days: 1
+        if-no-files-found: warn
 
   cross-platform-test:
     name: Cross Platform Test
