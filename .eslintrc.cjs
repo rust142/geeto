@@ -171,7 +171,7 @@ module.exports = {
     'unicorn/numeric-separators-style': 'off',
     'unicorn/no-null': 'off',
     'unicorn/prefer-top-level-await': 'off',
-    'unicorn/no-nested-ternary': 'warn',
+    'unicorn/no-nested-ternary': 'off',
     'unicorn/prefer-ternary': 'off', // Allow if-else for readability in CLI
     'unicorn/no-process-exit': 'off', // CLI tool needs to exit
   },
