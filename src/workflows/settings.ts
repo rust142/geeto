@@ -293,8 +293,7 @@ const handleChangeModelSetting = async (): Promise<boolean | void> => {
 
   saveState(base)
   const providerLabel =
-    // eslint-disable-next-line prettier/prettier
-    chosenProv === 'copilot' ? 'Copilot' : (chosenProv === 'gemini' ? 'Gemini' : 'OpenRouter')
+    chosenProv === 'copilot' ? 'Copilot' : chosenProv === 'gemini' ? 'Gemini' : 'OpenRouter'
   log.success(`Set ${providerLabel} model to: ${picked}`)
   // Done; do not go back to settings menu
   return false
