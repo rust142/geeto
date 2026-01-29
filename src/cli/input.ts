@@ -98,7 +98,7 @@ export class ProgressBar {
   complete(): void {
     this.current = this.total
     this.render()
-    console.log() // New line after completion
+    console.log('') // New line after completion
   }
 
   private render(): void {
