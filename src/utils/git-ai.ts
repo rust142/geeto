@@ -1,6 +1,7 @@
 import type { CopilotModel } from '../api/copilot.js'
-import type { OpenRouterModel } from '../api/openrouter.js'
 import type { GeminiModel } from '../api/gemini.js'
+import type { OpenRouterModel } from '../api/openrouter.js'
+
 import { DEFAULT_GEMINI_MODEL } from './config.js'
 import { log } from '../utils/logging.js'
 
@@ -201,8 +202,6 @@ export async function interactiveAIFallback(
   isCommit: boolean = false
 ): Promise<string | null> {
   const { select } = await import('../cli/menu.js')
-
-  const { log } = await import('../utils/logging.js')
 
   const isTransientFailure = isTransientAIFailure
 

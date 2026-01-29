@@ -4,8 +4,8 @@ import { exec } from '../utils/exec.js'
 import {
   branchExists,
   getBranchPrefix,
-  validateBranchName,
   isContextLimitFailure,
+  validateBranchName,
 } from '../utils/git.js'
 import { log } from '../utils/logging.js'
 

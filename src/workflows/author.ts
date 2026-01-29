@@ -1,7 +1,7 @@
 // no confirm prompt here; callers control return/exit behavior
-import { exec, commandExists } from '../utils/exec.js'
-import { colors } from '../utils/colors.js'
 import { select } from '../cli/menu.js'
+import { colors } from '../utils/colors.js'
+import { commandExists, exec } from '../utils/exec.js'
 
 /** Simple author tools menu. Shows Geeto developer information. */
 export const showAuthorTools = async (): Promise<void> => {

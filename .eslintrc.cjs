@@ -16,9 +16,16 @@ module.exports = {
   parserOptions: {
     ecmaVersion: 'latest',
     sourceType: 'module',
-    project: './tsconfig.json',
-    tsconfigRootDir: __dirname,
   },
+  overrides: [
+    {
+      files: ['**/*.ts', '**/*.tsx'],
+      parserOptions: {
+        project: './tsconfig.json',
+        tsconfigRootDir: __dirname,
+      },
+    },
+  ],
   plugins: ['@typescript-eslint', 'unicorn', 'promise'],
   rules: {
     // Basic rules

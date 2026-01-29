@@ -1,5 +1,6 @@
 /** Main workflow for the Geeto CLI. */
 
+import path from 'node:path'
 import type { CopilotModel } from '../api/copilot.js'
 import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
@@ -11,19 +12,16 @@ import { handleBranchCreationWorkflow } from './branch.js'
 import { handleCommitWorkflow } from './commit.js'
 import { handleCleanup, handleMerge, handlePush } from './main-steps.js'
 import { showSettingsMenu } from './settings.js'
-
+import { closeInput, confirm } from '../cli/input.js'
 import { select } from '../cli/menu.js'
-import { confirm } from '../cli/input.js'
-import { closeInput } from '../cli/input.js'
 import { STEP, TASK_PLATFORMS } from '../core/constants.js'
-import { loadState, saveState, preserveProviderState } from '../utils/state.js'
-import { formatTimestampLocale } from '../utils/time.js'
 import { colors } from '../utils/colors.js'
-import path from 'node:path'
-import { hasTrelloConfig, getTrelloConfig, DEFAULT_GEMINI_MODEL } from '../utils/config.js'
-import { log } from '../utils/logging.js'
+import { DEFAULT_GEMINI_MODEL, getTrelloConfig, hasTrelloConfig } from '../utils/config.js'
 import { exec } from '../utils/exec.js'
 import { getChangedFiles, getCurrentBranch, getStagedFiles } from '../utils/git.js'
+import { log } from '../utils/logging.js'
+import { loadState, preserveProviderState, saveState } from '../utils/state.js'
+import { formatTimestampLocale } from '../utils/time.js'
 
 const getStepName = (step: number): string => {
   switch (step) {
@@ -670,7 +668,7 @@ export const main = async (opts?: {
         // intentionally skip push prompt here; merge step will validate push status
       } else {
         const currentBranch = state.workingBranch || getCurrentBranch()
-        console.log('');
+        console.log('')
         const wantPush = confirm(`Push ${currentBranch} to origin now?`)
         if (wantPush) {
           handlePush(state, { suppressStep: !!opts?.startAt, suppressLogs: true })
@@ -681,7 +679,7 @@ export const main = async (opts?: {
     } else {
       // Interactive: ask before pushing
       const currentBranch = state.workingBranch || getCurrentBranch()
-      console.log('');
+      console.log('')
       // For safety, default NO to avoid accidental pushes on Enter
       const wantPush = confirm(`Push ${currentBranch} to origin now?`)
       if (wantPush) {
@@ -699,14 +697,14 @@ export const main = async (opts?: {
       let hasCommitsToPush = false
       try {
         const remoteRef = exec(`git ls-remote --heads origin "${branchToCheck}"`, true).trim()
-        if (!remoteRef) {
-          hasCommitsToPush = true
-        } else {
+        if (remoteRef) {
           const commitsAhead = exec(
             `git rev-list HEAD...origin/"${branchToCheck}" --count`,
             true
           ).trim()
           hasCommitsToPush = commitsAhead !== '0' && commitsAhead !== ''
+        } else {
+          hasCommitsToPush = true
         }
       } catch {
         hasCommitsToPush = true
@@ -714,11 +712,9 @@ export const main = async (opts?: {
 
       if (hasCommitsToPush) {
         // Default NO to avoid accidental push; if user declines, abort merge
-        console.log('');
-        log.info(
-          `Branch ${branchToCheck} has commits not pushed to origin.`
-        )
-        handlePush(state, { suppressStep: false, suppressLogs: false, force: true } )
+        console.log('')
+        log.info(`Branch ${branchToCheck} has commits not pushed to origin.`)
+        handlePush(state, { suppressStep: false, suppressLogs: false, force: true })
       }
     } catch {
       // On any error checking remote status, be conservative and abort the merge
@@ -739,7 +735,6 @@ export const main = async (opts?: {
       /* ignore */
     }
     process.exit(0)
-
   } catch (error) {
     if (error instanceof Error) {
       log.error(error.message)

@@ -2,15 +2,14 @@
  * Configuration file management
  */
 
+import fs from 'node:fs'
+import os from 'node:os'
 import type {
   BranchStrategyConfig,
   GeminiConfig,
   OpenRouterConfig,
   TrelloConfig,
 } from '../types/index.js'
-
-import fs from 'node:fs'
-import os from 'node:os'
 
 import { log } from './logging.js'
 

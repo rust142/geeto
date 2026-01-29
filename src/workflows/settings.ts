@@ -6,14 +6,14 @@ import { existsSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { confirm } from '../cli/input.js'
-import { log } from '../utils/logging.js'
+import { select } from '../cli/menu.js'
 import {
   getBranchStrategyConfig,
-  hasTrelloConfig,
   hasGeminiConfig,
+  hasTrelloConfig,
   saveBranchStrategyConfig,
 } from '../utils/config.js'
-import { select } from '../cli/menu.js'
+import { log } from '../utils/logging.js'
 
 const configDirPath = () => join(process.cwd(), '.geeto')
 
@@ -81,6 +81,8 @@ const handleSeparatorSetting = async (): Promise<boolean | void> => {
   }
 
   log.success(`Branch separator set to: ${separator === '-' ? 'hyphen (-)' : 'underscore (_)'} `)
+  // Explicitly return false to indicate "do not go back" to caller
+  return false
 }
 
 // Sync OpenRouter models (fetch & persist detailed + simple lists)
@@ -206,6 +208,9 @@ const handleModelResetSetting = async (): Promise<boolean | void> => {
   } catch (error) {
     log.error(`Model sync failed: ${error}`)
   }
+
+  // Explicitly return false when leaving handler without going back
+  return false
 }
 
 /**
@@ -237,7 +242,7 @@ const handleChangeModelSetting = async (): Promise<boolean | void> => {
   }
   if (picked === undefined) {
     log.warn('Provider setup not available; cannot change model.')
-    return
+    return false
   }
 
   // Persist choice into checkpoint state so it is used next run
@@ -291,6 +296,8 @@ const handleChangeModelSetting = async (): Promise<boolean | void> => {
     // eslint-disable-next-line prettier/prettier
     chosenProv === 'copilot' ? 'Copilot' : (chosenProv === 'gemini' ? 'Gemini' : 'OpenRouter')
   log.success(`Set ${providerLabel} model to: ${picked}`)
+  // Done; do not go back to settings menu
+  return false
 }
 const handleGeminiSetting = async (): Promise<boolean | void> => {
   const hasConfig = hasGeminiConfig()
@@ -298,7 +305,7 @@ const handleGeminiSetting = async (): Promise<boolean | void> => {
   if (!hasConfig) {
     log.info('No Gemini configuration found. Setting up Gemini AI integration...')
     await runInteractiveSetup('gemini')
-    return
+    return false
   }
 
   const action = await select(
@@ -336,6 +343,9 @@ const handleGeminiSetting = async (): Promise<boolean | void> => {
   if (action === 'back') {
     return true
   }
+
+  // Completed without returning to settings menu
+  return false
 }
 
 const handleTrelloSetting = async (): Promise<boolean | void> => {
@@ -344,7 +354,7 @@ const handleTrelloSetting = async (): Promise<boolean | void> => {
   if (!hasConfig) {
     log.info('No Trello configuration found. Setting up Trello integration...')
     await runInteractiveSetup('trello')
-    return
+    return false
   }
 
   const action = await select(
@@ -372,7 +382,7 @@ const handleTrelloSetting = async (): Promise<boolean | void> => {
   } else if (action === 'remove') {
     const confirmRemove = confirm('Are you sure you want to remove Trello configuration?')
     if (!confirmRemove) {
-      return
+      return false
     }
     if (removeConfigFile('trello')) {
       log.success('Trello configuration removed!')
@@ -383,6 +393,9 @@ const handleTrelloSetting = async (): Promise<boolean | void> => {
   if (action === 'back') {
     return true
   }
+
+  // Completed without returning to settings menu
+  return false
 }
 
 const handleOpenRouterSetting = async (): Promise<boolean | void> => {
@@ -392,7 +405,7 @@ const handleOpenRouterSetting = async (): Promise<boolean | void> => {
   if (!hasConfig) {
     log.info('No OpenRouter configuration found. Setting up OpenRouter integration...')
     await runInteractiveSetup('openrouter')
-    return
+    return false
   }
 
   const action = await select(
@@ -414,7 +427,7 @@ const handleOpenRouterSetting = async (): Promise<boolean | void> => {
   } else if (action === 'remove') {
     const confirmRemove = confirm('Are you sure you want to remove OpenRouter configuration?')
     if (!confirmRemove) {
-      return
+      return false
     }
     if (removeConfigFile('openrouter')) {
       log.success('OpenRouter configuration removed!')
@@ -425,6 +438,9 @@ const handleOpenRouterSetting = async (): Promise<boolean | void> => {
   if (action === 'back') {
     return true
   }
+
+  // Completed without returning to settings menu
+  return false
 }
 
 export const showSettingsMenu = async () => {

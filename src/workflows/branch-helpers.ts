@@ -1,35 +1,34 @@
-import type { GeetoState, BranchStrategyConfig } from '../types/index.js'
 import type { CopilotModel } from '../api/copilot.js'
-import type { OpenRouterModel } from '../api/openrouter.js'
 import type { GeminiModel } from '../api/gemini.js'
+import type { OpenRouterModel } from '../api/openrouter.js'
+import type { BranchStrategyConfig, GeetoState } from '../types/index.js'
 
 import { createBranch, promptManualBranch } from './branch-utils.js'
-
 import {
   fetchTrelloCards,
   fetchTrelloLists,
   generateBranchNameFromTrelloTitle,
 } from '../api/trello.js'
 import { askQuestion } from '../cli/input.js'
+import { select } from '../cli/menu.js'
 import { STEP } from '../core/constants.js'
-import { log } from '../utils/logging.js'
 import { colors } from '../utils/colors.js'
 import {
+  DEFAULT_GEMINI_MODEL,
   getBranchStrategyConfig,
   hasTrelloConfig,
   saveBranchStrategyConfig,
-  DEFAULT_GEMINI_MODEL,
 } from '../utils/config.js'
+import { chooseModelForProvider } from '../utils/git-ai.js'
 import {
   generateBranchNameWithProvider,
   getAIProviderShortName,
   getModelDisplayName,
   interactiveAIFallback,
-  isTransientAIFailure,
   isContextLimitFailure,
+  isTransientAIFailure,
 } from '../utils/git.js'
-import { chooseModelForProvider } from '../utils/git-ai.js'
-import { select } from '../cli/menu.js'
+import { log } from '../utils/logging.js'
 import { saveState } from '../utils/state.js'
 
 export interface TrelloCaseResult {

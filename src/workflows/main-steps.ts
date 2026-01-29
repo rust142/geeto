@@ -1,16 +1,16 @@
 import type { GeetoState } from '../types/index.js'
 
 import { confirm, ProgressBar } from '../cli/input.js'
+import { select } from '../cli/menu.js'
 import { STEP } from '../core/constants.js'
 import { exec } from '../utils/exec.js'
-import { log } from '../utils/logging.js'
 import { getCurrentBranch, pushWithRetry } from '../utils/git.js'
+import { log } from '../utils/logging.js'
 import { saveState } from '../utils/state.js'
-import { select } from '../cli/menu.js'
 
 export function handlePush(
   state: GeetoState,
-  opts?: { suppressStep?: boolean; suppressLogs?: boolean, force?: boolean }
+  opts?: { suppressStep?: boolean; suppressLogs?: boolean; force?: boolean }
 ): void {
   if (state.step < STEP.PUSHED || opts?.force) {
     if (!opts?.suppressStep) {
@@ -48,16 +48,19 @@ export function handlePush(
           // Check if remote branch exists; if not, treat as commits to push
           let hasCommitsToPush = false
           try {
-            const remoteRef = exec(`git ls-remote --heads origin "${getCurrentBranch()}"`, true).trim()
-            if (!remoteRef) {
-              // remote branch doesn't exist yet
-              hasCommitsToPush = true
-            } else {
+            const remoteRef = exec(
+              `git ls-remote --heads origin "${getCurrentBranch()}"`,
+              true
+            ).trim()
+            if (remoteRef) {
               const commitsAhead = exec(
                 `git rev-list HEAD...origin/"${getCurrentBranch()}" --count`,
                 true
               ).trim()
               hasCommitsToPush = commitsAhead !== '0' && commitsAhead !== ''
+            } else {
+              // remote branch doesn't exist yet
+              hasCommitsToPush = true
             }
           } catch {
             // If any of the checks fail, assume there are commits to push
@@ -95,16 +98,19 @@ export function handlePush(
           // Check if remote branch exists; if not, treat as commits to push
           let hasCommitsToPush = false
           try {
-            const remoteRef = exec(`git ls-remote --heads origin "${getCurrentBranch()}"`, true).trim()
-            if (!remoteRef) {
-              // remote branch doesn't exist yet
-              hasCommitsToPush = true
-            } else {
+            const remoteRef = exec(
+              `git ls-remote --heads origin "${getCurrentBranch()}"`,
+              true
+            ).trim()
+            if (remoteRef) {
               const commitsAhead = exec(
                 `git rev-list HEAD...origin/"${getCurrentBranch()}" --count`,
                 true
               ).trim()
               hasCommitsToPush = commitsAhead !== '0' && commitsAhead !== ''
+            } else {
+              // remote branch doesn't exist yet
+              hasCommitsToPush = true
             }
           } catch {
             // If any of the checks fail, assume there are commits to push
@@ -232,7 +238,7 @@ export async function handleMerge(
         log.success(`Squashed ${featureBranch} and merged into ${targetBranch} with --no-ff`)
       }
 
-      console.log('');
+      console.log('')
       // Push the updated target branch back to remote
       const shouldPushTarget = confirm(`Push ${targetBranch} to origin?`)
       if (shouldPushTarget) {
@@ -261,16 +267,19 @@ export async function handleMerge(
           // Check if remote branch exists; if not, treat as commits to push
           let hasCommitsToPush = false
           try {
-            const remoteRef = exec(`git ls-remote --heads origin "${getCurrentBranch()}"`, true).trim()
-            if (!remoteRef) {
-              // remote branch doesn't exist yet
-              hasCommitsToPush = true
-            } else {
+            const remoteRef = exec(
+              `git ls-remote --heads origin "${getCurrentBranch()}"`,
+              true
+            ).trim()
+            if (remoteRef) {
               const commitsAhead = exec(
                 `git rev-list HEAD...origin/"${getCurrentBranch()}" --count`,
                 true
               ).trim()
               hasCommitsToPush = commitsAhead !== '0' && commitsAhead !== ''
+            } else {
+              // remote branch doesn't exist yet
+              hasCommitsToPush = true
             }
           } catch {
             // If any of the checks fail, assume there are commits to push

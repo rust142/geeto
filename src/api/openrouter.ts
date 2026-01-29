@@ -2,12 +2,12 @@
  * OpenRouter integration for AI-powered branch naming and commit messages
  */
 
-import { log } from '../utils/logging.js'
 import {
   generateBranchName as sdkGenerateBranchName,
   generateCommitMessage as sdkGenerateCommitMessage,
   isAvailable as sdkIsAvailable,
 } from './openrouter-sdk.js'
+import { log } from '../utils/logging.js'
 
 // Supported models on OpenRouter
 export type OpenRouterModel = string

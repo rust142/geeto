@@ -3,6 +3,7 @@
  */
 
 import fs from 'node:fs'
+
 import { askQuestion, confirm } from '../cli/input.js'
 import { ensureGeetoIgnored, getGeminiConfigPath } from '../utils/config.js'
 import { log } from '../utils/logging.js'

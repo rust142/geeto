@@ -4,11 +4,11 @@
 
 import os from 'node:os'
 
+import { confirm } from '../cli/input.js'
+import { select } from '../cli/menu.js'
+import { ensureGeetoIgnored } from '../utils/config.js'
 import { commandExists, exec } from '../utils/exec.js'
 import { log } from '../utils/logging.js'
-import { ensureGeetoIgnored } from '../utils/config.js'
-import { select } from '../cli/menu.js'
-import { confirm } from '../cli/input.js'
 
 // Helper: Check Copilot version and warn if outdated
 export const checkCopilotVersion = (): void => {

@@ -3,13 +3,14 @@
  */
 
 import type { CopilotModel } from '../api/copilot.js'
-import type { OpenRouterModel } from '../api/openrouter.js'
 import type { GeminiModel } from '../api/gemini.js'
+import type { OpenRouterModel } from '../api/openrouter.js'
+
 // SelectOption type previously used for model lists; not needed after refactor
 
 import { select } from '../cli/menu.js'
-import { log } from '../utils/logging.js'
 import { chooseModelForProvider } from '../utils/git-ai.js'
+import { log } from '../utils/logging.js'
 
 export const handleAIProviderSelection = async (): Promise<{
   aiProvider: 'gemini' | 'copilot' | 'openrouter' | 'manual'
@@ -53,16 +54,27 @@ export const handleAIProviderSelection = async (): Promise<{
     }
 
     // Assign chosen model to the appropriate variable
-    if (aiProvider === 'gemini') {
-      geminiModel = chosen as GeminiModel
-      log.info(`Selected Gemini Model: ${geminiModel}`)
-    } else if (aiProvider === 'copilot') {
-      copilotModel = chosen as CopilotModel
-      log.info(`Selected Copilot Model: ${copilotModel}`)
-      console.log('')
-    } else if (aiProvider === 'openrouter') {
-      openrouterModel = chosen as OpenRouterModel
-      log.info(`Selected OpenRouter Model: ${openrouterModel}`)
+    switch (aiProvider) {
+      case 'gemini': {
+        geminiModel = chosen as GeminiModel
+        log.info(`Selected Gemini Model: ${geminiModel}`)
+
+        break
+      }
+      case 'copilot': {
+        copilotModel = chosen as CopilotModel
+        log.info(`Selected Copilot Model: ${copilotModel}`)
+        console.log('')
+
+        break
+      }
+      case 'openrouter': {
+        openrouterModel = chosen as OpenRouterModel
+        log.info(`Selected OpenRouter Model: ${openrouterModel}`)
+
+        break
+      }
+      // No default
     }
 
     // If we get here, user has made their choice

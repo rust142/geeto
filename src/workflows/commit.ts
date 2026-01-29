@@ -3,23 +3,24 @@
  */
 
 import type { CopilotModel } from '../api/copilot.js'
-import type { OpenRouterModel } from '../api/openrouter.js'
 import type { GeminiModel } from '../api/gemini.js'
-import { DEFAULT_GEMINI_MODEL } from '../utils/config.js'
+import type { OpenRouterModel } from '../api/openrouter.js'
 import type { GeetoState } from '../types/index.js'
 
 import { askQuestion, confirm, editInEditor } from '../cli/input.js'
+import { select } from '../cli/menu.js'
+import { colors } from '../utils/colors.js'
+import { DEFAULT_GEMINI_MODEL } from '../utils/config.js'
 import { exec, execGit } from '../utils/exec.js'
 import {
-  interactiveAIFallback,
-  isTransientAIFailure,
+  chooseModelForProvider,
   getAIProviderShortName,
+  interactiveAIFallback,
+  isContextLimitFailure,
+  isTransientAIFailure,
 } from '../utils/git-ai.js'
-import { chooseModelForProvider, isContextLimitFailure } from '../utils/git-ai.js'
-import { saveState } from '../utils/state.js'
-import { colors } from '../utils/colors.js'
 import { log } from '../utils/logging.js'
-import { select } from '../cli/menu.js'
+import { saveState } from '../utils/state.js'
 
 export const getCommitTypes = () => [
   { label: 'feat     - New feature', value: 'feat' },
@@ -299,12 +300,13 @@ export const handleCommitWorkflow = async (
 
       if (action === 'edit') {
         const edited = editInEditor(`${titleStr}\n\n${bodyStr ?? ''}`, 'geeto-commit.txt')
-        if (!edited || !edited.trim()) {
+        if (!edited?.trim()) {
           return false
         }
 
         const normalized = normalizeAIOutput(edited.trim())
-        const newTitle = extractCommitTitle(normalized) ?? edited.split('\n').find((l) => l.trim()) ?? ''
+        const newTitle =
+          extractCommitTitle(normalized) ?? edited.split('\n').find((l) => l.trim()) ?? ''
         const newBody = newTitle ? extractCommitBody(normalized, newTitle) : null
         return attemptCommit(newTitle as string, newBody)
       }
@@ -370,7 +372,7 @@ export const handleCommitWorkflow = async (
   const commitSuccess = false
 
   const diff = execGit('git diff --cached', true)
-  if (!diff || !diff.trim()) {
+  if (!diff?.trim()) {
     log.warn('No staged changes found. Cannot generate a commit message from empty diff. Aborting.')
     return false
   }
@@ -464,7 +466,6 @@ export const handleCommitWorkflow = async (
 
   if (selectedTool !== 'manual') {
     let correction = ''
-
 
     // Try generating commit message via AI
     let initialAiResult: string | null = null
@@ -718,19 +719,24 @@ export const handleCommitWorkflow = async (
         // Show the suggested commit: subject and full body if present
         const lines = commitMessage.split('\n')
         const subject = lines.find((l) => l.trim()) ?? commitMessage
-        const body = lines.slice(lines.indexOf(subject) + 1).join('\n').trim()
+        const body = lines
+          .slice(lines.indexOf(subject) + 1)
+          .join('\n')
+          .trim()
         log.ai(`Suggested Commit:\n\n${colors.cyan}${colors.bright}${subject}`)
         if (body) {
           console.log('\n' + body + `${colors.reset}\n`)
         }
-        log.info('Incorrect Suggestion? check .geeto/last-ai-suggestion.json (possible AI/context limit).')
+        log.info(
+          'Incorrect Suggestion? check .geeto/last-ai-suggestion.json (possible AI/context limit).'
+        )
       } catch {
         /* ignore file write failures */
       }
 
       let acceptAi: string
       if (contextLimitDetected) {
-        const editorName = process.env.EDITOR || (process.platform === 'win32' ? 'notepad' : 'vi')
+        const editorName = process.env.EDITOR ?? (process.platform === 'win32' ? 'notepad' : 'vi')
         acceptAi = await select(
           'This model cannot process the input due to token/context limits. Please choose a different model or provider:',
           [
@@ -740,7 +746,7 @@ export const handleCommitWorkflow = async (
           ]
         )
       } else {
-        const editorName = process.env.EDITOR || (process.platform === 'win32' ? 'notepad' : 'vi')
+        const editorName = process.env.EDITOR ?? (process.platform === 'win32' ? 'notepad' : 'vi')
         acceptAi = await select('Accept this commit message?', [
           { label: 'Yes, use it', value: 'accept' },
           { label: 'Regenerate', value: 'regenerate' },
@@ -820,22 +826,30 @@ export const handleCommitWorkflow = async (
 
           state.aiProvider = prov as 'gemini' | 'copilot' | 'openrouter'
           switch (prov) {
-            case 'copilot':
+            case 'copilot': {
               state.copilotModel = chosenModel as unknown as CopilotModel
               state.openrouterModel = undefined
               state.geminiModel = undefined
               break
-            case 'openrouter':
+            }
+            case 'openrouter': {
               state.openrouterModel = chosenModel as unknown as OpenRouterModel
               state.copilotModel = undefined
               state.geminiModel = undefined
               break
-            case 'gemini':
-            default:
+            }
+            case 'gemini': {
               state.geminiModel = chosenModel as unknown as GeminiModel
               state.copilotModel = undefined
               state.openrouterModel = undefined
               break
+            }
+            default: {
+              state.geminiModel = chosenModel as unknown as GeminiModel
+              state.copilotModel = undefined
+              state.openrouterModel = undefined
+              break
+            }
           }
 
           saveState(state)
@@ -845,7 +859,11 @@ export const handleCommitWorkflow = async (
           continue
         }
         case 'change-model': {
-          const currentProv = (state.aiProvider ?? 'gemini') as 'gemini' | 'copilot' | 'openrouter' | 'manual'
+          const currentProv = (state.aiProvider ?? 'gemini') as
+            | 'gemini'
+            | 'copilot'
+            | 'openrouter'
+            | 'manual'
           const providerKey = (currentProv === 'manual' ? 'gemini' : currentProv) as
             | 'gemini'
             | 'copilot'
@@ -865,16 +883,24 @@ export const handleCommitWorkflow = async (
           }
 
           switch (currentProv) {
-            case 'copilot':
+            case 'copilot': {
               state.copilotModel = chosen as unknown as CopilotModel
               break
-            case 'openrouter':
+            }
+            case 'openrouter': {
               state.openrouterModel = chosen as unknown as OpenRouterModel
               break
-            case 'gemini':
-            default:
+            }
+            case 'gemini': {
+              state.geminiModel = chosen as unknown as GeminiModel
+              state.copilotModel = undefined
+              state.openrouterModel = undefined
+              break
+            }
+            default: {
               state.geminiModel = chosen as unknown as GeminiModel
               break
+            }
           }
 
           saveState(state)
@@ -896,7 +922,7 @@ export const handleCommitWorkflow = async (
           // Open user's editor for multi-line editing
           const initial = commitMessage
           const edited = editInEditor(initial, 'geeto-commit.txt')
-          if (edited && edited.trim()) {
+          if (edited?.trim()) {
             const editedMessage = edited.trim()
 
             // Process the edited message
