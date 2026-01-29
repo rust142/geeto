@@ -1,9 +1,14 @@
 {
   "name": "@geeto/core",
   "version": "1.1.0-beta.0",
-  "description": "Git flow automation CLI tool with AI-powered branch naming using Gemini API",
-  "author": "Your Name",
+  "description": "Git flow automation CLI tool with AI-powered (Gemini, GitHub Copilot, OpenRouter)",
+  "author": {
+    "email": "amdev142@gmail.com",
+    "name": "Agung Maulana Malik",
+    "url": "https://github.com/rust142"
+  },
   "license": "MIT",
+  "type": "module",
   "bin": {
     "geeto": "./lib/index.js"
   },
@@ -14,7 +19,7 @@
   ],
   "scripts": {
     "build": "tsc && chmod +x ./lib/index.js",
-    "dev": "tsc --watch",
+    "dev": "bun src/index.ts",
     "start": "./lib/index.js",
     "clean": "rm -rf lib",
     "prebuild": "bun run clean",
@@ -28,9 +33,11 @@
     "commitlint": "commitlint --edit",
     "geeto:build": "bun build --compile --minify --sourcemap lib/index.js --outfile geeto",
     "geeto:build:linux": "bun build --compile --minify --target=bun-linux-x64 lib/index.js --outfile geeto-linux",
+    "geeto:build:linux:arm64": "bun build --compile --minify --target=bun-linux-arm64 lib/index.js --outfile geeto-linux-arm64",
     "geeto:build:windows": "bun build --compile --minify --target=bun-windows-x64 lib/index.js --outfile geeto-windows.exe",
     "geeto:build:mac": "bun build --compile --minify --target=bun-darwin-x64 lib/index.js --outfile geeto-mac",
-    "geeto:build:all": "bun run geeto:build:linux && bun run geeto:build:windows && bun run geeto:build:mac",
+    "geeto:build:mac:arm64": "bun build --compile --minify --target=bun-darwin-arm64 lib/index.js --outfile geeto-mac-arm64",
+    "geeto:build:all": "bun run geeto:build:linux  && bun run geeto:build:linux:arm64 && bun run geeto:build:windows && bun run geeto:build:mac && bun run geeto:build:mac:arm64",
     "release": "release-it",
     "release:minor": "release-it minor",
     "release:major": "release-it major",
@@ -79,6 +86,9 @@
     "bun": ">=1.0.0"
   },
   "dependencies": {
+    "@github/copilot-sdk": "^0.1.18",
+    "@google/genai": "^1.38.0",
+    "@openrouter/sdk": "^0.4.0",
     "geeto": "."
   }
 }

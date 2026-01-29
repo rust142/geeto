@@ -1,53 +1,29 @@
-/**
- * Git command utilities
- */
+/** Git helpers */
 
-import type { FreeModel } from '../types'
+import { exec, execSilent } from './exec.js'
+import { log } from './logging.js'
+import { askQuestion, confirm } from '../cli/input.js'
+import {
+  generateBranchNameWithProvider,
+  getAIProviderDisplayName,
+  getAIProviderShortName,
+  getModelDisplayName,
+  interactiveAIFallback,
+  isTransientAIFailure,
+  isContextLimitFailure,
+} from './git-ai.js'
 
-import { execGit, execSilent } from './exec.js'
-
-/**
- * Get display name for AI provider
- */
-export function getAIProviderDisplayName(aiProvider: string): string {
-  switch (aiProvider) {
-    case 'gemini': {
-      return 'Gemini AI'
-    }
-    case 'copilot': {
-      return 'GitHub Copilot'
-    }
-    default: {
-      return 'OpenRouter'
-    }
-  }
+export {
+  generateBranchNameWithProvider,
+  getAIProviderDisplayName,
+  getAIProviderShortName,
+  getModelDisplayName,
+  interactiveAIFallback,
+  isTransientAIFailure,
+  isContextLimitFailure,
 }
 
-/**
- * Generate branch name from title using the specified AI provider
- */
-export async function generateBranchNameFromTitleWithProvider(
-  aiProvider: string,
-  title: string,
-  correction?: string,
-  copilotModel?: 'claude-haiku-4.5' | 'gpt-5',
-  openrouterModel?: FreeModel
-): Promise<string | null> {
-  switch (aiProvider) {
-    case 'gemini': {
-      const { generateBranchNameFromTitle } = await import('../api/gemini.js')
-      return generateBranchNameFromTitle(title, correction)
-    }
-    case 'copilot': {
-      const { generateBranchNameFromTitle } = await import('../api/copilot.js')
-      return generateBranchNameFromTitle(title, correction, copilotModel)
-    }
-    default: {
-      const { generateBranchNameFromTitle } = await import('../api/openrouter.js')
-      return generateBranchNameFromTitle(title, correction, openrouterModel)
-    }
-  }
-}
+export { handleBranchNaming } from './branch-naming.js'
 
 /**
  * Check if branch exists locally
@@ -142,8 +118,32 @@ export const getChangedFiles = (): string[] => {
  * Get staged files
  */
 export const getStagedFiles = (): string[] => {
-  const status = execSilent('git diff --cached --name-only')
+  const status = execSilent('git diff --name-only --cached')
   return status.split('\n').filter(Boolean)
+}
+
+/**
+ * Get recommended prefix separator based on existing branches
+ */
+export const getRecommendedPrefixSeparator = (): '/' | '#' => {
+  try {
+    const branches = getLocalBranches()
+    let slashCount = 0
+    let hashCount = 0
+
+    for (const branch of branches) {
+      if (branch.includes('/')) {
+        slashCount++
+      }
+      if (branch.includes('#')) {
+        hashCount++
+      }
+    }
+
+    return hashCount >= slashCount ? '#' : '/'
+  } catch {
+    return '#'
+  }
 }
 
 /**
@@ -151,9 +151,14 @@ export const getStagedFiles = (): string[] => {
  */
 export const generateBranchSuggestions = (stagedFiles: string[], prefix: string): string[] => {
   const suggestions: string[] = []
+  const recommendedSeparator = getRecommendedPrefixSeparator()
 
   if (stagedFiles.length === 0) {
-    suggestions.push(`${prefix}#update`, `${prefix}#fix`, `${prefix}#feature`)
+    suggestions.push(
+      `${prefix}${recommendedSeparator}update`,
+      `${prefix}${recommendedSeparator}fix`,
+      `${prefix}${recommendedSeparator}feature`
+    )
     return suggestions
   }
 
@@ -183,55 +188,58 @@ export const generateBranchSuggestions = (stagedFiles: string[], prefix: string)
     ['js', 'ts', 'py', 'rb', 'php', 'java', 'go'].includes(f.ext ?? '')
   )
 
-  // Generate suggestions based on file types with dev#title format
+  // Generate suggestions based on file types with recommended separator
   if (hasTests) {
-    suggestions.push(`${prefix}#test-update`, `${prefix}#test-fix`)
+    suggestions.push(
+      `${prefix}${recommendedSeparator}test-update`,
+      `${prefix}${recommendedSeparator}test-fix`
+    )
   }
 
   if (hasConfig) {
-    suggestions.push(`${prefix}#config-update`, `${prefix}#deps-update`)
+    suggestions.push(
+      `${prefix}${recommendedSeparator}config-update`,
+      `${prefix}${recommendedSeparator}deps-update`
+    )
   }
 
   if (hasDocs) {
-    suggestions.push(`${prefix}#docs-update`, `${prefix}#readme-update`)
+    suggestions.push(
+      `${prefix}${recommendedSeparator}docs-update`,
+      `${prefix}${recommendedSeparator}readme-update`
+    )
   }
 
   if (hasStyles) {
-    suggestions.push(`${prefix}#style-update`, `${prefix}#ui-fix`)
+    suggestions.push(
+      `${prefix}${recommendedSeparator}style-update`,
+      `${prefix}${recommendedSeparator}ui-fix`
+    )
   }
 
   if (hasScripts) {
-    suggestions.push(`${prefix}#feature`, `${prefix}#bug-fix`)
+    suggestions.push(
+      `${prefix}${recommendedSeparator}feature`,
+      `${prefix}${recommendedSeparator}bug-fix`
+    )
   }
 
   // Fallback suggestions
   if (suggestions.length === 0) {
-    suggestions.push(`${prefix}#update`, `${prefix}#fix`, `${prefix}#feature`)
+    suggestions.push(
+      `${prefix}${recommendedSeparator}update`,
+      `${prefix}${recommendedSeparator}fix`,
+      `${prefix}${recommendedSeparator}feature`
+    )
   }
 
   // Add some generic suggestions
-  suggestions.push(`${prefix}#refactor`, `${prefix}#chore`)
+  suggestions.push(
+    `${prefix}${recommendedSeparator}refactor`,
+    `${prefix}${recommendedSeparator}chore`
+  )
 
   return [...new Set(suggestions)] // Remove duplicates
-}
-export const getRecommendedSeparator = (): '-' | '_' => {
-  try {
-    const branches = getLocalBranches()
-    let hyphenCount = 0
-    let underscoreCount = 0
-
-    for (const branch of branches) {
-      const hyphens = (branch.match(/-/g) ?? []).length
-      const underscores = (branch.match(/_/g) ?? []).length
-
-      hyphenCount += hyphens
-      underscoreCount += underscores
-    }
-
-    return underscoreCount > hyphenCount ? '_' : '-'
-  } catch {
-    return '-'
-  }
 }
 
 /**
@@ -255,26 +263,80 @@ export const getBranchPrefix = (currentBranch: string): string => {
   }
 
   // Fallback to mapping for common branch names
+  const recommendedSeparator = getRecommendedPrefixSeparator()
   const branchMappings: Record<string, string> = {
-    development: 'dev#',
-    develop: 'dev#',
-    dev: 'dev#',
-    main: 'release#',
-    master: 'release#',
-    staging: 'stage#',
-    production: 'hotfix#',
-    prod: 'hotfix#',
-    testing: 'test#',
-    test: 'test#',
-    qa: 'qa#',
-    feature: 'feat#',
-    features: 'feat#',
-    bugfix: 'fix#',
-    hotfix: 'hotfix#',
-    release: 'release#',
+    development: `dev${recommendedSeparator}`,
+    develop: `dev${recommendedSeparator}`,
+    dev: `dev${recommendedSeparator}`,
+    main: `release${recommendedSeparator}`,
+    master: `release${recommendedSeparator}`,
+    staging: `stage${recommendedSeparator}`,
+    production: `hotfix${recommendedSeparator}`,
+    prod: `hotfix${recommendedSeparator}`,
+    testing: `test${recommendedSeparator}`,
+    test: `test${recommendedSeparator}`,
+    qa: `qa${recommendedSeparator}`,
+    feature: `feat${recommendedSeparator}`,
+    features: `feat${recommendedSeparator}`,
+    bugfix: `fix${recommendedSeparator}`,
+    hotfix: `hotfix${recommendedSeparator}`,
+    release: `release${recommendedSeparator}`,
   }
 
-  return branchMappings[currentBranch.toLowerCase()] ?? 'dev#'
+  return branchMappings[currentBranch.toLowerCase()] ?? `dev${recommendedSeparator}`
+}
+
+/**
+ * Push wrapper with authentication retry loop.
+ * Keeps prompting the user to retry if authentication fails so the user can update credentials externally.
+ */
+export const pushWithRetry = (cmd: string, silent: boolean = true): void => {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      exec(cmd, silent)
+      return
+    } catch (error) {
+      const msg = String(error)
+      const lower = msg.toLowerCase()
+      const isAuth =
+        lower.includes('authentication failed') ||
+        lower.includes('http basic: access denied') ||
+        lower.includes('fatal: authentication failed') ||
+        lower.includes('remote:')
+
+      if (isAuth) {
+        // Inform user and allow retry
+        log.error(
+          'Push failed due to authentication. Check your credentials (use SSH or a Personal Access Token).'
+        )
+        log.info(
+          'If you updated credentials (SSH key, credential helper, or PAT), select Retry to try again.'
+        )
+
+        const retry = confirm('Retry push?')
+        if (!retry) {
+          throw error
+        }
+
+        // Optionally allow the user to enter a token to set for this session
+        const setToken = confirm('Would you like to enter a personal access token to try with?')
+        if (setToken) {
+          const token = askQuestion('Enter token (will be used only for this run): ').trim()
+          if (token) {
+            // Store into env for this process; users should prefer credential helpers for persistence
+            process.env.GITHUB_TOKEN = token
+            process.env.COPILOT_TOKEN = token
+          }
+        }
+
+        // Loop to retry after user action
+        continue
+      }
+
+      // Non-auth error: rethrow
+      throw error
+    }
+  }
 }
 
 /**
@@ -284,188 +346,4 @@ export interface BranchNamingResult {
   workingBranch: string
   shouldRestart: boolean
   cancelled: boolean
-}
-
-/**
- * Handle branch naming menu (AI or custom)
- */
-export const handleBranchNaming = async (
-  defaultPrefix: string,
-  separator: '-' | '_',
-  trelloCardId: string,
-  stagedFiles: string[],
-  currentBranch: string,
-  aiProvider: 'gemini' | 'copilot' | 'openrouter' = 'gemini',
-  model?:
-    | 'claude-haiku-4.5'
-    | 'claude-1-haiku'
-    | 'gpt-5'
-    | 'gpt-3.5-turbo'
-    | 'claude-haiku-4.5'
-    | 'grok-beta'
-    | 'mistral-7b'
-    | FreeModel
-): Promise<BranchNamingResult> => {
-  const { askQuestion } = await import('../cli/input.js')
-  const { select } = await import('../cli/menu.js')
-  const { exec } = await import('./exec.js')
-  const { log } = await import('./logging.js')
-  const { colors } = await import('./colors.js')
-
-  const result: BranchNamingResult = {
-    workingBranch: '',
-    shouldRestart: false,
-    cancelled: false,
-  }
-
-  // This function handles AI branch naming directly
-  const diff = execGit('git diff --cached', true)
-  let correction = ''
-
-  // Loop until branch name is accepted
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    log.ai(`Generating branch name with ${getAIProviderDisplayName(aiProvider)}...`)
-
-    let aiSuffix: string | null = null
-
-    switch (aiProvider) {
-      case 'gemini': {
-        const { generateBranchName } = await import('../api/gemini.js')
-        aiSuffix = await generateBranchName(defaultPrefix, stagedFiles, diff, correction)
-
-        break
-      }
-      case 'copilot': {
-        const { generateBranchNameFromTitle } = await import('../api/copilot.js')
-        // For Copilot, we need to create a title from the diff or staged files
-        const titleFromDiff =
-          stagedFiles.length > 0
-            ? `Update ${stagedFiles.slice(0, 3).join(', ')}${stagedFiles.length > 3 ? ' and more' : ''}`
-            : 'Code changes'
-        aiSuffix = await generateBranchNameFromTitle(
-          titleFromDiff,
-          correction,
-          model as 'claude-haiku-4.5' | 'gpt-5'
-        )
-
-        break
-      }
-      case 'openrouter': {
-        const { generateBranchNameFromTitle } = await import('../api/openrouter.js')
-        // For OpenRouter, we need to create a title from the diff or staged files
-        const titleFromDiff =
-          stagedFiles.length > 0
-            ? `Update ${stagedFiles.slice(0, 3).join(', ')}${stagedFiles.length > 3 ? ' and more' : ''}`
-            : 'Code changes'
-        aiSuffix = await generateBranchNameFromTitle(titleFromDiff, correction, model as FreeModel)
-
-        break
-      }
-      // No default
-    }
-
-    if (!aiSuffix) {
-      log.warn(
-        `${getAIProviderDisplayName(aiProvider)} generation failed, falling back to manual input`
-      )
-      while (!result.workingBranch || result.workingBranch.trim() === '') {
-        result.workingBranch = askQuestion('Enter branch name: ').trim()
-        if (!result.workingBranch) {
-          log.error('Branch name cannot be empty!')
-        }
-      }
-      break
-    }
-
-    log.info(`${getAIProviderDisplayName(aiProvider)} generated: "${aiSuffix}"`)
-
-    const cleanSuffix = aiSuffix
-      .toLowerCase()
-      .replaceAll(/\W+/g, separator)
-      .replace(separator === '-' ? /-+/g : /_+/g, separator)
-      .replace(separator === '-' ? /^-|-$/g : /^_|_$/g, '')
-      .trim()
-
-    // Check if branch name seems incomplete
-    const incompletePatterns =
-      separator === '-'
-        ? ['-and', '-or', '-with', '-for', '-the', '-a', '-an', '-in', '-on', '-at', '-to', '-of']
-        : ['_and', '_or', '_with', '_for', '_the', '_a', '_an', '_in', '_on', '_at', '_to', '_of']
-    const seemsIncomplete = incompletePatterns.some((pattern) => cleanSuffix.endsWith(pattern))
-
-    if (seemsIncomplete) {
-      log.warn(
-        `AI response seems incomplete (ends with "${cleanSuffix.slice(-4)}"), regenerating...`
-      )
-      correction = 'Generate a complete branch name without truncation'
-      continue
-    }
-
-    const currentSuggestion = trelloCardId
-      ? `${defaultPrefix}${trelloCardId}${separator}${cleanSuffix}`
-      : `${defaultPrefix}${cleanSuffix}`
-
-    log.ai(`Suggested: ${colors.cyan}${currentSuggestion}${colors.reset}`)
-
-    const acceptAi = await select('Accept this branch name?', [
-      { label: 'Yes, use it', value: 'accept' },
-      { label: 'Regenerate', value: 'regenerate' },
-      { label: 'Correct AI (give feedback)', value: 'correct' },
-      { label: 'Edit manually', value: 'edit' },
-      { label: 'Back to branch menu', value: 'back' },
-    ])
-
-    switch (acceptAi) {
-      case 'accept': {
-        result.workingBranch = currentSuggestion
-        break
-      }
-      case 'regenerate': {
-        correction = ''
-        continue
-      }
-      case 'correct': {
-        correction = askQuestion('What should be different? ')
-        continue
-      }
-      case 'edit': {
-        const edited = askQuestion(`Edit branch (${currentSuggestion}): `)
-        result.workingBranch = edited || currentSuggestion
-        break
-      }
-      case 'back': {
-        result.shouldRestart = true
-        break
-      }
-    }
-
-    if (result.workingBranch || acceptAi === 'back') {
-      break
-    }
-  }
-
-  // Create branch if we have a valid name
-  if (result.workingBranch && result.workingBranch !== currentBranch) {
-    // Validate branch name
-    const validation = validateBranchName(result.workingBranch)
-    if (!validation.valid) {
-      log.error(`Invalid branch name: ${validation.reason}`)
-      result.workingBranch = ''
-      return result
-    }
-
-    // Check if branch already exists
-    if (branchExists(result.workingBranch)) {
-      log.error(`Branch '${result.workingBranch}' already exists locally`)
-      result.workingBranch = ''
-      return result
-    }
-
-    log.info(`Creating branch: ${result.workingBranch}`)
-    exec(`git checkout -b "${result.workingBranch}"`)
-    log.success(`Branch created: ${result.workingBranch}`)
-  }
-
-  return result
 }

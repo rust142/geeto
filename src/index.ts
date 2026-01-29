@@ -3,10 +3,220 @@
  * Geeto - Git flow automation CLI tool with AI-powered branch naming
  * Main entry point - delegates to modular workflows
  */
-import { main } from './workflows/main'
+import { main } from './workflows/main.js'
 
-// Start the application
-main().catch((error: unknown) => {
-  console.error('Fatal error:', error)
-  process.exit(1)
-})
+// Parse simple CLI flags for quick step shortcuts
+const argv = process.argv.slice(2)
+let startAt: 'commit' | 'merge' | 'branch' | 'stage' | 'push' | undefined
+let fresh = false
+let resume = false
+let showVersion = false
+let showHelp = false
+let showAuthor = false
+let showSaweria = false
+let settingsAction:
+  | 'separator'
+  | 'models'
+  | 'change-model'
+  | 'gemini'
+  | 'openrouter'
+  | 'trello'
+  | undefined
+for (const arg of argv) {
+  if (arg === '-c' || arg === '--commit') {
+    startAt = 'commit'
+  }
+  if (arg === '-m' || arg === '--merge') {
+    startAt = 'merge'
+  }
+  if (arg === '-b' || arg === '--branch') {
+    startAt = 'branch'
+  }
+  if (arg === '-s' || arg === '--stage') {
+    startAt = 'stage'
+  }
+  if (arg === '-p' || arg === '--push') {
+    startAt = 'push'
+  }
+  if (arg === '-f' || arg === '--fresh') {
+    fresh = true
+  }
+  if (arg === '-r' || arg === '--resume') {
+    resume = true
+  }
+  if (arg === '-v' || arg === '--version') {
+    showVersion = true
+  }
+  if (arg === '-h' || arg === '--help') {
+    showHelp = true
+  }
+  if (arg === '--author') {
+    showAuthor = true
+  }
+  if (arg === '--saweria') {
+    showSaweria = true
+  }
+  if (arg === '--separator') {
+    settingsAction = 'separator'
+  }
+  if (arg === '--sync-models') {
+    settingsAction = 'models'
+  }
+  if (arg === '--change-model') {
+    settingsAction = 'change-model'
+  }
+  if (arg === '--setup-gemini') {
+    settingsAction = 'gemini'
+  }
+  if (arg === '--setup-openrouter') {
+    settingsAction = 'openrouter'
+  }
+  if (arg === '--setup-trello') {
+    settingsAction = 'trello'
+  }
+}
+
+// Validate unknown flags
+const validFlags = new Set([
+  '-c',
+  '--commit',
+  '-m',
+  '--merge',
+  '-b',
+  '--branch',
+  '-s',
+  '--stage',
+  '-p',
+  '--push',
+  '-f',
+  '--fresh',
+  '-r',
+  '--resume',
+  '-v',
+  '--version',
+  '-h',
+  '--help',
+  '--separator',
+  '--sync-models',
+  '--change-model',
+  '--setup-gemini',
+  '--setup-openrouter',
+  '--setup-trello',
+  '--author',
+  '--saweria',
+])
+
+for (const arg of argv) {
+  if (arg.startsWith('-') && !validFlags.has(arg)) {
+    console.error(`Unknown flag: ${arg}`)
+    console.error('Use --help to see available options')
+    process.exit(1)
+    }
+  }
+
+;(async () => {
+      if (showVersion) {
+        console.log('Geeto v1.1.0-beta.0')
+        process.exit(0)
+      }
+
+      if (showHelp) {
+        console.log('Geeto CLI — Git flow automation')
+        console.log('')
+        console.log('Usage: geeto [options]')
+        console.log('')
+        console.log('Options:')
+        console.log('  -c, --commit         Start at commit step')
+        console.log('  -m, --merge          Start at merge step')
+        console.log('  -b, --branch         Start at branch step')
+        console.log('  -s, --stage          Start at stage step')
+        console.log('  -p, --push           Start at push step')
+        console.log('  -f, --fresh          Start fresh workflow (ignore checkpoint)')
+        console.log('  -r, --resume         Resume from checkpoint (default if exists)')
+        console.log('  -v, --version        Show version')
+        console.log('  -h, --help           Show this help message')
+        console.log('')
+        console.log('Settings:')
+        console.log('  --separator          Configure branch separator (hyphen/underscore)')
+        console.log('  --sync-models        Sync model configurations (fetch live models)')
+        console.log('  --change-model       Change AI provider / model')
+        console.log('  --setup-gemini       Setup Gemini AI integration')
+        console.log('  --setup-openrouter   Setup OpenRouter AI integration')
+        console.log('  --setup-trello       Setup Trello integration')
+        console.log('')
+        console.log('Other:')
+        console.log('  --author             Show author information and tools')
+        console.log('  --saweria            Print Saweria (support) link')
+        console.log('')
+        // Footer notes
+        console.log('Tip: use the --author flag to show author tools, or --saweria to print the support link')
+        process.exit(0)
+      }
+
+    if (showAuthor) {
+      try {
+        const { showAuthorTools } = await import('./workflows/author.js')
+        await showAuthorTools()
+        // After returning from author tools, show main menu
+        await main({ startAt, fresh, resume })
+        return
+      } catch (error) {
+        console.error('Author tools error:', error)
+        process.exit(1)
+      }
+    }
+
+      if (showSaweria) {
+        console.log('Support the author: https://saweria.co/rust142')
+        process.exit(0)
+      }
+
+      if (settingsAction) {
+        try {
+          const {
+            handleSeparatorSetting,
+            handleModelResetSetting,
+            handleChangeModelSetting,
+            handleGeminiSetting,
+            handleOpenRouterSetting,
+            handleTrelloSetting,
+          } = await import('./workflows/settings.js')
+          switch (settingsAction) {
+            case 'separator': {
+              await handleSeparatorSetting()
+              break
+            }
+            case 'models': {
+              await handleModelResetSetting()
+              break
+            }
+            case 'change-model': {
+              await handleChangeModelSetting()
+              break
+            }
+            case 'gemini': {
+              await handleGeminiSetting()
+              break
+            }
+            case 'openrouter': {
+              await handleOpenRouterSetting()
+              break
+            }
+            case 'trello': {
+              await handleTrelloSetting()
+              break
+            }
+          }
+          process.exit(0)
+        } catch (error) {
+          console.error('Settings error:', error)
+          process.exit(1)
+        }
+      }
+
+      // Start the application with optional start step
+      main({ startAt, fresh, resume }).catch((error: unknown) => {
+        console.error('Fatal error:', error)
+        process.exit(1)
+      })
+    })()

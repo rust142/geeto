@@ -2,215 +2,108 @@
  * GitHub Copilot integration for AI-powered branch naming and commit messages
  */
 
-import { spawn } from 'node:child_process'
-
 import { log } from '../utils/logging.js'
+import {
+  generateBranchName as sdkGenerateBranchName,
+  generateCommitMessage as sdkGenerateCommitMessage,
+  isAvailable as sdkIsAvailable,
+  getAvailableModelChoices as sdkGetAvailableModels,
+} from './copilot-sdk.js'
+
+// Supported models on GitHub Copilot
+export type CopilotModel = string
 
 /**
- * Generate branch name from Trello card title using GitHub Copilot CLI
+ * Return Copilot model choices from the SDK in realtime.
+ * This deliberately does NOT read or write `.geeto/copilot-model.json`.
  */
-export const generateBranchNameFromTitle = async (
-  trelloTitle: string,
-  correction?: string,
-  model: 'claude-haiku-4.5' | 'gpt-5' = 'claude-haiku-4.5'
-): Promise<string | null> => {
-  return new Promise((resolve) => {
-    // Use GitHub Copilot CLI to generate branch name
-    let prompt = `Generate a short git branch name suffix from this Trello card title:
-
-Trello title: "${trelloTitle}"
-
-Requirements:
-- Output ONLY the branch suffix (no prefix like "dev#" or "#123-")
-- Use kebab-case format (lowercase-with-hyphens)
-- Length: 15-40 characters (be descriptive, don't truncate important info)
-- Keep important context like version numbers, years, or key details
-- Focus on the main action and what's being changed
-- NEVER truncate in the middle of a word or number
-
-Good examples from titles:
-"Add user authentication flow" → "add-user-authentication"
-"Fix booking API validation" → "fix-booking-validation"
-"Update navbar responsive design" → "update-navbar-responsive"
-"Refactor git flow script" → "refactor-git-flow"
-"Create shopping cart feature" → "create-shopping-cart"
-"Fix payment processing bug" → "fix-payment-processing"
-"Update database schema migration" → "update-database-schema"
-"Implement email notifications" → "implement-email-notifications"
-"Add admin dashboard" → "add-admin-dashboard"
-"Optimize image upload service" → "optimize-image-upload"
-
-Bad examples (avoid):
-- "create-shopping-cart-feat" (truncated, missing context)
-- "update-datab" (incomplete word)
-- "fix-bug" (too short)
-
-Output ONLY the branch suffix, nothing else. No quotes, no explanation.`
-
-    if (correction) {
-      prompt += `\n\nUser wants this adjustment: "${correction}"\nGenerate a new branch name based on this feedback.`
+export const getCopilotModels = async (): Promise<
+  Array<{ label: string; value: CopilotModel }>
+> => {
+  try {
+    const ok = await sdkIsAvailable()
+    if (!ok) {
+      log.info('Copilot SDK not available; returning no Copilot models.')
+      return []
     }
-    const command = 'copilot'
-    const args = ['-p', prompt, '--allow-all-tools', '--model', model]
-
-    const child = spawn(command, args, {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, FORCE_COLOR: '0' }, // Disable colors
-    })
-
-    let stdout = ''
-    let stderr = ''
-
-    child.stdout.on('data', (data: Buffer) => {
-      stdout += data.toString()
-    })
-
-    child.stderr.on('data', (data: Buffer) => {
-      stderr += data.toString()
-    })
-
-    child.on('close', (code: number) => {
-      if (code === 0 && stdout.trim()) {
-        // Clean up the result - remove any extra text, keep only the branch name
-        const branchName =
-          stdout
-            .trim()
-            .split('\n')
-            .filter(
-              (line) =>
-                line.trim() &&
-                !line.includes('Total usage') &&
-                !line.includes('Total duration') &&
-                !line.includes('Usage by model') &&
-                !line.includes('Premium request')
-            )
-            .pop() // Get last meaningful line
-            ?.replace(/[^\da-z-]/g, '') // Remove special chars except hyphens
-            ?.replace(/-+/g, '-') // Replace multiple hyphens
-            ?.replace(/^-|-$/g, '') ?? null // Remove leading/trailing hyphens
-
-        resolve(branchName && branchName.length >= 3 ? branchName : null)
-      } else {
-        log.warn(`GitHub Copilot (${model}) failed with exit code ${code}`)
-        if (stderr.trim()) {
-          log.warn(`Copilot stderr: ${stderr.trim()}`)
-        }
-        if (stdout.trim()) {
-          log.info(`Copilot stdout: ${stdout.trim()}`)
-        }
-        resolve(null)
-      }
-    })
-
-    child.on('error', () => {
-      log.warn(`GitHub Copilot (${model}) process error`)
-      resolve(null)
-    })
-
-    // Timeout after 30 seconds
-    setTimeout(() => {
-      child.kill()
-      log.warn(`GitHub Copilot (${model}) timed out after 30 seconds`)
-      resolve(null)
-    }, 30000)
-  })
+    const live = await sdkGetAvailableModels()
+    if (Array.isArray(live) && live.length > 0) {
+      return live as Array<{ label: string; value: CopilotModel }>
+    }
+    return []
+  } catch (error) {
+    log.warn(`Failed to fetch live Copilot models: ${String(error)}`)
+    return []
+  }
 }
 
 /**
- * Generate commit message from git diff using GitHub Copilot CLI
+ * Generate branch name from title using GitHub Copilot SDK
+ */
+export const generateBranchName = async (
+  text: string,
+  correction?: string,
+  model: CopilotModel = 'claude-haiku-4.5'
+): Promise<string | null> => {
+  try {
+    const ok = await sdkIsAvailable()
+    if (!ok) {
+      log.warn('Copilot SDK not available; install @github/copilot-sdk to enable Copilot features.')
+      return null
+    }
+
+    const sdkRes = await sdkGenerateBranchName(text, correction, model)
+    if (!sdkRes) {
+      return null
+    }
+
+    // Persist original provider response so the user can inspect the unmodified AI output.
+    try {
+      const fs = await import('node:fs/promises')
+      const pathMod = await import('node:path')
+      const path = pathMod.default || pathMod
+      const outDir = path.join(process.cwd(), '.geeto')
+      await fs.mkdir(outDir, { recursive: true })
+      const payload = {
+        provider: 'copilot',
+        model,
+        raw: sdkRes,
+        cleaned: sdkRes,
+        timestamp: new Date().toISOString(),
+      }
+      await fs.writeFile(
+        path.join(outDir, 'last-ai-suggestion.json'),
+        JSON.stringify(payload, null, 2)
+      )
+    } catch {
+      /* ignore file write failures */
+    }
+
+    return sdkRes
+  } catch (error) {
+    log.warn('Copilot Error: ' + String(error))
+    return null
+  }
+}
+
+/**
+ * Generate commit message from git diff using GitHub Copilot SDK
  */
 export const generateCommitMessage = async (
   diff: string,
   correction?: string,
-  model: 'claude-haiku-4.5' | 'gpt-5' = 'claude-haiku-4.5'
+  model: CopilotModel = 'claude-haiku-4.5'
 ): Promise<string | null> => {
-  return new Promise((resolve) => {
-    let prompt = `Generate a conventional commit message from this git diff:
-
-Git diff summary:
-${diff}
-
-Requirements:
-- Use conventional commit format: type(scope): description
-- Types: feat, fix, docs, style, refactor, test, chore, perf, ci, build, revert
-- Scope: optional, use component/module name if clear from diff
-- Description: imperative mood, start with lowercase, max 72 chars
-- If multiple changes, focus on the main change
-- Be specific but concise
-
-Examples:
-feat(auth): add user login validation
-fix(api): resolve null pointer in user service
-docs(readme): update installation instructions
-refactor(utils): simplify date formatting logic
-test(auth): add unit tests for password validation
-chore(deps): update lodash to version 4.17.21
-
-Output ONLY the commit message, nothing else. No quotes, no explanation.`
-
-    if (correction) {
-      prompt += `\n\nUser wants this adjustment: "${correction}"\nGenerate a new commit message based on this feedback.`
+  try {
+    const ok = await sdkIsAvailable()
+    if (!ok) {
+      log.warn('Copilot SDK not available; install @github/copilot-sdk to enable Copilot features.')
+      return null
     }
-
-    const command = 'copilot'
-    const args = ['-p', prompt, '--allow-all-tools', '--model', model]
-
-    const child = spawn(command, args, {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, FORCE_COLOR: '0' }, // Disable colors
-    })
-
-    let stdout = ''
-    let stderr = ''
-
-    child.stdout.on('data', (data: Buffer) => {
-      stdout += data.toString()
-    })
-
-    child.stderr.on('data', (data: Buffer) => {
-      stderr += data.toString()
-    })
-
-    child.on('close', (code: number) => {
-      if (code === 0 && stdout.trim()) {
-        // Clean up the result - remove any extra text, keep only the commit message
-        const commitMessage =
-          stdout
-            .trim()
-            .split('\n')
-            .filter(
-              (line) =>
-                line.trim() &&
-                !line.includes('Total usage') &&
-                !line.includes('Total duration') &&
-                !line.includes('Usage by model') &&
-                !line.includes('Premium request')
-            )
-            .pop() // Get last meaningful line
-            ?.trim() ?? null
-        resolve(commitMessage && commitMessage.length >= 10 ? commitMessage : null)
-      } else {
-        log.warn(`GitHub Copilot (${model}) failed with exit code ${code}`)
-        if (stderr.trim()) {
-          log.warn(`Copilot stderr: ${stderr.trim()}`)
-        }
-        if (stdout.trim()) {
-          log.info(`Copilot stdout: ${stdout.trim()}`)
-        }
-        resolve(null)
-      }
-    })
-
-    child.on('error', (error: Error) => {
-      log.warn(`GitHub Copilot (${model}) process error: ${error.message}`)
-      resolve(null)
-    })
-
-    // Timeout after 30 seconds
-    setTimeout(() => {
-      child.kill()
-      log.warn(`GitHub Copilot (${model}) timed out after 30 seconds`)
-      resolve(null)
-    }, 30000)
-  })
+    const sdkRes = await sdkGenerateCommitMessage(diff, correction, model)
+    return sdkRes
+  } catch (error) {
+    log.warn('Copilot Error: ' + String(error))
+    return null
+  }
 }

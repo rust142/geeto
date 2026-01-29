@@ -2,7 +2,12 @@
  * Configuration file management
  */
 
-import type { BranchStrategyConfig, GeminiConfig, OpenRouterConfig, TrelloConfig } from '../types'
+import type {
+  BranchStrategyConfig,
+  GeminiConfig,
+  OpenRouterConfig,
+  TrelloConfig,
+} from '../types/index.js'
 
 import fs from 'node:fs'
 import os from 'node:os'
@@ -29,11 +34,27 @@ export const ensureGeetoIgnored = (): void => {
       if (gitignoreContent && !gitignoreContent.endsWith('\n')) {
         gitignoreContent += '\n'
       }
+      gitignoreContent += '\n# Geeto state files\n'
       gitignoreContent += '.geeto\n'
-
-      // Write back to .gitignore
-      fs.writeFileSync(gitignorePath, gitignoreContent, 'utf8')
       log.info('Added .geeto to .gitignore')
+    }
+
+    // Check if geeto* is already ignored
+    if (!gitignoreContent.includes('geeto*')) {
+      // Add geeto* to the end of .gitignore
+      if (gitignoreContent && !gitignoreContent.endsWith('\n')) {
+        gitignoreContent += '\n'
+      }
+      gitignoreContent += 'geeto*\n'
+      log.info('Added geeto* to .gitignore')
+    }
+
+    // Write back to .gitignore only if we made changes
+    const originalContent = fs.existsSync(gitignorePath)
+      ? fs.readFileSync(gitignorePath, 'utf8')
+      : ''
+    if (gitignoreContent !== originalContent) {
+      fs.writeFileSync(gitignorePath, gitignoreContent, 'utf8')
     }
   } catch (error) {
     log.warn(`Could not update .gitignore: ${(error as Error).message}`)
@@ -41,18 +62,10 @@ export const ensureGeetoIgnored = (): void => {
 }
 
 /**
- * Get path to geminicommit config (cross-platform)
+ * Get path to Gemini config (project-local)
  */
 export const getGeminiConfigPath = (): string => {
-  const platform = process.platform
-  if (platform === 'linux') {
-    return `${os.homedir()}/.config/geminicommit/config.toml`
-  }
-  if (platform === 'win32') {
-    const appData = process.env.APPDATA ?? `${os.homedir()}/AppData/Roaming`
-    return `${appData}/geminicommit/config.toml`
-  }
-  return `${os.homedir()}/Library/Application Support/geminicommit/config.toml`
+  return '.geeto/gemini.toml'
 }
 
 /**
@@ -73,23 +86,26 @@ const GEMINI_CONFIG_PATH = getGeminiConfigPath()
 export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash'
 
 /**
- * Read Gemini config from geminicommit config.toml
+ * Read Gemini config from project-local `.geeto/gemini.toml`.
+ * Expected format:
+ * api_key = "YOUR_API_KEY"
  */
 export const getGeminiConfig = (): GeminiConfig => {
   try {
     if (fs.existsSync(GEMINI_CONFIG_PATH)) {
       const content = fs.readFileSync(GEMINI_CONFIG_PATH, 'utf8')
-      const keyMatch = content.match(/key\s*=\s*["']([^"']+)["']/)
-      const modelMatch = content.match(/model\s*=\s*["']([^"']+)["']/)
+      // Look for gemini_api_key first, fall back to api_key or apiKey for compatibility
+      const apiKey = content.match(/gemini_api_key\s*=\s*["']([^"']+)["']/)
+      const apiKeyMatch = content.match(/api_key\s*=\s*["']([^"']+)["']/)
+      const apiKeyAlt = content.match(/apiKey\s*=\s*["']([^"']+)["']/)
       return {
-        apiKey: keyMatch?.[1] ?? '',
-        model: modelMatch?.[1] ?? DEFAULT_GEMINI_MODEL,
+        apiKey: apiKey?.[1] ?? apiKeyMatch?.[1] ?? apiKeyAlt?.[1] ?? '',
       }
     }
   } catch {
     // Ignore errors
   }
-  return { apiKey: '', model: DEFAULT_GEMINI_MODEL }
+  return { apiKey: '' }
 }
 
 /**
@@ -97,6 +113,14 @@ export const getGeminiConfig = (): GeminiConfig => {
  */
 export const getGeminiApiKey = (): string => {
   return getGeminiConfig().apiKey
+}
+
+/**
+ * Check if Gemini is configured (has API key)
+ */
+export const hasGeminiConfig = (): boolean => {
+  const config = getGeminiConfig()
+  return !!(config.apiKey && config.apiKey.trim().length > 0)
 }
 
 /**
@@ -145,9 +169,11 @@ export const getOpenRouterConfig = (): OpenRouterConfig => {
     const path = getOpenRouterConfigPath()
     if (fs.existsSync(path)) {
       const content = fs.readFileSync(path, 'utf8')
+      const apiKey = content.match(/openrouter_api_key\s*=\s*["']([^"']+)["']/)
       const apiKeyMatch = content.match(/api_key\s*=\s*["']([^"']+)["']/)
+      const apiKeyAlt = content.match(/apiKey\s*=\s*["']([^"']+)["']/)
       return {
-        apiKey: apiKeyMatch?.[1] ?? '',
+        apiKey: apiKey?.[1] ?? apiKeyMatch?.[1] ?? apiKeyAlt?.[1] ?? '',
       }
     }
   } catch {

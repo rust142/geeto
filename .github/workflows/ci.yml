@@ -53,17 +53,16 @@ jobs:
     - name: Build project
       run: bun run build
 
-    - name: Build cross-platform binaries
-      run: bun run geeto:build:all
-
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
         name: geeto-binaries-${{ matrix.node-version }}
         path: |
           geeto-linux
+          geeto-linux-arm
           geeto-windows.exe
           geeto-mac
+          geeto-mac-arm
         retention-days: 1
 
   cross-platform-test:
@@ -85,11 +84,17 @@ jobs:
       if: runner.os != 'Windows'
       run: |
         chmod +x geeto-linux
+        chmod +x geeto-linux-arm
         chmod +x geeto-mac
+        chmod +x geeto-mac-arm
 
     - name: Test Linux binary
       if: runner.os == 'Linux'
       run: ./geeto-linux --help | head -10
+
+    - name: Test Linux ARM binary
+      if: runner.os == 'Linux'
+      run: ./geeto-linux-arm --help | head -10
 
     - name: Test Windows binary
       if: runner.os == 'Windows'
@@ -98,6 +103,10 @@ jobs:
     - name: Test macOS binary
       if: runner.os == 'macOS'
       run: ./geeto-mac --help | head -10
+
+    - name: Test macOS ARM binary
+      if: runner.os == 'macOS'
+      run: ./geeto-mac-arm --help | head -10
 
   commitlint:
     name: Commit Message Lint

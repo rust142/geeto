@@ -2,11 +2,12 @@
  * State management for checkpoint recovery
  */
 
-import type { GeetoState } from '../types'
+import type { GeetoState } from '../types/index.js'
 
 import fs from 'node:fs'
 
 import { ensureGeetoIgnored } from './config.js'
+import { STEP } from '../core/constants.js'
 
 const STATE_FILE = '.geeto/geeto-state.json'
 
@@ -41,13 +42,25 @@ export const loadState = (): GeetoState | null => {
 }
 
 /**
- * Clear checkpoint file
+ * Reset checkpoint but preserve configured AI provider and models.
+ * Useful for "Start fresh" while keeping AI settings.
  */
-export const clearState = (): void => {
+export const preserveProviderState = (state: GeetoState): void => {
   try {
-    if (fs.existsSync(STATE_FILE)) {
-      fs.unlinkSync(STATE_FILE)
+    const minimal: GeetoState = {
+      step: STEP.INIT,
+      workingBranch: '',
+      targetBranch: '',
+      currentBranch: state.currentBranch ?? '',
+      timestamp: new Date().toISOString(),
+      aiProvider: state.aiProvider,
+      copilotModel: state.copilotModel,
+      openrouterModel: state.openrouterModel,
+      geminiModel: state.geminiModel,
     }
+
+    // Reuse save logic to ensure .geeto exists and is ignored
+    saveState(minimal)
   } catch {
     // Ignore errors
   }
