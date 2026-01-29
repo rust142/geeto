@@ -3,7 +3,7 @@
     // Environment setup & latest features
     "lib": ["ES2022"],
     "target": "ES2022",
-    "module": "commonjs",
+    "module": "node16",
     "allowJs": true,
 
     // Output configuration
@@ -15,7 +15,7 @@
     "removeComments": false,
 
     // Module resolution
-    "moduleResolution": "node",
+    "moduleResolution": "node16",
     "noEmit": false,
     "esModuleInterop": true,
     "resolveJsonModule": true,

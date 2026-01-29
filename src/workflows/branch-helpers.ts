@@ -1,0 +1,445 @@
+import type { GeetoState, BranchStrategyConfig } from '../types/index.js'
+import type { CopilotModel } from '../api/copilot.js'
+import type { OpenRouterModel } from '../api/openrouter.js'
+import type { GeminiModel } from '../api/gemini.js'
+
+import { createBranch, promptManualBranch } from './branch-utils.js'
+
+import {
+  fetchTrelloCards,
+  fetchTrelloLists,
+  generateBranchNameFromTrelloTitle,
+} from '../api/trello.js'
+import { askQuestion } from '../cli/input.js'
+import { STEP } from '../core/constants.js'
+import { log } from '../utils/logging.js'
+import { colors } from '../utils/colors.js'
+import {
+  getBranchStrategyConfig,
+  hasTrelloConfig,
+  saveBranchStrategyConfig,
+  DEFAULT_GEMINI_MODEL,
+} from '../utils/config.js'
+import {
+  generateBranchNameWithProvider,
+  getAIProviderShortName,
+  getModelDisplayName,
+  interactiveAIFallback,
+  isTransientAIFailure,
+  isContextLimitFailure,
+} from '../utils/git.js'
+import { chooseModelForProvider } from '../utils/git-ai.js'
+import { select } from '../cli/menu.js'
+import { saveState } from '../utils/state.js'
+
+export interface TrelloCaseResult {
+  workingBranch?: string
+  selectedNamingStrategy?: 'title-full' | 'title-ai' | 'ai' | 'manual'
+  branchFlowComplete: boolean
+  branchMenuShown: boolean
+}
+
+export async function handleTrelloCase(
+  state: GeetoState,
+  branchConfig: BranchStrategyConfig | null,
+  separator: '-' | '_',
+  defaultPrefix: string
+): Promise<TrelloCaseResult> {
+  // Returns result explaining what to do next for the branch workflow
+  if (!hasTrelloConfig()) {
+    log.info('No Trello configuration found. Setting up Trello integration...')
+    const { setupTrelloConfigInteractive } = await import('../core/trello-setup.js')
+    const setupSuccess = setupTrelloConfigInteractive()
+    if (!setupSuccess) {
+      log.warn('Trello setup failed or cancelled.')
+      return { branchFlowComplete: false, branchMenuShown: false }
+    }
+    log.success('Trello integration configured!')
+  }
+
+  log.info('🔍 Checking Trello for tasks...')
+
+  const trelloLists = await fetchTrelloLists()
+  if (trelloLists.length === 0) {
+    log.warn('No Trello lists found on board')
+    return { branchFlowComplete: false, branchMenuShown: false }
+  }
+
+  // List selection
+  const lastUsedListId = branchConfig?.lastTrelloList as string | undefined
+  const listOptions = [
+    ...trelloLists.map((list) => ({
+      label: list.id === lastUsedListId ? `${list.name} ⭐ Last used` : `${list.name}`,
+      value: list.id,
+    })),
+    { label: 'All lists (no filter)', value: 'all' },
+    { label: 'Back to branch menu', value: 'back-menu' },
+  ]
+
+  const selectedListId = await select('Select Trello list:', listOptions)
+  if (selectedListId === 'back-menu') {
+    return { branchFlowComplete: false, branchMenuShown: false }
+  }
+
+  if (selectedListId !== 'all') {
+    const currentStrategy = getBranchStrategyConfig()
+    saveBranchStrategyConfig({
+      separator,
+      lastNamingStrategy: currentStrategy?.lastNamingStrategy,
+      lastTrelloList: selectedListId,
+    })
+  }
+
+  const filterListId = selectedListId === 'all' ? undefined : selectedListId
+  log.info('⏳ Loading Trello cards...')
+  const trelloCards = await fetchTrelloCards(filterListId)
+
+  if (trelloCards.length === 0) {
+    log.warn('No cards found in selected list')
+    return { branchFlowComplete: false, branchMenuShown: false }
+  }
+
+  // Card selection and naming
+  const trelloOptions = [
+    ...trelloCards.slice(0, 15).map((card) => {
+      const branchPreview = generateBranchNameFromTrelloTitle(card.name, card.shortLink, separator)
+      return {
+        label: `${defaultPrefix}${branchPreview}`,
+        value: JSON.stringify({ id: card.shortLink, title: card.name }),
+      }
+    }),
+    { label: 'Back to branch menu', value: 'back-menu' },
+  ]
+
+  const selectedCard = await select('Select Trello card:', trelloOptions)
+  if (selectedCard === 'back-menu') {
+    return { branchFlowComplete: false, branchMenuShown: false }
+  }
+
+  const cardData = JSON.parse(selectedCard) as { id: string; title: string }
+  const trelloCardId = cardData.id
+  log.success(`Linked to Trello card ${trelloCardId}`)
+
+  // Naming strategy selection for the card
+  const namingChoice = await select('Branch naming strategy:', [
+    { label: 'Use Trello title (full)', value: 'title-full' },
+    { label: 'Use Trello title (AI shortened)', value: 'title-ai' },
+    { label: 'Back to card selection', value: 'back' },
+  ])
+
+  if (namingChoice === 'back') {
+    return { branchFlowComplete: false, branchMenuShown: false }
+  }
+
+  if (namingChoice === 'title-full') {
+    const branchSuffix = generateBranchNameFromTrelloTitle(cardData.title, cardData.id, separator)
+    const workingBranch = `${defaultPrefix}${branchSuffix}`
+    log.success(`Branch name: ${colors.cyan}${workingBranch}${colors.reset}`)
+    if (createBranch(workingBranch, state.currentBranch)) {
+      state.workingBranch = workingBranch
+      state.step = STEP.BRANCH_CREATED
+      saveState(state)
+      return {
+        workingBranch,
+        selectedNamingStrategy: 'title-full',
+        branchFlowComplete: true,
+        branchMenuShown: true,
+      }
+    }
+
+    return { branchFlowComplete: false, branchMenuShown: false }
+  }
+
+  // title-ai: use AI to shorten Trello title
+  let correction = ''
+  let aiSuffix: string | null = null
+  let skipRegenerate = false
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const aiProvider = (state.aiProvider ?? 'gemini') as 'gemini' | 'copilot' | 'openrouter'
+    let modelParam: CopilotModel | OpenRouterModel | GeminiModel
+    if (aiProvider === 'copilot') {
+      modelParam = state.copilotModel as CopilotModel
+    } else if (aiProvider === 'openrouter') {
+      modelParam = state.openrouterModel as OpenRouterModel
+    } else {
+      modelParam = DEFAULT_GEMINI_MODEL as GeminiModel
+    }
+
+    let model: string | undefined
+    if (aiProvider === 'copilot') {
+      model = state.copilotModel as unknown as string
+    } else if (aiProvider === 'openrouter') {
+      model = state.openrouterModel as unknown as string
+    } else {
+      model = (state.geminiModel as unknown as string) ?? DEFAULT_GEMINI_MODEL
+    }
+    const modelDisplay = getModelDisplayName(aiProvider, model)
+    log.ai(
+      `Generating short branch name using ${getAIProviderShortName(aiProvider)}${
+        modelDisplay ? ` (${modelDisplay})` : ''
+      }...`
+    )
+
+    if (skipRegenerate) {
+      // consume skip once and reuse previous aiSuffix
+      skipRegenerate = false
+    } else {
+      aiSuffix = await generateBranchNameWithProvider(
+        aiProvider,
+        cardData.title,
+        correction,
+        state.copilotModel,
+        state.openrouterModel
+      )
+    }
+
+    // Save the raw AI response so users can inspect it if the suggestion looks wrong
+    try {
+      const fs = await import('node:fs/promises')
+      const pathMod = await import('node:path')
+      const path = pathMod.default || pathMod
+      const outDir = path.join(process.cwd(), '.geeto')
+      await fs.mkdir(outDir, { recursive: true })
+      const payload: Record<string, unknown> = {
+        provider: aiProvider,
+        model: modelParam ?? null,
+        raw: aiSuffix,
+        cardTitle: cardData.title,
+        timestamp: new Date().toISOString(),
+      }
+
+      try {
+        const existing = await fs.readFile(path.join(outDir, 'last-ai-suggestion.json'), 'utf8')
+        const parsed: unknown = JSON.parse(existing || '{}')
+        if (parsed && typeof parsed === 'object' && 'content' in parsed) {
+          payload.content = (parsed as Record<string, unknown>).content
+        }
+      } catch {
+        /* ignore read errors */
+      }
+
+      await fs.writeFile(
+        path.join(outDir, 'last-ai-suggestion.json'),
+        JSON.stringify(payload, null, 2)
+      )
+      log.info(
+        'Incorrect Suggestion? check .geeto/last-ai-suggestion.json (possible AI/context limit).\n'
+      )
+    } catch {
+      log.warn('Failed to write AI suggestion file')
+    }
+
+    if (!aiSuffix || isTransientAIFailure(aiSuffix) || isContextLimitFailure(aiSuffix)) {
+      aiSuffix = await interactiveAIFallback(
+        aiSuffix,
+        aiProvider,
+        modelParam,
+        cardData.title,
+        correction,
+        state.currentBranch,
+        (provider: 'gemini' | 'copilot' | 'openrouter', selectedModel?: string) => {
+          state.aiProvider = provider
+          if (provider === 'copilot') {
+            state.copilotModel = selectedModel as CopilotModel
+          } else if (provider === 'openrouter') {
+            state.openrouterModel = selectedModel as OpenRouterModel
+          }
+          saveState(state)
+        }
+      )
+    }
+
+    let workingBranch = ''
+
+    if (aiSuffix === null) {
+      workingBranch = promptManualBranch(state.currentBranch)
+    } else {
+      const cleanSuffix = aiSuffix
+        .replaceAll(/[^\w-]/gi, separator)
+        .replace(separator === '-' ? /-+/g : /_+/g, separator)
+        .replace(separator === '-' ? /^-|-$/g : /^_|_$/g, '')
+        .toLowerCase()
+
+      workingBranch = `${defaultPrefix}${trelloCardId}${separator}${cleanSuffix}`
+      const contextLimitDetected = isContextLimitFailure(aiSuffix)
+      if (!contextLimitDetected) {
+        log.ai(`Suggested: ${colors.cyan}${workingBranch}${colors.reset}`)
+        log.info(
+          'Incorrect Suggestion? check .geeto/last-ai-suggestion.json (possible AI/context limit).\n'
+        )
+      }
+    }
+
+    const contextLimitDetected = isContextLimitFailure(aiSuffix)
+
+    let acceptChoice: string
+    if (contextLimitDetected) {
+      acceptChoice = await select(
+        'This model cannot process the input due to token/context limits. Please choose a different model or provider:',
+        [
+          { label: 'Change model', value: 'change-model' },
+          { label: 'Change AI provider', value: 'change-provider' },
+          { label: 'Edit manually', value: 'edit' },
+          { label: 'Back to card selection', value: 'back' },
+        ]
+      )
+    } else {
+      acceptChoice = await select('Accept this branch name?', [
+        { label: 'Yes, use it', value: 'accept' },
+        { label: 'Regenerate', value: 'regenerate' },
+        { label: 'Correct AI (give feedback)', value: 'correct' },
+        { label: 'Change model', value: 'change-model' },
+        { label: 'Change AI provider', value: 'change-provider' },
+        { label: 'Edit manually', value: 'edit' },
+        { label: 'Back to card selection', value: 'back' },
+      ])
+    }
+
+    switch (acceptChoice) {
+      case 'accept': {
+        // create branch and return
+        if (createBranch(workingBranch, state.currentBranch)) {
+          state.workingBranch = workingBranch
+          state.step = STEP.BRANCH_CREATED
+          saveState(state)
+          return {
+            workingBranch,
+            selectedNamingStrategy: 'title-ai',
+            branchFlowComplete: true,
+            branchMenuShown: true,
+          }
+        }
+        // creation failed, return to menus
+        return { branchFlowComplete: false, branchMenuShown: false }
+      }
+      case 'regenerate': {
+        correction = ''
+        break
+      }
+      case 'change-provider': {
+        // let user pick another provider and optionally pick a model
+        const prov = await select('Choose AI provider:', [
+          { label: 'Gemini', value: 'gemini' },
+          { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
+          { label: 'OpenRouter', value: 'openrouter' },
+          { label: 'Back to suggested branch selection', value: 'cancel-prov' },
+        ])
+        if (prov === 'cancel-prov') {
+          // User chose contextual back — don't regenerate AI suggestion
+          skipRegenerate = true
+          continue
+        }
+        state.aiProvider = prov as 'gemini' | 'copilot' | 'openrouter'
+
+        log.info(`Selected AI Provider: ${getAIProviderShortName(state.aiProvider ?? 'gemini')}`)
+        const chosen = await chooseModelForProvider(
+          state.aiProvider as 'gemini' | 'copilot' | 'openrouter',
+          'Choose model:',
+          'Back to suggested branch selection'
+        )
+        if (!chosen) {
+          skipRegenerate = true
+          continue
+        }
+        if (chosen === 'back') {
+          skipRegenerate = true
+          continue
+        }
+
+        switch (prov) {
+          case 'copilot': {
+            state.copilotModel = chosen as unknown as CopilotModel
+            break
+          }
+          case 'openrouter': {
+            state.openrouterModel = chosen as unknown as OpenRouterModel
+            break
+          }
+          case 'gemini': {
+            state.geminiModel = chosen as unknown as GeminiModel
+            break
+          }
+          default: {
+            break
+          }
+        }
+        saveState(state)
+        correction = ''
+        break
+      }
+      case 'change-model': {
+        // change only the current provider's model
+        const currentProv = state.aiProvider ?? 'gemini'
+        if (currentProv === 'copilot') {
+          const cop = await import('../api/copilot.js')
+          const models = await cop.getCopilotModels()
+          const copOptions = models.some((m) => m.value === 'back')
+            ? models
+            : [...models, { label: 'Back to suggested branch selection', value: 'back' }]
+          const chosen = await select('Choose Copilot model:', copOptions)
+          if (chosen === 'back') {
+            skipRegenerate = true
+            continue
+          }
+          state.copilotModel = chosen as unknown as CopilotModel
+        } else if (currentProv === 'openrouter') {
+          const or = await import('../api/openrouter.js')
+          const models = await or.getOpenRouterModels()
+          const orOptions = models.some((m) => m.value === 'back')
+            ? models
+            : [...models, { label: 'Back to suggested branch selection', value: 'back' }]
+          const chosen = await select('Choose OpenRouter model:', orOptions)
+          if (chosen === 'back') {
+            skipRegenerate = true
+            continue
+          }
+          state.openrouterModel = chosen as unknown as OpenRouterModel
+        } else {
+          const gm = await import('../api/gemini.js')
+          const models = await gm.getGeminiModels()
+          const gmOptions = models.some((m) => m.value === 'back')
+            ? models
+            : [...models, { label: 'Back to suggested branch selection', value: 'back' }]
+          const chosen = await select('Choose Gemini model:', gmOptions)
+          if (chosen === 'back') {
+            skipRegenerate = true
+            continue
+          }
+          state.geminiModel = chosen as unknown as GeminiModel
+        }
+        saveState(state)
+        correction = ''
+        break
+      }
+      case 'correct': {
+        const suggestionFirstLine = workingBranch.split('\n').find((l) => l.trim()) ?? ''
+        correction = askQuestion(
+          'Provide corrections for the AI (e.g., shorten, prefer verb tense): ',
+          suggestionFirstLine,
+          true
+        )
+        break
+      }
+      case 'edit': {
+        const edited = askQuestion(`Edit branch (${workingBranch}): `)
+        workingBranch = edited || workingBranch
+        if (createBranch(workingBranch, state.currentBranch)) {
+          state.workingBranch = workingBranch
+          state.step = STEP.BRANCH_CREATED
+          saveState(state)
+          return {
+            workingBranch,
+            selectedNamingStrategy: 'title-ai',
+            branchFlowComplete: true,
+            branchMenuShown: true,
+          }
+        }
+        return { branchFlowComplete: false, branchMenuShown: false }
+      }
+      case 'back': {
+        return { branchFlowComplete: false, branchMenuShown: false }
+      }
+    }
+  }
+}

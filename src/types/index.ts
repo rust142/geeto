@@ -1,26 +1,25 @@
+import type { GeminiModel } from '../api/gemini.js'
+import type { CopilotModel } from '../api/copilot.js'
+import type { OpenRouterModel } from '../api/openrouter.js'
+
 export interface SelectOption {
   label: string
   value: string
 }
-
-// Models available on OpenRouter (cheapest options)
-export type FreeModel =
-  | 'allenai/olmo-3.1-32b-instruct'
-  | 'minimax/minimax-m2.1'
-  | 'meta-llama/llama-3.2-3b-instruct:free'
-  | 'meta-llama/llama-3.1-8b-instruct:free'
-  | 'meta-llama/llama-3.1-70b-instruct:free'
 
 export interface GeetoState {
   step: number
   workingBranch: string
   targetBranch: string
   currentBranch: string
-  stagedFiles: string[]
   timestamp: string
-  aiProvider?: 'gemini' | 'copilot' | 'openrouter'
-  copilotModel?: 'claude-haiku-4.5' | 'gpt-5'
-  openrouterModel?: FreeModel
+  aiProvider?: 'gemini' | 'copilot' | 'openrouter' | 'manual'
+  copilotModel?: CopilotModel
+  openrouterModel?: OpenRouterModel
+  geminiModel?: GeminiModel
+  // Flags for explicitly skipped steps
+  skippedCommit?: boolean
+  skippedPush?: boolean
 }
 
 export interface BranchNamingResult {
@@ -80,7 +79,6 @@ export interface BranchNamingResult {
 
 export interface GeminiConfig {
   apiKey: string
-  model: string
 }
 
 export interface OpenRouterConfig {

@@ -1,14 +1,10 @@
-/**
- * Command execution utilities
- */
+/** Execute shell commands and helpers. */
 
 import { execSync } from 'node:child_process'
 
 import { log } from './logging.js'
 
-/**
- * Execute a command and return the trimmed output
- */
+/** Run a command and return its trimmed stdout. */
 export const exec = (command: string, silent = false): string => {
   try {
     const result = execSync(command, { encoding: 'utf8', stdio: silent ? 'pipe' : 'inherit' })
@@ -21,9 +17,7 @@ export const exec = (command: string, silent = false): string => {
   }
 }
 
-/**
- * Execute a git command that may return exit code 1 (like git diff when there are changes)
- */
+/** Run git commands and handle common non-zero exit codes gracefully. */
 export const execGit = (command: string, silent = false): string => {
   try {
     const result = execSync(command, { encoding: 'utf8', stdio: silent ? 'pipe' : 'inherit' })
@@ -42,16 +36,12 @@ export const execGit = (command: string, silent = false): string => {
   }
 }
 
-/**
- * Execute a command silently and return the trimmed output
- */
+/** Run a command silently and return stdout. */
 export const execSilent = (command: string): string => {
   return exec(command, true)
 }
 
-/**
- * Check if a command exists (cross-platform)
- */
+/** Check whether an executable is available on PATH. */
 export const commandExists = (command: string): boolean => {
   const platform = process.platform
   const checkCommand = platform === 'win32' ? 'where' : 'which'

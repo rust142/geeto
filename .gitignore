@@ -13,9 +13,7 @@ out/
 
 # State files
 .geeto/
-geeto-linux
-geeto-mac
-geeto-windows.exe
+geeto*
 
 # Environment
 .env

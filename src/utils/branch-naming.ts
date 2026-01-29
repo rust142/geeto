@@ -1,0 +1,414 @@
+import type { CopilotModel } from '../api/copilot.js'
+import type { OpenRouterModel } from '../api/openrouter.js'
+import type { GeminiModel } from '../api/gemini.js'
+
+import { execGit } from './exec.js'
+
+export interface BranchNamingResult {
+  workingBranch: string
+  shouldRestart: boolean
+  cancelled: boolean
+}
+
+export const handleBranchNaming = async (
+  defaultPrefix: string,
+  separator: '-' | '_',
+  trelloCardId: string,
+  currentBranch: string,
+  aiProvider: 'gemini' | 'copilot' | 'openrouter' = 'gemini',
+  model?: CopilotModel | OpenRouterModel | GeminiModel,
+  updateModel?: (
+    provider: 'gemini' | 'copilot' | 'openrouter',
+    model?: CopilotModel | OpenRouterModel | GeminiModel
+  ) => void
+): Promise<BranchNamingResult> => {
+  const { askQuestion } = await import('../cli/input.js')
+  const { select } = await import('../cli/menu.js')
+  const { exec } = await import('./exec.js')
+  const { log } = await import('./logging.js')
+  const { colors } = await import('./colors.js')
+
+  const result: BranchNamingResult = {
+    workingBranch: '',
+    shouldRestart: false,
+    cancelled: false,
+  }
+
+  const diff = execGit('git diff --cached', true)
+  let correction = ''
+  let aiSuffix: string | null = null
+  let skipRegenerate = false
+
+  // Loop until branch name accepted
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const {
+      getModelDisplayName,
+      getAIProviderShortName,
+      interactiveAIFallback,
+      isTransientAIFailure,
+      isContextLimitFailure,
+      chooseModelForProvider,
+    } = await import('./git-ai.js')
+
+    const modelDisplay = getModelDisplayName(aiProvider, model)
+
+    // Separate this AI generation log from prior output so it stands alone
+    if (correction) {
+      console.log('')
+    }
+    log.ai(
+      `Generating branch name with ${getAIProviderShortName(aiProvider)}${modelDisplay ? ` (${modelDisplay})` : ''}...`
+    )
+
+    // Only call provider to regenerate when not skipping (e.g., user selected Back)
+    if (skipRegenerate) {
+      // consume the skip once - will reuse existing aiSuffix
+      skipRegenerate = false
+    } else {
+      aiSuffix = null
+      switch (aiProvider) {
+        case 'gemini': {
+          const { generateBranchName } = await import('../api/gemini.js')
+          const word = diff || 'Code changes'
+          aiSuffix = await generateBranchName(word, correction, model as GeminiModel)
+          break
+        }
+        case 'copilot': {
+          const { generateBranchName } = await import('../api/copilot.js')
+          const word = diff || 'Code changes'
+          aiSuffix = await generateBranchName(word, correction, model as CopilotModel)
+          break
+        }
+        case 'openrouter': {
+          const { generateBranchName } = await import('../api/openrouter.js')
+          const word = diff || 'Code changes'
+          aiSuffix = await generateBranchName(word, correction, model as OpenRouterModel)
+
+          break
+        }
+      }
+    }
+
+    if (!aiSuffix || isTransientAIFailure(aiSuffix) || isContextLimitFailure(aiSuffix)) {
+      const safeUpdate = (provider: 'gemini' | 'copilot' | 'openrouter', modelStr?: string) => {
+        if (updateModel) {
+          // forward to provided updater (cast since caller may use narrower model types)
+          updateModel(provider, modelStr as unknown as CopilotModel | OpenRouterModel | GeminiModel)
+        }
+      }
+
+      aiSuffix = await interactiveAIFallback(
+        aiSuffix,
+        aiProvider ?? 'gemini',
+        model as CopilotModel | OpenRouterModel | GeminiModel,
+        diff,
+        correction,
+        currentBranch,
+        safeUpdate
+      )
+
+      if (aiSuffix === null) {
+        const { getBranchPrefix, validateBranchName } = await import('./git.js')
+        const customPrefix = getBranchPrefix(currentBranch)
+        let valid = false
+        while (!valid) {
+          result.workingBranch = askQuestion('Enter branch name:', `${customPrefix}new-feature`)
+          const validation = validateBranchName(result.workingBranch)
+          if (validation.valid) {
+            valid = true
+          } else {
+            log.error(`Invalid branch name: ${validation.reason}`)
+          }
+        }
+        break
+      }
+    }
+
+    const cleanSuffix = aiSuffix
+      .toLowerCase()
+      .replaceAll(/\W+/g, separator)
+      .replace(separator === '-' ? /-+/g : /_+/g, separator)
+      .replace(separator === '-' ? /^-|-$/g : /^_|_$/g, '')
+      .trim()
+
+    const incompletePatterns =
+      separator === '-'
+        ? ['-and', '-or', '-with', '-for', '-the', '-a', '-an', '-in', '-on', '-at', '-to', '-of']
+        : ['_and', '_or', '_with', '_for', '_the', '_a', '_an', '_in', '_on', '_at', '_to', '_of']
+    // Treat trailing prepositions as incomplete
+    const extraIncomplete =
+      separator === '-'
+        ? ['-from', '-via', '-using', '-per', '-by']
+        : ['_from', '_via', '_using', '_per', '_by']
+    incompletePatterns.push(...extraIncomplete)
+    const seemsIncomplete = incompletePatterns.some((pattern) => cleanSuffix.endsWith(pattern))
+
+    if (seemsIncomplete) {
+      log.warn(
+        `AI response seems incomplete (ends with "${cleanSuffix.slice(-4)}"), regenerating...`
+      )
+      correction = 'Generate a complete branch name without truncation'
+      continue
+    }
+
+    const currentSuggestion = trelloCardId
+      ? `${defaultPrefix}${trelloCardId}${separator}${cleanSuffix}`
+      : `${defaultPrefix}${cleanSuffix}`
+
+    const contextLimitDetected = isContextLimitFailure(aiSuffix)
+
+    if (!contextLimitDetected) {
+      log.ai(`Suggested: ${colors.cyan}${currentSuggestion}${colors.reset}`)
+      log.info(
+        'Incorrect Suggestion? check .geeto/last-ai-suggestion.json (possible AI/context limit).\n'
+      )
+    }
+
+    if (contextLimitDetected) {
+      // Force user to change model/provider or edit manually; don't allow accepting this suggestion
+      const acceptAi = await select(
+        'This model cannot process the input due to token/context limits. Please choose a different model or provider:',
+        [
+          { label: 'Change model', value: 'change-model' },
+          { label: 'Change AI provider', value: 'change-provider' },
+          { label: 'Edit manually', value: 'edit' },
+          { label: 'Back to branch menu', value: 'back' },
+        ]
+      )
+
+      switch (acceptAi) {
+        case 'change-model': {
+          // change only the current provider's model — use centralized helper
+          const provKey = (aiProvider ?? 'gemini') as 'gemini' | 'copilot' | 'openrouter' | string
+          const provider = (provKey === 'manual' ? 'gemini' : provKey) as 'gemini' | 'copilot' | 'openrouter'
+          const chosen = await chooseModelForProvider(
+            provider,
+            'Choose model:',
+            'Back to suggested branch selection'
+          )
+          if (!chosen) {
+            skipRegenerate = true
+            continue
+          }
+          if (chosen === 'back') {
+            skipRegenerate = true
+            continue
+          }
+          updateModel?.(provider, chosen as unknown as CopilotModel | OpenRouterModel | GeminiModel)
+          model = chosen as unknown as CopilotModel | OpenRouterModel | GeminiModel
+          correction = ''
+          continue
+        }
+        case 'change-provider': {
+          const prov = await select('Choose AI provider:', [
+            { label: 'Gemini', value: 'gemini' },
+              { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
+              { label: 'OpenRouter', value: 'openrouter' },
+              { label: 'Back to suggested branch selection', value: 'cancel-prov' },
+          ])
+          if (prov === 'cancel-prov') {
+            // User chose the contextual "Back" option — don't regenerate, return to previous menu
+            skipRegenerate = true
+            continue
+          }
+          // Centralized provider/model selection helper
+          const { chooseModelForProvider } = await import('./git-ai.js')
+          const chosen = await chooseModelForProvider(
+            prov as 'gemini' | 'copilot' | 'openrouter',
+            'Choose model:',
+            'Back to suggested branch selection'
+          )
+          if (!chosen) {
+            skipRegenerate = true
+            continue
+          }
+          if (chosen === 'back') {
+            skipRegenerate = true
+            continue
+          }
+          if (prov === 'copilot') {
+            updateModel?.('copilot', chosen as unknown as CopilotModel)
+            aiProvider = 'copilot'
+            model = chosen as unknown as CopilotModel
+          } else if (prov === 'openrouter') {
+            updateModel?.('openrouter', chosen as unknown as OpenRouterModel)
+            aiProvider = 'openrouter'
+            model = chosen as unknown as OpenRouterModel
+          } else {
+            updateModel?.('gemini', chosen as unknown as GeminiModel)
+            aiProvider = 'gemini'
+            model = chosen as unknown as GeminiModel
+          }
+          correction = ''
+          continue
+        }
+        case 'edit': {
+          const edited = askQuestion(`Edit branch (${currentSuggestion}): `)
+          result.workingBranch = edited || currentSuggestion
+          break
+        }
+        case 'back': {
+          result.shouldRestart = true
+          break
+        }
+      }
+    } else {
+      const acceptAi = await select('Accept this branch name?', [
+        { label: 'Yes, use it', value: 'accept' },
+        { label: 'Regenerate', value: 'regenerate' },
+        { label: 'Correct AI (give feedback)', value: 'correct' },
+        { label: 'Change model', value: 'change-model' },
+        { label: 'Change AI provider', value: 'change-provider' },
+        { label: 'Edit manually', value: 'edit' },
+        { label: 'Back to branch menu', value: 'back' },
+      ])
+
+      switch (acceptAi) {
+        case 'accept': {
+          result.workingBranch = currentSuggestion
+          break
+        }
+        case 'regenerate': {
+          correction = ''
+          continue
+        }
+        case 'correct': {
+          correction = askQuestion(
+            'Provide corrections for the AI (e.g., prefer kebab-case, shorten subject): ',
+            undefined,
+            true
+          )
+          continue
+        }
+        case 'change-model': {
+          // change only the current provider's model
+          const currentProv = aiProvider ?? 'gemini'
+          if (currentProv === 'copilot') {
+            const cop = await import('../api/copilot.js')
+            const models = await cop.getCopilotModels()
+            const copOptions = models.some((m) => m.value === 'back')
+              ? models
+              : [...models, { label: 'Back to suggested branch selection', value: 'back' }]
+            const chosen = await select('Choose Copilot model:', copOptions)
+            if (chosen === 'back') {
+              skipRegenerate = true
+              continue
+            }
+            updateModel?.('copilot', chosen as unknown as CopilotModel)
+            model = chosen as unknown as CopilotModel
+          } else if (currentProv === 'openrouter') {
+            const or = await import('../api/openrouter.js')
+            const models = await or.getOpenRouterModels()
+            const orOptions = models.some((m) => m.value === 'back')
+              ? models
+              : [...models, { label: 'Back to suggested branch selection', value: 'back' }]
+            const chosen = await select('Choose OpenRouter model:', orOptions)
+            if (chosen === 'back') {
+              skipRegenerate = true
+              continue
+            }
+            updateModel?.('openrouter', chosen as unknown as OpenRouterModel)
+            model = chosen as unknown as OpenRouterModel
+          } else {
+            const gm = await import('../api/gemini.js')
+            const models = await gm.getGeminiModels()
+            const gmOptions = models.some((m) => m.value === 'back')
+              ? models
+              : [...models, { label: 'Back to suggested branch selection', value: 'back' }]
+            const chosen = await select('Choose Gemini model:', gmOptions)
+            if (chosen === 'back') {
+              skipRegenerate = true
+              continue
+            }
+            updateModel?.('gemini', chosen as unknown as GeminiModel)
+            model = chosen as unknown as GeminiModel
+          }
+          correction = ''
+          continue
+        }
+        case 'change-provider': {
+          const prov = await select('Choose AI provider:', [
+            { label: 'Gemini', value: 'gemini' },
+            { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
+            { label: 'OpenRouter', value: 'openrouter' },
+            { label: 'Back to suggested branch selection', value: 'cancel-prov' },
+          ])
+          if (prov === 'cancel-prov') {
+            // User chose the contextual "Back" option — don't regenerate, return to previous menu
+            skipRegenerate = true
+            continue
+          }
+
+          // Centralized provider/model selection helper
+          const chosen = await chooseModelForProvider(
+            prov as 'gemini' | 'copilot' | 'openrouter',
+            'Choose model:',
+            'Back to suggested branch selection'
+          )
+          if (!chosen) {
+            skipRegenerate = true
+            continue
+          }
+          if (chosen === 'back') {
+            skipRegenerate = true
+            continue
+          }
+          if (prov === 'copilot') {
+            updateModel?.('copilot', chosen as unknown as CopilotModel)
+            aiProvider = 'copilot'
+            model = chosen as unknown as CopilotModel
+          } else if (prov === 'openrouter') {
+            updateModel?.('openrouter', chosen as unknown as OpenRouterModel)
+            aiProvider = 'openrouter'
+            model = chosen as unknown as OpenRouterModel
+          } else {
+            updateModel?.('gemini', chosen as unknown as GeminiModel)
+            aiProvider = 'gemini'
+            model = chosen as unknown as GeminiModel
+          }
+          correction = ''
+          continue
+        }
+        case 'edit': {
+          const edited = askQuestion(`Edit branch (${currentSuggestion}): `)
+          result.workingBranch = edited || currentSuggestion
+          break
+        }
+        case 'back': {
+          result.shouldRestart = true
+          break
+        }
+      }
+    }
+
+    if (result.workingBranch || result.shouldRestart) {
+      break
+    }
+  }
+
+  if (result.workingBranch && result.workingBranch !== currentBranch) {
+    const { validateBranchName } = await import('./git.js')
+    const validation = validateBranchName(result.workingBranch)
+    if (!validation.valid) {
+      log.error(`Invalid branch name: ${validation.reason}`)
+      result.workingBranch = ''
+      return result
+    }
+
+    const { branchExists } = await import('./git.js')
+    if (branchExists(result.workingBranch)) {
+      log.error(`Branch '${result.workingBranch}' already exists locally`)
+      result.workingBranch = ''
+      return result
+    }
+
+    log.info(`Creating branch: ${result.workingBranch}`)
+    exec(`git checkout -b "${result.workingBranch}"`)
+    log.success(`Branch created: ${result.workingBranch}`)
+  }
+
+  return result
+}
+
+export default handleBranchNaming

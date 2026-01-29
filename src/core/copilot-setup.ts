@@ -2,9 +2,7 @@
  * GitHub Copilot CLI setup helper (moved from `setup.ts`)
  */
 
-import fs from 'node:fs'
 import os from 'node:os'
-import path from 'node:path'
 
 import { commandExists, exec } from '../utils/exec.js'
 import { log } from '../utils/logging.js'
@@ -12,36 +10,18 @@ import { ensureGeetoIgnored } from '../utils/config.js'
 import { select } from '../cli/menu.js'
 import { confirm } from '../cli/input.js'
 
-// Default Copilot models list
-const models = [
-  { label: 'Claude Sonnet 4.5 (default)', value: 'claude-sonnet-4.5' },
-  { label: 'Claude Haiku 4.5', value: 'claude-haiku-4.5' },
-  { label: 'Claude Opus 4.5', value: 'claude-opus-4.5' },
-  { label: 'Claude Sonnet 4', value: 'claude-sonnet-4' },
-  {
-    label: 'GPT-5.2-Codex (requires enablement) (latest version)',
-    value: 'gpt-5.2-codex',
-  },
-  {
-    label: 'GPT-5.1-Codex-Max (requires enablement)',
-    value: 'gpt-5.1-codex-max',
-  },
-  { label: 'GPT-5.1-Codex', value: 'gpt-5.1-codex' },
-  { label: 'GPT-5.2 (requires enablement)', value: 'gpt-5.2' },
-  { label: 'GPT-5.1', value: 'gpt-5.1' },
-  { label: 'GPT-5', value: 'gpt-5' },
-  {
-    label: 'GPT-5.1-Codex-Mini (requires enablement)',
-    value: 'gpt-5.1-codex-mini',
-  },
-  { label: 'GPT-5 mini', value: 'gpt-5-mini' },
-  { label: 'GPT-4.1', value: 'gpt-4.1' },
-  { label: 'Gemini 3 Pro (Preview)', value: 'gemini-3-pro-preview' },
-]
-
 // Helper: Check Copilot version and warn if outdated
-const checkCopilotVersion = (): void => {
+export const checkCopilotVersion = (): void => {
   try {
+    // Check CLI availability
+    try {
+      exec('copilot --version', true)
+      // log.info('GitHub Copilot CLI available')
+      return
+    } catch {
+      // CLI not available
+    }
+
     const verOut = exec('copilot --version', true)
     const m = verOut.match(/v?(\d+\.\d+\.\d+)/)
     const ver = m?.[1]
@@ -54,37 +34,17 @@ const checkCopilotVersion = (): void => {
       const minor = current[1] ?? 0
       const patch = current[2] ?? 0
       const currentNum = major * 1_000_000 + minor * 1_000 + patch
-      const minNum = 0 * 1e6 + 0 * 1e3 + 393
+      const minNum = 0 * 1e6 + 0 * 1e3 + 382
       if (currentNum < minNum) {
         log.warn(
-          'Detected Copilot CLI version is older than v0.0.393 — the latest Copilot models are only supported on v0.0.393 and above. See: https://github.com/github/copilot-cli/releases'
+          'Detected Copilot CLI version is older than v0.0.382 — the latest Copilot models (GPT-5.2-Codex) are only supported on v0.0.382 and above. See: https://github.com/github/copilot-cli/releases'
         )
+      } else {
+        log.info(`GitHub Copilot CLI version: v${ver}`)
       }
     }
   } catch {
     // ignore version parse errors
-  }
-}
-
-// Helper: Write default models if missing
-const writeDefaultModelsIfMissing = (): void => {
-  try {
-    ensureGeetoIgnored()
-    const outDir = path.join(process.cwd(), '.geeto')
-    if (!fs.existsSync(outDir)) {
-      fs.mkdirSync(outDir, { recursive: true })
-    }
-    const modelFilePath = path.join(outDir, 'copilot-model.json')
-    if (fs.existsSync(modelFilePath)) {
-      log.info(
-        `Copilot model file already exists, skipping: ${path.join('.geeto', 'copilot-model.json')}`
-      )
-    } else {
-      fs.writeFileSync(modelFilePath, JSON.stringify(models, null, 2), 'utf8')
-      log.info(`Wrote default Copilot model list to: ${path.join('.geeto', 'copilot-model.json')}`)
-    }
-  } catch {
-    /* ignore */
   }
 }
 
@@ -94,7 +54,6 @@ const setupGitHubCLI = (): boolean => {
 
   // Check if GitHub CLI is already installed
   if (commandExists('gh')) {
-    log.info('GitHub CLI already installed')
     return true
   }
 
@@ -132,7 +91,6 @@ const setupGitHubCLI = (): boolean => {
   if (installCommand) {
     try {
       exec(installCommand)
-      log.success('GitHub CLI installed successfully!')
       return true
     } catch (error) {
       log.error(`Failed to install GitHub CLI: ${error}`)
@@ -154,6 +112,16 @@ const isGitHubAuthenticated = (): boolean => {
   }
 }
 
+// Helper: Get authenticated GitHub username via gh
+const getGitHubUsername = (): string | null => {
+  try {
+    const out = exec('gh api user --jq .login', true)
+    return out?.trim() || null
+  } catch {
+    return null
+  }
+}
+
 // Helper: Authenticate with GitHub CLI
 const authenticateGitHub = async (): Promise<boolean> => {
   const authOptions = [
@@ -172,7 +140,7 @@ const authenticateGitHub = async (): Promise<boolean> => {
       log.success('Authentication process started!')
       await new Promise((resolve) => setTimeout(resolve, 2000))
       if (isGitHubAuthenticated()) {
-        log.success('GitHub CLI authenticated successfully')
+        log.success('GitHub authenticated successfully')
         return true
       } else {
         log.warn('Authentication may not have completed yet. Please finish in browser.')
@@ -205,7 +173,12 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
 
   // Check if already authenticated
   if (isGitHubAuthenticated()) {
-    log.success('GitHub CLI already authenticated')
+    const user = getGitHubUsername()
+    if (user) {
+      log.info(`GitHub authenticated as: ${user}`)
+    } else {
+      log.success('GitHub authenticated')
+    }
   } else {
     // Need to authenticate
     const ghAuthenticated = await authenticateGitHub()
@@ -215,19 +188,22 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
   }
 
   // Now check/setup Copilot CLI
-  if (commandExists('copilot')) {
-    log.success('GitHub Copilot CLI already installed and ready to use')
+  // Check if Copilot CLI is available
+  const copilotAvailable = commandExists('copilot')
+
+  if (copilotAvailable) {
+    // Note about premium models that may require enablement.
+    log.success('GitHub Copilot ready to use')
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     checkCopilotVersion()
-    writeDefaultModelsIfMissing()
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    ensureGeetoIgnored()
     return true
   }
 
   // Show informational text only if we reach installer flow
   log.info('GitHub Copilot CLI allows local AI workflows via the copilot command-line tool.')
   log.info('This helper will attempt to install and/or authenticate the Copilot CLI for you.')
-  log.info(
-    `This helper may write a default model list to: ${path.join('.geeto', 'copilot-model.json')} (only if missing). Copilot CLI uses local authentication; no API key is stored by Geeto.`
-  )
 
   const shouldSetup = confirm('Setup GitHub Copilot CLI now?')
   if (!shouldSetup) {
@@ -344,13 +320,27 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
         }
       }
 
-      if (!commandExists('copilot')) {
+      // Re-check availability via CLI or SDK-managed client
+      let copilotNowAvailable = commandExists('copilot')
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const sdk = await import('../api/copilot-sdk.js')
+        if (sdk && typeof sdk.isAvailable === 'function') {
+          copilotNowAvailable = copilotNowAvailable || (await sdk.isAvailable())
+        }
+      } catch {
+        // ignore
+      }
+
+      if (!copilotNowAvailable) {
         throw new Error('GitHub Copilot CLI command not found after installation')
       }
 
       log.info('GitHub Copilot CLI is ready to use!')
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
       checkCopilotVersion()
-      writeDefaultModelsIfMissing()
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      ensureGeetoIgnored()
 
       return true
     } catch (error) {
@@ -364,36 +354,15 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
 
   // Check if Copilot CLI is working after installation
   try {
-    exec('copilot --help', true)
+    exec('copilot --version', true)
     log.success('GitHub Copilot CLI configured and ready to use')
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     checkCopilotVersion()
-    writeDefaultModelsIfMissing()
-
+    ensureGeetoIgnored()
     return true
   } catch {
-    // Try to find copilot in npm global bin if not in PATH
-    if (commandExists('npm')) {
-      try {
-        const npmBinPath = path.join(exec('npm config get prefix', true).trim(), 'bin')
-        const copilotCmd = platform === 'win32' ? 'copilot.cmd' : 'copilot'
-        const copilotPath = path.join(npmBinPath, copilotCmd)
-        if (fs.existsSync(copilotPath)) {
-          log.warn('GitHub Copilot CLI installed but not in PATH!')
-          log.info('Add this to your PATH or restart your terminal:')
-          log.info(`  ${npmBinPath}`)
-          log.info('')
-          log.info('Or run copilot directly:')
-          log.info(`  "${copilotPath}" --help`)
-          return false
-        }
-      } catch {
-        // Ignore npm prefix check errors
-      }
-    }
-
-    log.warn('GitHub Copilot CLI may not be working properly')
-    log.info('You can try running: copilot --help')
-    log.info('Or reinstall with: npm install -g @github/copilot')
-    return false
+    // CLI not working
   }
+
+  return false
 }

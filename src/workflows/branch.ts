@@ -2,26 +2,41 @@
  * Branch creation workflow - handles AI-powered branch naming
  */
 
-import type { GeetoState } from '../types'
+import type { CopilotModel } from '../api/copilot.js'
+import type { OpenRouterModel } from '../api/openrouter.js'
+import type { GeminiModel } from '../api/gemini.js'
+import { DEFAULT_GEMINI_MODEL } from '../utils/config.js'
+import type { GeetoState } from '../types/index.js'
 
-import {
-  fetchTrelloCards,
-  fetchTrelloLists,
-  generateBranchNameFromTrelloTitle,
-} from '../api/trello'
-import { askQuestion, confirm, select } from '../cli'
-import { STEP } from '../core/constants'
-import { exec, log, saveState } from '../utils'
-import { getBranchStrategyConfig, hasTrelloConfig, saveBranchStrategyConfig } from '../utils/config'
-import { branchExists, getBranchPrefix, handleBranchNaming, validateBranchName } from '../utils/git'
-import { generateBranchNameFromTitleWithProvider, getAIProviderDisplayName } from '../utils/git.js'
+import { handleTrelloCase } from './branch-helpers.js'
+import { createBranch, promptManualBranch } from './branch-utils.js'
 
-export const handleBranchCreationWorkflow = async (state: GeetoState): Promise<string> => {
-  log.step('Step 2: Create Branch')
+import { askQuestion, confirm } from '../cli/input.js'
+import { STEP } from '../core/constants.js'
+import { exec, execGit } from '../utils/exec.js'
+import { getBranchStrategyConfig, saveBranchStrategyConfig } from '../utils/config.js'
+import { getBranchPrefix, handleBranchNaming } from '../utils/git.js'
+import { interactiveAIFallback, isContextLimitFailure } from '../utils/git.js'
+import { log } from '../utils/logging.js'
+import { select } from '../cli/menu.js'
+import { saveState } from '../utils/state.js'
+
+export const handleBranchCreationWorkflow = async (
+  state: GeetoState,
+  opts?: { suppressStep?: boolean; suppressConfirm?: boolean }
+): Promise<{ branchName: string; created: boolean }> => {
+  if (!opts?.suppressStep) {
+    log.step('Step 2: Create Branch')
+  }
 
   const defaultPrefix = getBranchPrefix(state.currentBranch)
 
-  const createNewBranch = confirm('Create new branch?')
+  let createNewBranch: boolean
+  if (opts?.suppressConfirm) {
+    createNewBranch = true
+  } else {
+    createNewBranch = confirm('Create new branch?')
+  }
 
   // Initialize variables that need to be accessible throughout the function
   let branchConfig = getBranchStrategyConfig()
@@ -29,20 +44,88 @@ export const handleBranchCreationWorkflow = async (state: GeetoState): Promise<s
   let selectedNamingStrategy: 'title-full' | 'title-ai' | 'ai' | 'manual' = 'ai'
   const selectedTrelloList = ''
   let workingBranch = ''
-  let trelloCardId = ''
+  let wasCreated = false
 
   if (createNewBranch) {
     // Check if separator is configured, if not, prompt user to choose
     if (!branchConfig?.separator) {
-      log.info('\nFirst time creating a branch in this project!')
       log.info('Please choose your preferred branch name separator:\n')
 
-      const separatorChoice = await select('Choose branch name separator:', [
+      // Offer an automatic detection option based on existing branch history.
+      let preDetectedSeparator: '-' | '_' | undefined
+      try {
+        // Gather branch names from refs
+        const localAndRemote = exec(
+          'git for-each-ref --format="%(refname:short)" refs/heads refs/remotes',
+          true
+        )
+        const merged = exec(
+          'git for-each-ref --format="%(refname:short)" --merged HEAD refs/heads refs/remotes',
+          true
+        )
+        const combined = `${localAndRemote}\n${merged}`
+        const branches = [
+          ...new Set(
+            combined
+              .split(/\r?\n/)
+              .map((b) => b.trim())
+              .filter(Boolean)
+          ),
+        ]
+        // Detect separator by scanning existing branch names
+        let hyphenCount = 0
+        let underscoreCount = 0
+        let hyphenBranchCount = 0
+        let underscoreBranchCount = 0
+        for (const b of branches) {
+          const short = b.split('/').pop() ?? b
+          const hasHyphen = /-/.test(short)
+          const hasUnderscore = /_/.test(short)
+          if (hasHyphen) {
+            hyphenBranchCount++
+          }
+          if (hasUnderscore) {
+            underscoreBranchCount++
+          }
+          hyphenCount += (short.match(/-/g) ?? []).length
+          underscoreCount += (short.match(/_/g) ?? []).length
+        }
+
+        if (hyphenBranchCount > underscoreBranchCount) {
+          preDetectedSeparator = '-'
+        } else if (underscoreBranchCount > hyphenBranchCount) {
+          preDetectedSeparator = '_'
+        } else if (hyphenCount > underscoreCount) {
+          preDetectedSeparator = '-'
+        } else if (underscoreCount > hyphenCount) {
+          preDetectedSeparator = '_'
+        }
+      } catch {
+        // ignore detection errors and fall back to prompt
+      }
+
+      const baseOptions = [
         { label: 'Kebab-case (hyphen): my-branch-name', value: 'kebab' },
         { label: 'Snake_case (underscore): my_branch_name', value: 'snake' },
-      ])
+      ]
 
-      separator = separatorChoice === 'kebab' ? '-' : '_'
+      // Build separator options (detected first)
+      let sepOptions: Array<{ label: string; value: string }> = []
+
+      if (preDetectedSeparator) {
+        const label = preDetectedSeparator === '-' ? 'Kebab-case (-)' : 'Snake_case (_)'
+        sepOptions.push({ label: `Use detected: ${label}`, value: 'detected' })
+      }
+
+      sepOptions = [...sepOptions, ...baseOptions]
+
+      // Ask user to choose: use detected (if available) or manual options
+      const separatorChoice = await select('Choose branch name separator:', sepOptions)
+      if (separatorChoice === 'detected' && preDetectedSeparator) {
+        separator = preDetectedSeparator
+      } else {
+        separator = separatorChoice === 'kebab' ? '-' : '_'
+      }
 
       // Save the separator choice
       saveBranchStrategyConfig({
@@ -82,291 +165,109 @@ export const handleBranchCreationWorkflow = async (state: GeetoState): Promise<s
 
           switch (branchChoice) {
             case 'trello': {
-              // Check if Trello is configured
-              if (!hasTrelloConfig()) {
-                log.info('No Trello configuration found. Setting up Trello integration...')
-                // Import and run trello setup
-                const { setupTrelloConfigInteractive } = await import('../core/trello-setup')
-                const setupSuccess = setupTrelloConfigInteractive()
-                if (setupSuccess) {
-                  log.success('Trello integration configured!')
-                  // Now Trello is configured, continue with Trello logic
-                } else {
-                  log.warn('Trello setup failed or cancelled.')
-                  branchMenuShown = false
-                  continue
-                }
-              }
-
-              log.info('🔍 Checking Trello for tasks...')
-
-              // First, fetch and select list
-              const trelloLists = await fetchTrelloLists()
-
-              if (trelloLists.length === 0) {
-                log.warn('No Trello lists found on board')
+              const trelloResult = await handleTrelloCase(
+                state,
+                branchConfig,
+                separator,
+                defaultPrefix
+              )
+              if (trelloResult.branchFlowComplete && trelloResult.workingBranch) {
+                selectedNamingStrategy =
+                  trelloResult.selectedNamingStrategy ?? selectedNamingStrategy
+                workingBranch = trelloResult.workingBranch
+                state.workingBranch = workingBranch
+                state.currentBranch = workingBranch
+                wasCreated = true
+                state.step = STEP.BRANCH_CREATED
+                saveState(state)
+                branchFlowComplete = true
+              } else {
+                branchMenuShown = trelloResult.branchMenuShown
                 continue
-              }
-
-              // Loop for list selection
-              let listSelected = false
-
-              while (!listSelected) {
-                // Ask user to select a list first
-                const lastUsedListId = branchConfig?.lastTrelloList
-
-                const listOptions = [
-                  ...trelloLists.map((list) => ({
-                    label:
-                      list.id === lastUsedListId ? `${list.name} ⭐ Last used` : `${list.name}`,
-                    value: list.id,
-                  })),
-                  { label: 'All lists (no filter)', value: 'all' },
-                  { label: 'Back to branch menu', value: 'back-menu' },
-                ]
-
-                const selectedListId = await select('Select Trello list:', listOptions)
-
-                if (selectedListId === 'back-menu') {
-                  // Go back to branch menu
-                  branchMenuShown = false
-                  listSelected = true
-                  break
-                }
-
-                // Save the selected list preference
-                if (selectedListId !== 'all') {
-                  const currentStrategy = getBranchStrategyConfig()
-                  saveBranchStrategyConfig({
-                    separator,
-                    lastNamingStrategy: currentStrategy?.lastNamingStrategy,
-                    lastTrelloList: selectedListId,
-                  })
-                }
-
-                const filterListId = selectedListId === 'all' ? undefined : selectedListId
-                const trelloCards = await fetchTrelloCards(filterListId)
-
-                if (trelloCards.length === 0) {
-                  log.warn('No cards found in selected list')
-                  // Loop back to list selection
-                } else {
-                  // Loop for card selection and naming strategy
-                  let cardSelected = false
-
-                  while (!cardSelected) {
-                    const trelloOptions = [
-                      ...trelloCards.slice(0, 15).map((card) => {
-                        const branchPreview = generateBranchNameFromTrelloTitle(
-                          card.name,
-                          card.shortLink,
-                          separator
-                        )
-                        return {
-                          label: `${branchPreview}`,
-                          value: JSON.stringify({ id: card.shortLink, title: card.name }),
-                        }
-                      }),
-                      { label: 'Back to branch menu', value: 'back-menu' },
-                    ]
-
-                    const selectedCard = await select('Select Trello card:', trelloOptions)
-
-                    if (selectedCard === 'back-menu') {
-                      // Go back to branch menu
-                      branchMenuShown = false
-                      cardSelected = true
-                      listSelected = true
-                      break
-                    }
-
-                    if (selectedCard === 'skip') {
-                      // Skip Trello entirely
-                      cardSelected = true
-                      listSelected = true
-                      break
-                    }
-
-                    const cardData = JSON.parse(selectedCard) as { id: string; title: string }
-                    trelloCardId = cardData.id
-                    log.success(`Linked to Trello card ${trelloCardId}`)
-
-                    // Loop for naming strategy
-                    let namingSelected = false
-
-                    while (!namingSelected) {
-                      // Ask for naming strategy
-                      const namingChoice = await select('Branch naming strategy:', [
-                        {
-                          label: 'Use Trello title (full)',
-                          value: 'title-full',
-                        },
-                        {
-                          label: 'Use Trello title (AI shortened)',
-                          value: 'title-ai',
-                        },
-                        { label: 'Back to card selection', value: 'back' },
-                      ])
-
-                      if (namingChoice === 'back') {
-                        // Go back to card selection
-                        break
-                      }
-
-                      switch (namingChoice) {
-                        case 'title-full': {
-                          // Use full Trello title directly
-                          const branchSuffix = generateBranchNameFromTrelloTitle(
-                            cardData.title,
-                            cardData.id,
-                            separator
-                          )
-                          workingBranch = `${defaultPrefix}#${branchSuffix}`
-                          log.success(`Branch name: ${workingBranch}`)
-
-                          // Create the branch
-                          if (workingBranch && workingBranch !== state.currentBranch) {
-                            // Validate branch name
-                            const validation = validateBranchName(workingBranch)
-                            if (!validation.valid) {
-                              log.error(`Invalid branch name: ${validation.reason}`)
-                              branchMenuShown = false
-                              continue
-                            }
-
-                            // Check if branch already exists
-                            if (branchExists(workingBranch)) {
-                              log.error(`Branch '${workingBranch}' already exists locally`)
-                              branchMenuShown = false
-                              continue
-                            }
-
-                            log.info(`Creating branch: ${workingBranch}`)
-                            exec(`git checkout -b "${workingBranch}"`)
-                            log.success(`Branch created: ${workingBranch}`)
-                          }
-
-                          selectedNamingStrategy = 'title-full'
-                          state.workingBranch = workingBranch
-                          state.step = STEP.BRANCH_CREATED
-                          saveState(state)
-                          branchFlowComplete = true
-                          break
-                        }
-                        case 'title-ai': {
-                          // Use AI to shorten Trello title
-                          let correction = ''
-                          let shouldContinue = true
-
-                          while (shouldContinue) {
-                            const aiProvider = state.aiProvider ?? 'gemini'
-                            log.ai(
-                              `Generating short branch name from Trello title using ${getAIProviderDisplayName(aiProvider)}...`
-                            )
-                            const aiSuffix = await generateBranchNameFromTitleWithProvider(
-                              aiProvider,
-                              cardData.title,
-                              correction,
-                              state.copilotModel,
-                              state.openrouterModel
-                            )
-
-                            if (!aiSuffix) {
-                              log.warn('AI generation failed, using manual input')
-                              const customName = askQuestion('Enter branch name: ')
-                              workingBranch = `${defaultPrefix}${trelloCardId}${separator}${customName}`
-                              shouldContinue = false
-                              break
-                            }
-
-                            const cleanSuffix = aiSuffix
-                              .replaceAll(/[^\w-]/gi, separator)
-                              .replace(separator === '-' ? /-+/g : /_+/g, separator)
-                              .replace(separator === '-' ? /^-|-$/g : /^_|_$/g, '')
-                              .toLowerCase()
-
-                            workingBranch = `${defaultPrefix}${trelloCardId}${separator}${cleanSuffix}`
-                            log.ai(`Suggested: ${workingBranch}`)
-
-                            const acceptChoice = await select('Accept this branch name?', [
-                              { label: 'Yes, use it', value: 'accept' },
-                              { label: 'Regenerate', value: 'regenerate' },
-                              { label: 'Correct AI (give feedback)', value: 'correct' },
-                              { label: 'Edit manually', value: 'edit' },
-                              { label: 'Back to card selection', value: 'back' },
-                            ])
-
-                            switch (acceptChoice) {
-                              case 'accept': {
-                                shouldContinue = false
-                                break
-                              }
-                              case 'regenerate': {
-                                correction = ''
-                                break
-                              }
-                              case 'correct': {
-                                correction = askQuestion('What should be different? ')
-                                break
-                              }
-                              case 'edit': {
-                                const edited = askQuestion(`Edit branch (${workingBranch}): `)
-                                workingBranch = edited || workingBranch
-                                shouldContinue = false
-                                break
-                              }
-                              case 'back': {
-                                // Reset and go back to card selection
-                                workingBranch = ''
-                                shouldContinue = false
-                                namingSelected = false
-                                break
-                              }
-                            }
-                          }
-
-                          // If user went back, don't create branch yet
-                          if (workingBranch) {
-                            // Create the branch
-                            if (workingBranch !== state.currentBranch) {
-                              log.info(`Creating branch: ${workingBranch}`)
-                              exec(`git checkout -b "${workingBranch}"`)
-                              log.success(`Branch created: ${workingBranch}`)
-                            }
-
-                            selectedNamingStrategy = 'title-ai'
-                            state.workingBranch = workingBranch
-                            state.step = STEP.BRANCH_CREATED
-                            saveState(state)
-                            branchFlowComplete = true
-                          }
-                          break
-                        }
-                      }
-
-                      // Check if branch was created
-                      if (workingBranch && state.step === STEP.BRANCH_CREATED) {
-                        namingSelected = true
-                        cardSelected = true
-                        listSelected = true
-                      }
-                    }
-                  }
-                }
               }
 
               break
             }
             case 'ai': {
               // Use AI branch naming
+              let selectedModel: CopilotModel | OpenRouterModel | GeminiModel | undefined
+              let providerToUse: 'gemini' | 'copilot' | 'openrouter'
+              // If user previously chose manual, ask which AI provider to use now
+              if (!state.aiProvider || state.aiProvider === 'manual') {
+                const prov = await select('Choose AI provider for branch generation:', [
+                                { label: 'Gemini', value: 'gemini' },
+                                { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
+                                { label: 'OpenRouter', value: 'openrouter' },
+                                { label: 'Back to suggested branch selection', value: 'cancel-prov' },
+                ])
+
+                if (prov === 'cancel-prov') {
+                  branchMenuShown = false
+                  continue
+                }
+
+                providerToUse = prov as 'gemini' | 'copilot' | 'openrouter'
+
+                // Ensure provider is ready (skip check for manual since user chose an AI provider)
+                const { ensureAIProvider } = await import('../core/setup.js')
+                const ready = await ensureAIProvider(providerToUse)
+                if (!ready) {
+                  branchMenuShown = false
+                  continue
+                }
+
+                state.aiProvider = providerToUse
+                saveState(state)
+              } else {
+                providerToUse = state.aiProvider as 'gemini' | 'copilot' | 'openrouter'
+              }
+              // Ensure state reflects the provider we'll use for generation
+              state.aiProvider = providerToUse
+              saveState(state)
+              switch (providerToUse) {
+                case 'copilot': {
+                  selectedModel = state.copilotModel
+                  break
+                }
+                case 'openrouter': {
+                  selectedModel = state.openrouterModel
+                  break
+                }
+                case 'gemini': {
+                  selectedModel = state.geminiModel
+                  break
+                }
+                // No default
+              }
+
+              let correction = ''
+
               const namingResult = await handleBranchNaming(
                 defaultPrefix,
                 separator,
                 '', // trelloCardId
-                state.stagedFiles,
                 state.currentBranch,
-                state.aiProvider ?? 'gemini',
-                state.aiProvider === 'copilot' ? state.copilotModel : undefined
+                providerToUse,
+                selectedModel,
+                (provider: 'gemini' | 'copilot' | 'openrouter', model?: string) => {
+                  state.aiProvider = provider
+                  switch (provider) {
+                    case 'copilot': {
+                      state.copilotModel = model as CopilotModel
+                      break
+                    }
+                    case 'openrouter': {
+                      state.openrouterModel = model as OpenRouterModel
+                      break
+                    }
+                    case 'gemini': {
+                      state.geminiModel = model as GeminiModel
+                      break
+                    }
+                    // No default
+                  }
+                  saveState(state)
+                }
               )
 
               if (namingResult.cancelled) {
@@ -381,44 +282,247 @@ export const handleBranchCreationWorkflow = async (state: GeetoState): Promise<s
                 workingBranch = namingResult.workingBranch
                 selectedNamingStrategy = 'ai'
                 state.workingBranch = workingBranch
+                state.currentBranch = workingBranch
+                wasCreated = true
                 state.step = STEP.BRANCH_CREATED
                 saveState(state)
                 branchFlowComplete = true
+              } else {
+                // AI failed — try interactive fallback first, then manual
+                log.warn('AI generation failed. Trying interactive fallback...')
+
+                const diff = execGit('git diff --cached', true)
+
+                const aiSuffix = await interactiveAIFallback(
+                  null,
+                  providerToUse,
+                  selectedModel ?? state.geminiModel ?? DEFAULT_GEMINI_MODEL,
+                  diff,
+                  correction,
+                  state.currentBranch,
+                  (provider: 'gemini' | 'copilot' | 'openrouter', model?: string) => {
+                    state.aiProvider = provider
+                    switch (provider) {
+                      case 'copilot': {
+                        state.copilotModel = model as CopilotModel
+                        break
+                      }
+                      case 'openrouter': {
+                        state.openrouterModel = model as OpenRouterModel
+                        break
+                      }
+                      case 'gemini': {
+                        state.geminiModel = model as GeminiModel
+                        break
+                      }
+                      // No default
+                    }
+                    saveState(state)
+                  }
+                )
+
+                if (aiSuffix) {
+                  // If the AI returned a context/token-limit failure message, don't use it as a branch name.
+                  if (isContextLimitFailure(aiSuffix)) {
+                    log.error(
+                      'Selected model cannot handle this input due to token/context limits. Please choose a different model or provider.'
+                    )
+                    // Reset menu so user can pick a different provider/model or manual input
+                    branchMenuShown = false
+                    continue
+                  }
+                  const cleanSuffix = aiSuffix
+                    .replaceAll(/[^\w-]/gi, separator)
+                    .replace(separator === '-' ? /^-|-$/g : /^_|_$/g, '')
+                    .toLowerCase()
+
+                  workingBranch = `${defaultPrefix}${cleanSuffix}`
+
+                  // Create the branch
+                  if (createBranch(workingBranch, state.currentBranch)) {
+                    selectedNamingStrategy = 'ai'
+                    state.workingBranch = workingBranch
+                    state.currentBranch = workingBranch
+                    wasCreated = true
+                    state.step = STEP.BRANCH_CREATED
+                    saveState(state)
+                    branchFlowComplete = true
+                  } else {
+                    // If creation failed because branch exists, offer explicit actions
+                    const { select: dynamicSelect } = await import('../cli/menu.js')
+                    const choice = await dynamicSelect(
+                      `Branch '${workingBranch}' already exists. What would you like to do?`,
+                      [
+                        { label: 'Regenerate branch name', value: 'regenerate' },
+                        { label: 'Change model', value: 'change-model' },
+                        { label: 'Change AI provider', value: 'change-provider' },
+                        { label: 'Edit branch name manually', value: 'edit' },
+                        { label: 'Back to branch menu', value: 'back' },
+                      ]
+                    )
+
+                    switch (choice) {
+                      case 'regenerate': {
+                        correction = ''
+                        branchMenuShown = false
+                        continue
+                      }
+                      case 'change-model': {
+                        const currentProv = state.aiProvider ?? 'gemini'
+                        if (currentProv === 'copilot') {
+                          const cop = await import('../api/copilot.js')
+                          const models = await cop.getCopilotModels()
+                          const copOptions = models.some((m) => m.value === 'back')
+                            ? models
+                            : [
+                                ...models,
+                                { label: 'Back to suggested branch selection', value: 'back' },
+                              ]
+                          const chosen = await select('Choose Copilot model:', copOptions)
+                          if (chosen === 'back') {
+                            continue
+                          }
+                          state.copilotModel = chosen as unknown as CopilotModel
+                        } else if (currentProv === 'openrouter') {
+                          const or = await import('../api/openrouter.js')
+                          const models = await or.getOpenRouterModels()
+                          const orOptions = models.some((m) => m.value === 'back')
+                            ? models
+                            : [
+                                ...models,
+                                { label: 'Back to suggested branch selection', value: 'back' },
+                              ]
+                          const chosen = await select('Choose OpenRouter model:', orOptions)
+                          if (chosen === 'back') {
+                            continue
+                          }
+                          state.openrouterModel = chosen as unknown as OpenRouterModel
+                        } else {
+                          const gm = await import('../api/gemini.js')
+                          const models = await gm.getGeminiModels()
+                          const gmOptions = models.some((m) => m.value === 'back')
+                            ? models
+                            : [
+                                ...models,
+                                { label: 'Back to suggested branch selection', value: 'back' },
+                              ]
+                          const chosen = await select('Choose Gemini model:', gmOptions)
+                          if (chosen === 'back') {
+                            continue
+                          }
+                          state.geminiModel = chosen as unknown as GeminiModel
+                        }
+                        saveState(state)
+                        branchMenuShown = false
+                        continue
+                      }
+                      case 'change-provider': {
+                        const prov = await select('Choose AI provider:', [
+                          { label: 'Gemini', value: 'gemini' },
+                          { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
+                          { label: 'OpenRouter', value: 'openrouter' },
+                          { label: 'Back to suggested branch selection', value: 'cancel-prov' },
+                        ])
+                        if (prov === 'cancel-prov') {
+                          // Return to branch menu without forcing regeneration
+                          branchMenuShown = false
+                          continue
+                        }
+
+                        // Use centralized helper to choose model for the provider
+                        const { chooseModelForProvider } = await import('../utils/git-ai.js')
+                        const chosen = await chooseModelForProvider(
+                          prov as 'gemini' | 'copilot' | 'openrouter',
+                          'Choose model:',
+                          'Back to suggested branch selection'
+                        )
+
+                        if (!chosen) {
+                          // setup failed or cancelled
+                          continue
+                        }
+                        if (chosen === 'back') {
+                          continue
+                        }
+
+                        state.aiProvider = prov as 'gemini' | 'copilot' | 'openrouter'
+                        switch (prov) {
+                          case 'copilot':
+                            state.copilotModel = chosen as unknown as CopilotModel
+                            state.openrouterModel = undefined
+                            state.geminiModel = undefined
+                            break
+                          case 'openrouter':
+                            state.openrouterModel = chosen as unknown as OpenRouterModel
+                            state.copilotModel = undefined
+                            state.geminiModel = undefined
+                            break
+                          case 'gemini':
+                          default:
+                            state.geminiModel = chosen as unknown as GeminiModel
+                            state.copilotModel = undefined
+                            state.openrouterModel = undefined
+                            break
+                        }
+
+                        saveState(state)
+                        branchMenuShown = false
+                        continue
+                      }
+                      case 'edit': {
+                        const edited = askQuestion('Enter new branch name:')
+                        if (!edited) {
+                          break
+                        }
+                        workingBranch = edited
+                        if (createBranch(workingBranch, state.currentBranch)) {
+                          selectedNamingStrategy = 'manual'
+                          state.workingBranch = workingBranch
+                          state.currentBranch = workingBranch
+                          wasCreated = true
+                          state.step = STEP.BRANCH_CREATED
+                          saveState(state)
+                          branchFlowComplete = true
+                        }
+                        break
+                      }
+                      case 'back': {
+                        branchMenuShown = false
+                        continue
+                      }
+                    }
+                  }
+                } else {
+                  // Fallback to manual input
+                  workingBranch = promptManualBranch(state.currentBranch)
+                  if (createBranch(workingBranch, state.currentBranch)) {
+                    selectedNamingStrategy = 'manual'
+                    state.workingBranch = workingBranch
+                    wasCreated = true
+                    state.step = STEP.BRANCH_CREATED
+                    saveState(state)
+                    branchFlowComplete = true
+                  }
+                }
               }
               break
             }
             case 'custom': {
-              const customPrefix = getBranchPrefix(state.currentBranch)
-              workingBranch = askQuestion('Enter branch name:', `${customPrefix}new-feature`)
+              workingBranch = promptManualBranch(state.currentBranch)
 
-              // Create the branch
-              if (workingBranch && workingBranch !== state.currentBranch) {
-                // Validate branch name
-                const validation = validateBranchName(workingBranch)
-                if (!validation.valid) {
-                  log.error(`Invalid branch name: ${validation.reason}`)
-                  continue
-                }
-
-                // Check if branch already exists
-                try {
-                  exec(`git show-ref --verify --quiet refs/heads/${workingBranch}`)
-                  log.error(`Branch '${workingBranch}' already exists locally`)
-                  continue
-                } catch {
-                  // Branch doesn't exist, create it
-                }
-
-                log.info(`Creating branch: ${workingBranch}`)
-                exec(`git checkout -b "${workingBranch}"`)
-                log.success(`Branch created: ${workingBranch}`)
+              if (createBranch(workingBranch, state.currentBranch)) {
+                selectedNamingStrategy = 'manual'
+                state.workingBranch = workingBranch
+                wasCreated = true
+                state.step = STEP.BRANCH_CREATED
+                saveState(state)
+                branchFlowComplete = true
+              } else {
+                // If creation failed for some reason, return to branch menu
+                branchMenuShown = false
+                continue
               }
 
-              selectedNamingStrategy = 'manual'
-              state.workingBranch = workingBranch
-              state.step = STEP.BRANCH_CREATED
-              saveState(state)
-              branchFlowComplete = true
               break
             }
           }
@@ -428,14 +532,45 @@ export const handleBranchCreationWorkflow = async (state: GeetoState): Promise<s
       }
     }
   } else {
-    // User chose not to create new branch, use current branch
+    // User chose not to create a new branch — ask what to do next
+    const choice = await select(
+      'You chose not to create a new branch. What would you like to do?',
+      [
+        { label: 'Step 3: Commit', value: 'commit' },
+        { label: 'Step 5: Merge to Target Branch', value: 'merge' },
+        { label: 'Cancel', value: 'cancel' },
+      ]
+    )
+
+    if (choice === 'cancel') {
+      log.warn('Cancelled.')
+      process.exit(0)
+    }
+
+    if (choice === 'merge') {
+      // Skip commit and push steps; proceed straight to merge
+      state.step = STEP.PUSHED
+      state.skippedCommit = true
+      state.skippedPush = true
+      saveState(state)
+      log.info('Skipping commit and push; will proceed directly to merge')
+    } else {
+      // User chose to proceed to commit on the current branch — mark branch step as complete
+      state.step = STEP.BRANCH_CREATED
+      // Ensure workingBranch reflects current branch
+      state.workingBranch = state.currentBranch
+      saveState(state)
+      log.info('Proceeding to commit on current branch')
+    }
+
     workingBranch = state.currentBranch
     log.info(`Using current branch: ${workingBranch}`)
   }
 
   // Only mark branch creation step complete if a branch was actually created
-  if (workingBranch && state.step < STEP.BRANCH_CREATED) {
+  if (workingBranch && wasCreated && state.step < STEP.BRANCH_CREATED) {
     state.step = STEP.BRANCH_CREATED
+    state.currentBranch = workingBranch
   }
 
   saveState(state)
@@ -447,5 +582,5 @@ export const handleBranchCreationWorkflow = async (state: GeetoState): Promise<s
     lastTrelloList: selectedTrelloList ?? branchConfig?.lastTrelloList,
   })
 
-  return workingBranch ?? state.currentBranch
+  return { branchName: workingBranch ?? state.currentBranch, created: !!wasCreated }
 }

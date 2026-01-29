@@ -79,14 +79,14 @@ export const setupGeminiConfigInteractive = (): boolean => {
       const modelFile = `${configDir}/gemini-model.json`
       const defaultModels = [
         { label: 'Gemini 2.0 Flash', value: 'gemini-2.0-flash' },
+        { label: 'Gemini 2.5 Flash Lite', value: 'gemini-2.5-flash-lite' },
         { label: 'Gemini 2.5 Flash', value: 'gemini-2.5-flash' },
         { label: 'Gemini 2.5 Pro', value: 'gemini-2.5-pro' },
       ]
-      if (fs.existsSync(modelFile) === false) {
+
+      if (!fs.existsSync(modelFile)) {
         fs.writeFileSync(modelFile, JSON.stringify(defaultModels, null, 2), 'utf8')
         log.info(`Wrote default Gemini model list to: ${modelFile}`)
-      } else {
-        log.info(`Gemini model file already exists, skipping: ${modelFile}`)
       }
     } catch {
       /* ignore model file write failures */
