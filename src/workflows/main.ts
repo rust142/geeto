@@ -13,6 +13,7 @@ import { handleCleanup, handleMerge, handlePush } from './main-steps.js'
 import { showSettingsMenu } from './settings.js'
 
 import { select } from '../cli/menu.js'
+import { confirm } from '../cli/input.js'
 import { closeInput } from '../cli/input.js'
 import { STEP, TASK_PLATFORMS } from '../core/constants.js'
 import { loadState, saveState, preserveProviderState } from '../utils/state.js'
@@ -707,7 +708,8 @@ export const main = async (opts?: {
     } else {
       // Interactive: ask before pushing
       const currentBranch = state.workingBranch || getCurrentBranch()
-      const wantPush = confirm(`Push ${currentBranch} to origin now?`)
+      // For safety, default NO to avoid accidental pushes on Enter
+      const wantPush = confirm(`Push ${currentBranch} to origin now?`, false)
       if (wantPush) {
         // We already confirmed, so suppress further confirm inside handlePush
         handlePush(state, { suppressStep: false, suppressLogs: true })

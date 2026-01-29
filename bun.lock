@@ -5,7 +5,7 @@
     "": {
       "name": "geeto",
       "dependencies": {
-        "@github/copilot-sdk": "^0.1.19",
+        "@github/copilot-sdk": "^0.1.18",
         "@google/genai": "^1.38.0",
         "@openrouter/sdk": "^0.4.0",
         "geeto": ".",
