@@ -256,6 +256,7 @@ export async function handleMerge(
         try {
           // Show a lightweight progress bar while the push runs so the user sees activity
           progressBar.update(0)
+          console.log('')
 
           // Perform push silently to avoid interleaving git progress output
           progressBar.update(1)
