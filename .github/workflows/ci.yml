@@ -59,10 +59,10 @@ jobs:
         name: geeto-binaries-${{ matrix.node-version }}
         path: |
           geeto-linux
-          geeto-linux-arm
+          geeto-linux-arm64
           geeto-windows.exe
           geeto-mac
-          geeto-mac-arm
+          geeto-mac-arm64
         retention-days: 1
 
   cross-platform-test:
