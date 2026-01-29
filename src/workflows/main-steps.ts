@@ -232,6 +232,7 @@ export async function handleMerge(
         log.success(`Squashed ${featureBranch} and merged into ${targetBranch} with --no-ff`)
       }
 
+      console.log('');
       // Push the updated target branch back to remote
       const shouldPushTarget = confirm(`Push ${targetBranch} to origin?`)
       if (shouldPushTarget) {
