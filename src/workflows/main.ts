@@ -13,6 +13,7 @@ import { handleCleanup, handleMerge, handlePush } from './main-steps.js'
 import { showSettingsMenu } from './settings.js'
 
 import { select } from '../cli/menu.js'
+import { confirm } from '../cli/input.js'
 import { closeInput } from '../cli/input.js'
 import { STEP, TASK_PLATFORMS } from '../core/constants.js'
 import { loadState, saveState, preserveProviderState } from '../utils/state.js'
@@ -640,49 +641,9 @@ export const main = async (opts?: {
       const liveStaged = getStagedFiles()
 
       if (liveStaged.length === 0) {
-        let noStageChoice: string
-        if (opts?.startAt === 'commit' || opts?.startAt === 'stage') {
-          noStageChoice = 'stageNow'
-        } else {
-          noStageChoice = await select('No staged files detected. How would you like to proceed?', [
-            { label: 'Stage all changes now', value: 'stageNow' },
-            { label: 'Skip commit and continue', value: 'skipCommit' },
-            { label: 'Cancel', value: 'cancel' },
-          ])
-        }
-
-        if (noStageChoice === 'cancel') {
-          log.warn('Cancelled.')
-          process.exit(0)
-        }
-
-        if (noStageChoice === 'skipCommit') {
-          state.skippedCommit = true
-          state.step = STEP.COMMITTED
-          saveState(state)
-        } else if (noStageChoice === 'stageNow') {
-          let doStageAll: boolean
-          if (opts?.startAt === 'commit' || opts?.startAt === 'stage') {
-            doStageAll = true
-          } else {
-            doStageAll = confirm('Stage all changes now?')
-          }
-          if (doStageAll) {
-            exec('git add -A')
-            const newlyStaged = getStagedFiles()
-            if (newlyStaged.length === 0) {
-              log.error('No files staged after running git add.')
-              process.exit(1)
-            }
-            state.step = STEP.STAGED
-            saveState(state)
-          } else {
-            log.warn('Skipping staging. Commit will be skipped.')
-            state.skippedCommit = true
-            state.step = STEP.COMMITTED
-            saveState(state)
-          }
-        }
+        console.log('')
+        log.warn('No staged files found at commit time. Aborting.')
+        process.exit(0)
       }
 
       if (!state.skippedCommit) {
@@ -702,11 +663,26 @@ export const main = async (opts?: {
 
     // STEP 4: Push — ask user before pushing in interactive mode
     if (opts?.startAt) {
-      // Non-interactive startAt flags preserve current behavior
-      handlePush(state, { suppressStep: !!opts?.startAt, suppressLogs })
+      // Non-interactive: only push automatically if starting at push
+      if (opts.startAt === 'push') {
+        handlePush(state, { suppressStep: true, suppressLogs })
+      } else if (opts.startAt === 'merge') {
+        // intentionally skip push prompt here; merge step will validate push status
+      } else {
+        const currentBranch = state.workingBranch || getCurrentBranch()
+        console.log('');
+        const wantPush = confirm(`Push ${currentBranch} to origin now?`)
+        if (wantPush) {
+          handlePush(state, { suppressStep: !!opts?.startAt, suppressLogs: true })
+        } else {
+          log.info('Skipping push as per user request')
+        }
+      }
     } else {
       // Interactive: ask before pushing
       const currentBranch = state.workingBranch || getCurrentBranch()
+      console.log('');
+      // For safety, default NO to avoid accidental pushes on Enter
       const wantPush = confirm(`Push ${currentBranch} to origin now?`)
       if (wantPush) {
         // We already confirmed, so suppress further confirm inside handlePush
@@ -717,6 +693,39 @@ export const main = async (opts?: {
     }
 
     // STEP 5: Merge (simplified)
+    // If the current branch has commits that are not pushed, ask the user to push
+    const branchToCheck = state.workingBranch || getCurrentBranch()
+    try {
+      let hasCommitsToPush = false
+      try {
+        const remoteRef = exec(`git ls-remote --heads origin "${branchToCheck}"`, true).trim()
+        if (!remoteRef) {
+          hasCommitsToPush = true
+        } else {
+          const commitsAhead = exec(
+            `git rev-list HEAD...origin/"${branchToCheck}" --count`,
+            true
+          ).trim()
+          hasCommitsToPush = commitsAhead !== '0' && commitsAhead !== ''
+        }
+      } catch {
+        hasCommitsToPush = true
+      }
+
+      if (hasCommitsToPush) {
+        // Default NO to avoid accidental push; if user declines, abort merge
+        console.log('');
+        log.info(
+          `Branch ${branchToCheck} has commits not pushed to origin.`
+        )
+        handlePush(state, { suppressStep: false, suppressLogs: false, force: true } )
+      }
+    } catch {
+      // On any error checking remote status, be conservative and abort the merge
+      log.warn('Could not determine remote push status; aborting merge for safety.')
+      return
+    }
+
     featureBranch = await handleMerge(state, { suppressStep: !!opts?.startAt, suppressLogs })
 
     // STEP 6: Cleanup (simplified)

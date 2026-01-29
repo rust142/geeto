@@ -10,9 +10,9 @@ import { select } from '../cli/menu.js'
 
 export function handlePush(
   state: GeetoState,
-  opts?: { suppressStep?: boolean; suppressLogs?: boolean }
+  opts?: { suppressStep?: boolean; suppressLogs?: boolean, force?: boolean }
 ): void {
-  if (state.step < STEP.PUSHED) {
+  if (state.step < STEP.PUSHED || opts?.force) {
     if (!opts?.suppressStep) {
       log.step('Step 4: Push to Remote')
     }
@@ -232,24 +232,65 @@ export async function handleMerge(
         log.success(`Squashed ${featureBranch} and merged into ${targetBranch} with --no-ff`)
       }
 
+      console.log('');
       // Push the updated target branch back to remote
       const shouldPushTarget = confirm(`Push ${targetBranch} to origin?`)
       if (shouldPushTarget) {
-        // Show a small progress indicator for merge push to match user expectations
+        // Provide visible push progress by allowing git to print progress to terminal
+        console.log('')
+        // Get remote URL silently for a nicer message
+        let remoteUrl = ''
+        try {
+          remoteUrl = exec('git remote get-url origin', true)
+        } catch {
+          /* ignore */
+        }
+        if (remoteUrl) {
+          log.info(`Pushing ${targetBranch} to: ${remoteUrl}`)
+        } else {
+          log.info(`Pushing ${targetBranch} to remote`)
+        }
+
         console.log('')
         const progressBar = new ProgressBar(2, `Pushing ${targetBranch} to remote`)
         progressBar.update(0)
+
+        // Perform push silently to avoid interleaving git progress output
         progressBar.update(1)
         try {
-          pushWithRetry(`git push origin ${targetBranch}`)
+          // Check if remote branch exists; if not, treat as commits to push
+          let hasCommitsToPush = false
+          try {
+            const remoteRef = exec(`git ls-remote --heads origin "${getCurrentBranch()}"`, true).trim()
+            if (!remoteRef) {
+              // remote branch doesn't exist yet
+              hasCommitsToPush = true
+            } else {
+              const commitsAhead = exec(
+                `git rev-list HEAD...origin/"${getCurrentBranch()}" --count`,
+                true
+              ).trim()
+              hasCommitsToPush = commitsAhead !== '0' && commitsAhead !== ''
+            }
+          } catch {
+            // If any of the checks fail, assume there are commits to push
+            hasCommitsToPush = true
+          }
+
+          exec(`git push -u origin "${getCurrentBranch()}"`, true)
           progressBar.complete()
           console.log('')
-          log.success(`Pushed ${targetBranch} to remote`)
-        } catch (err) {
+
+          if (hasCommitsToPush) {
+            log.success(`Pushed ${getCurrentBranch()} to remote`)
+          } else {
+            log.info(`Branch ${getCurrentBranch()} is already up to date with remote`)
+          }
+        } catch (error) {
           progressBar.complete()
           console.log('')
-          log.error(`Failed to push ${targetBranch} to remote`)
-          throw err
+          log.error('Push failed; see git output for details')
+          throw error
         }
       }
     }
@@ -273,16 +314,30 @@ export function handleCleanup(featureBranch: string, state: GeetoState): void {
     log.info(`Current branch: ${getCurrentBranch()}`)
 
     if (featureBranch && featureBranch !== state.targetBranch) {
-      const deleteAnswer = confirm(`Delete branch '${featureBranch}'?`)
-      if (deleteAnswer) {
-        exec(`git branch -d ${featureBranch}`)
+      // Protect canonical branches from accidental deletion
+      const protectedBranches = new Set(['development', 'develop', 'dev'])
+      if (protectedBranches.has(featureBranch.toLowerCase())) {
+        log.info(`Skipping deletion of protected branch '${featureBranch}'`)
+      } else {
+        const deleteAnswer = confirm(`Delete branch '${featureBranch}'?`)
+        if (deleteAnswer) {
+          exec(`git branch -d ${featureBranch}`)
 
-        // Also delete remote branch if it exists
-        try {
-          pushWithRetry(`git push origin --delete ${featureBranch}`, true)
-          log.success(`Remote branch '${featureBranch}' deleted`)
-        } catch {
-          // Remote branch might not exist, ignore error
+          // Also delete remote branch if it exists
+          try {
+            pushWithRetry(`git push origin --delete ${featureBranch}`, true)
+            log.success(`Remote branch '${featureBranch}' deleted`)
+          } catch {
+            // Remote branch might not exist, ignore error
+          }
+        } else {
+          // User chose not to delete the feature branch — switch back to it so they can continue working
+          try {
+            exec(`git checkout "${featureBranch}"`)
+            log.info(`Kept branch '${featureBranch}' and switched to it`)
+          } catch {
+            log.warn(`Could not switch back to branch '${featureBranch}'.`)
+          }
         }
       }
     }

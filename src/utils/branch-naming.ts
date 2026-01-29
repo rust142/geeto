@@ -35,6 +35,12 @@ export const handleBranchNaming = async (
   }
 
   const diff = execGit('git diff --cached', true)
+  // If there are no staged changes, abort early with a helpful message
+  if (!diff || !diff.trim()) {
+    log.warn('No staged changes found. Cannot generate a branch name from empty diff. Aborting.')
+    result.cancelled = true
+    return result
+  }
   let correction = ''
   let aiSuffix: string | null = null
   let skipRegenerate = false
@@ -70,19 +76,19 @@ export const handleBranchNaming = async (
       switch (aiProvider) {
         case 'gemini': {
           const { generateBranchName } = await import('../api/gemini.js')
-          const word = diff || 'Code changes'
+          const word = diff
           aiSuffix = await generateBranchName(word, correction, model as GeminiModel)
           break
         }
         case 'copilot': {
           const { generateBranchName } = await import('../api/copilot.js')
-          const word = diff || 'Code changes'
+          const word = diff
           aiSuffix = await generateBranchName(word, correction, model as CopilotModel)
           break
         }
         case 'openrouter': {
           const { generateBranchName } = await import('../api/openrouter.js')
-          const word = diff || 'Code changes'
+          const word = diff
           aiSuffix = await generateBranchName(word, correction, model as OpenRouterModel)
 
           break
