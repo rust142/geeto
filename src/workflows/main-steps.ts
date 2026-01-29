@@ -251,11 +251,30 @@ export async function handleMerge(
         }
 
         try {
-          // Allow git to show its progress output to the terminal so the user sees activity
+          // Show a lightweight progress bar while the push runs so the user sees activity
+          const progressBar = new ProgressBar(20, `Pushing ${targetBranch} to remote`)
+          progressBar.update(0)
+          const progressInterval = setInterval(() => {
+            try {
+              progressBar.increment(1)
+            } catch {
+              /* ignore */
+            }
+          }, 150)
+
+          // Run push allowing git to print its own output as well
           pushWithRetry(`git push origin ${targetBranch}`, false)
+
+          clearInterval(progressInterval)
+          progressBar.complete()
           console.log('')
           log.success(`Pushed ${targetBranch} to remote`)
         } catch (err) {
+          try {
+            clearInterval((global as any).__geeto_progress_interval)
+          } catch {
+            /* ignore */
+          }
           console.log('')
           log.error(`Failed to push ${targetBranch} to remote`)
           throw err
@@ -297,6 +316,14 @@ export function handleCleanup(featureBranch: string, state: GeetoState): void {
             log.success(`Remote branch '${featureBranch}' deleted`)
           } catch {
             // Remote branch might not exist, ignore error
+          }
+        } else {
+          // User chose not to delete the feature branch — switch back to it so they can continue working
+          try {
+            exec(`git checkout "${featureBranch}"`)
+            log.info(`Kept branch '${featureBranch}' and switched to it`)
+          } catch {
+            log.warn(`Could not switch back to branch '${featureBranch}'.`)
           }
         }
       }
