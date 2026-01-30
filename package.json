@@ -88,21 +88,17 @@
   "lint-staged": {
     "*.{ts,tsx}": [
       "eslint --fix",
-      "prettier --write",
-      "git add"
+      "prettier --write"
     ],
     "*.{js,json,md}": [
-      "prettier --write",
-      "git add"
+      "prettier --write"
     ],
     "*.md": [
       "markdownlint --fix",
-      "prettier --write",
-      "git add"
+      "prettier --write"
     ],
     "*.{yml,yaml}": [
-      "yamllint -f parsable",
-      "git add"
+      "yamllint -f parsable"
     ]
   },
   "peerDependencies": {

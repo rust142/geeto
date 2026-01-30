@@ -11,7 +11,7 @@ import { askQuestion, confirm, editInEditor } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
 import { DEFAULT_GEMINI_MODEL } from '../utils/config.js'
-import { exec, execGit } from '../utils/exec.js'
+import { execGit } from '../utils/exec.js'
 import {
   chooseModelForProvider,
   getAIProviderShortName,
@@ -284,18 +284,44 @@ export const handleCommitWorkflow = async (
     | 'manual'
   let selectedTool = getDefaultCommitTool(aiProvider)
 
-  // Helper: attempt to run git commit; on failure present concise options (edit/retry/no-verify/abort)
+  // Helper: attempt to run git commit using a temporary file to avoid shell quoting issues
   const attemptCommit = async (titleStr: string, bodyStr?: string | null): Promise<boolean> => {
-    const commitArgs = bodyStr ? `-m "${titleStr}" -m "${bodyStr}"` : `-m "${titleStr}"`
+    // Compose full commit message
+    const msg = bodyStr ? `${titleStr}\n\n${bodyStr}\n` : `${titleStr}\n`
+
+    // Use spawnSync to avoid shell quoting pitfalls
+    const tempDir = await import('node:os')
+    const pathMod = await import('node:path')
+    const fs = await import('node:fs')
+    const { spawnSync } = await import('node:child_process')
+
+    const tmpFile = pathMod.join(tempDir.tmpdir(), `geeto-commit-${Date.now()}.txt`)
+
     try {
-      exec(`git commit ${commitArgs}`)
-      return true
-    } catch {
+      fs.writeFileSync(tmpFile, msg, 'utf8')
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : String(error)
+      log.error(`Failed to write temporary commit message: ${errMsg}`)
+      return false
+    }
+
+    try {
+      const res = spawnSync('git', ['commit', '-F', tmpFile], { stdio: 'inherit' })
+      // cleanup
+      try {
+        fs.unlinkSync(tmpFile)
+      } catch {
+        /* ignore cleanup errors */
+      }
+
+      if (res.status === 0) {
+        return true
+      }
+
       log.error('Commit failed due to commit hook or invalid message.')
 
       const action = await select('Commit failed. Choose an action:', [
         { label: 'Edit commit message and retry', value: 'edit' },
-        { label: 'Commit with --no-verify (skip hooks)', value: 'no-verify' },
         { label: 'Abort', value: 'abort' },
       ])
 
@@ -312,16 +338,10 @@ export const handleCommitWorkflow = async (
         return attemptCommit(newTitle as string, newBody)
       }
 
-      if (action === 'no-verify') {
-        try {
-          exec(`git commit --no-verify ${commitArgs}`)
-          return true
-        } catch {
-          log.error('Commit with --no-verify failed. See git output for details.')
-          return false
-        }
-      }
-
+      return false
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : String(error)
+      log.error(`Failed to run git commit: ${errMsg}`)
       return false
     }
   }
