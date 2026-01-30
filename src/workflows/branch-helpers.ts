@@ -277,6 +277,10 @@ export async function handleTrelloCase(
       acceptChoice = await select(
         'This model cannot process the input due to token/context limits. Please choose a different model or provider:',
         [
+          {
+            label: `Try again with ${getAIProviderShortName(aiProvider)}${model ? ` (${model})` : ''} model`,
+            value: 'try-same',
+          },
           { label: 'Change model', value: 'change-model' },
           { label: 'Change AI provider', value: 'change-provider' },
           { label: 'Edit manually', value: 'edit' },
@@ -311,6 +315,11 @@ export async function handleTrelloCase(
         }
         // creation failed, return to menus
         return { branchFlowComplete: false, branchMenuShown: false }
+      }
+      case 'try-same': {
+        // User requested re-trying with the same provider/model
+        correction = ''
+        break
       }
       case 'regenerate': {
         correction = ''

@@ -55,8 +55,9 @@ export const ensureGeetoIgnored = (): void => {
     if (gitignoreContent !== originalContent) {
       fs.writeFileSync(gitignorePath, gitignoreContent, 'utf8')
     }
-  } catch (error) {
-    log.warn(`Could not update .gitignore: ${(error as Error).message}`)
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    log.warn(`Could not update .gitignore: ${msg}`)
   }
 }
 
@@ -242,8 +243,9 @@ separator = "${config.separator}"
 ${config.lastNamingStrategy ? `last_naming_strategy = "${config.lastNamingStrategy}"\n` : ''}${config.lastTrelloList ? `last_trello_list = "${config.lastTrelloList}"\n` : ''}`
 
     fs.writeFileSync(path, configContent, 'utf8')
-  } catch (error) {
-    log.warn(`Failed to save branch strategy config: ${(error as Error).message}`)
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    log.warn(`Failed to save branch strategy config: ${msg}`)
   }
 }
 

@@ -8,7 +8,7 @@ import { log } from '../utils/logging.js'
 // execGit not needed here
 
 /** Return the canonical string value for a model (object or string) */
-function getModelValue(
+export function getModelValue(
   m?: CopilotModel | OpenRouterModel | GeminiModel | string
 ): string | undefined {
   if (!m) {

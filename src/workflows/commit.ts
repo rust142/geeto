@@ -18,6 +18,7 @@ import {
   interactiveAIFallback,
   isContextLimitFailure,
   isTransientAIFailure,
+  getModelValue,
 } from '../utils/git-ai.js'
 import { log } from '../utils/logging.js'
 import { saveState } from '../utils/state.js'
@@ -469,6 +470,7 @@ export const handleCommitWorkflow = async (
 
     // Try generating commit message via AI
     let initialAiResult: string | null = null
+    let currentModel: string | undefined
     try {
       let currentProvider: 'gemini' | 'copilot' | 'openrouter' | undefined
       if (state.aiProvider && state.aiProvider !== 'manual') {
@@ -476,7 +478,7 @@ export const handleCommitWorkflow = async (
       } else {
         currentProvider = aiProvider as 'gemini' | 'copilot' | 'openrouter'
       }
-      let currentModel: string | undefined
+
       if (currentProvider === 'copilot') {
         currentModel = state.copilotModel
       } else if (currentProvider === 'openrouter') {
@@ -734,18 +736,28 @@ export const handleCommitWorkflow = async (
         /* ignore file write failures */
       }
 
+      // If we have a short subject line in the suggestion, allow accepting
+      // the suggested commit message even when a context limit was detected.
+      const subjectLine = commitMessage.split('\n').find((l) => l.trim()) ?? ''
+
       let acceptAi: string
-      if (contextLimitDetected) {
+      if (contextLimitDetected && !subjectLine) {
+        // No usable suggestion present: force the user to change model/provider or edit
         const editorName = process.env.EDITOR ?? (process.platform === 'win32' ? 'notepad' : 'vi')
         acceptAi = await select(
           'This model cannot process the input due to token/context limits. Please choose a different model or provider:',
           [
+            {
+              label: `Try again with ${getAIProviderShortName(aiProvider)}${getModelValue(currentModel) ? ` (${getModelValue(currentModel)})` : ''} model`,
+              value: 'try-same',
+            },
             { label: 'Change model', value: 'change-model' },
             { label: 'Change AI provider', value: 'change-provider' },
             { label: `Edit in editor (${editorName})`, value: 'edit' },
           ]
         )
       } else {
+        // Either no context limits, or we have a usable suggestion (allow accepting)
         const editorName = process.env.EDITOR ?? (process.platform === 'win32' ? 'notepad' : 'vi')
         acceptAi = await select('Accept this commit message?', [
           { label: 'Yes, use it', value: 'accept' },
@@ -789,6 +801,11 @@ export const handleCommitWorkflow = async (
         case 'regenerate': {
           correction = ''
           // next loop should try direct generation with the currently selected model
+          forceDirect = true
+          continue
+        }
+        case 'try-same': {
+          // User chose to attempt the same model again — try a direct regenerate
           forceDirect = true
           continue
         }

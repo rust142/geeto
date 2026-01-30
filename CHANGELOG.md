@@ -1,7 +1,12 @@
 
+# Changelog
 
-# [1.1.0](https://github.com/rust142/geeto/compare/v1.1.0-beta.0...v1.1.0) (2026-01-29)
+All notable changes to this project will be documented in this file.
 
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.1.0](https://github.com/rust142/geeto/compare/v1.1.0-beta.0...v1.1.0) (2026-01-29)
 
 ### Bug Fixes
 
@@ -14,7 +19,6 @@
 * **workflows:** remove explicit default from push confirmation prompts ([842243e](https://github.com/rust142/geeto/commit/842243e8bf3856901b65daf8cd5eaad210a3f430))
 * **workflows:** remove explicit false default from confirm calls ([0f896d2](https://github.com/rust142/geeto/commit/0f896d27d413b6feb5c5648dd9a41f3e4745e0e0))
 
-
 ### Features
 
 * **branch:** delete remote branch after local deletion ([11718ff](https://github.com/rust142/geeto/commit/11718ff655a39dd725eb2c7c4559bf5d51db99ed))
@@ -26,15 +30,6 @@
 * **workflows:** add pre-merge push check and force option ([8af0e4c](https://github.com/rust142/geeto/commit/8af0e4c3abd2a29b002be4c2401fbb6b6e5173f9))
 * **workflows:** add push progress bar and refine commit/push/cleanup ([4aa6759](https://github.com/rust142/geeto/commit/4aa6759e0e6fcf00b9f1928700fd2bc4d394089a))
 * **workflows:** show git push progress and remote URL ([8b17d53](https://github.com/rust142/geeto/commit/8b17d53614622cee00d353accc28b0b17aa7c825))
-
-# Changelog
-
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## 1.1.0-beta.0 (2026-01-19)
 
 ### Bug Fixes
 

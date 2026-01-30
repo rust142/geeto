@@ -155,8 +155,9 @@ const syncOpenRouterModels = async (): Promise<void> => {
           )
           return
         }
-      } catch (error) {
-        log.warn(`Failed to fetch OpenRouter models from SDK: ${(error as Error).message}`)
+      } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error)
+        log.warn(`Failed to fetch OpenRouter models from SDK: ${msg}`)
       }
     }
 
@@ -176,15 +177,17 @@ const syncOpenRouterModels = async (): Promise<void> => {
           )
           return
         }
-      } catch (error) {
-        log.warn(`Could not read OpenRouter model config: ${(error as Error).message}`)
+      } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error)
+        log.warn(`Could not read OpenRouter model config: ${msg}`)
       }
     }
 
     log.info('No OpenRouter model configuration found and no SDK sync possible.')
     log.info('Run the sync again after installing/configuring the OpenRouter SDK to fetch models.')
-  } catch (error) {
-    log.warn(`OpenRouter model sync failed: ${(error as Error).message}`)
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    log.warn(`OpenRouter model sync failed: ${msg}`)
   }
 }
 

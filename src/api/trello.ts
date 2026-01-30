@@ -29,8 +29,9 @@ export const fetchTrelloLists = async (): Promise<TrelloList[]> => {
 
     const lists = (await response.json()) as TrelloList[]
     return lists
-  } catch (error) {
-    log.warn(`Failed to fetch Trello lists: ${(error as Error).message}`)
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    log.warn(`Failed to fetch Trello lists: ${msg}`)
     return []
   }
 }
@@ -65,8 +66,9 @@ export const fetchTrelloCards = async (listId?: string): Promise<TrelloCard[]> =
     return cards.filter(
       (card) => !card.name.includes('[DONE]') && !card.name.includes('[ARCHIVED]')
     )
-  } catch (error) {
-    log.warn(`Failed to fetch Trello cards: ${(error as Error).message}`)
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    log.warn(`Failed to fetch Trello cards: ${msg}`)
     return []
   }
 }
