@@ -27,11 +27,16 @@
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "lint:md": "markdownlint \"**/*.md\" --ignore node_modules",
+    "lint:spell": "cspell \"**/*.{md,mdx,txt,ts,tsx,js,jsx,json}\" --no-progress",
+    "cspell": "cspell",
+    "cspell:check": "node ./scripts/cspell-check.js",
+    "cspell:interactive": "node ./scripts/cspell-ignore.js",
     "lint:yaml": "yamllint \"**/*.{yml,yaml}\" --ignore node_modules",
     "lint:md:fix": "markdownlint \"**/*.md\" --ignore node_modules --fix",
+    "lint:spell:fix": "cspell --no-progress --no-must-find --no-color ./",
     "format": "prettier --write \"src/**/*.{ts,json,md}\"",
     "format:check": "prettier --check \"src/**/*.{ts,json,md}\"",
-    "check:fast": "bun run format:check && bun run lint && bun run lint:md && bun run lint:yaml",
+    "check:fast": "bun run format:check && bun run lint && bun run lint:md && bun run lint:yaml && bun run lint:spell",
     "check:full": "bun run typecheck && bun run build",
     "prepush": "bun run check:fast && bun run check:full",
     "commitlint": "commitlint --edit",
@@ -83,10 +88,13 @@
     "prettier": "^3.8.1",
     "release-it": "^17.11.0",
     "typescript": "^5.9.3",
-    "yaml-lint": "^1.7.0"
+    "yaml-lint": "^1.7.0",
+    "cspell": "^6.16.0"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
+      "tsc --noEmit",
+      "node ./scripts/cspell-check.js",
       "eslint --fix",
       "prettier --write"
     ],
@@ -94,6 +102,7 @@
       "prettier --write"
     ],
     "*.md": [
+      "node ./scripts/cspell-check.js",
       "markdownlint --fix",
       "prettier --write"
     ],
@@ -109,7 +118,7 @@
     "bun": ">=1.0.0"
   },
   "dependencies": {
-    "@github/copilot-sdk": "^0.1.19",
+    "@github/copilot-sdk": "^0.1.20",
     "@google/genai": "^1.38.0",
     "@openrouter/sdk": "^0.4.0",
     "geeto": "."
