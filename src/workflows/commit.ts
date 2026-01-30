@@ -15,10 +15,10 @@ import { exec, execGit } from '../utils/exec.js'
 import {
   chooseModelForProvider,
   getAIProviderShortName,
+  getModelValue,
   interactiveAIFallback,
   isContextLimitFailure,
   isTransientAIFailure,
-  getModelValue,
 } from '../utils/git-ai.js'
 import { log } from '../utils/logging.js'
 import { saveState } from '../utils/state.js'

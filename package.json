@@ -27,10 +27,11 @@
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "lint:md": "markdownlint \"**/*.md\" --ignore node_modules",
+    "lint:yaml": "yamllint \"**/*.{yml,yaml}\" --ignore node_modules",
     "lint:md:fix": "markdownlint \"**/*.md\" --ignore node_modules --fix",
     "format": "prettier --write \"src/**/*.{ts,json,md}\"",
     "format:check": "prettier --check \"src/**/*.{ts,json,md}\"",
-    "check:fast": "bun run format:check && bun run lint && bun run lint:md",
+    "check:fast": "bun run format:check && bun run lint && bun run lint:md && bun run lint:yaml",
     "check:full": "bun run typecheck && bun run build",
     "prepush": "bun run check:fast && bun run check:full",
     "commitlint": "commitlint --edit",
@@ -48,7 +49,8 @@
     "release:beta": "release-it --preRelease=beta --ci",
     "release:alpha": "release-it --preRelease=alpha",
     "prepare": "husky install",
-    "postinstall": "bun run prepare"
+    "postinstall": "bun run prepare",
+    "lint-staged": "lint-staged"
   },
   "keywords": [
     "git",
@@ -64,6 +66,7 @@
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
     "@ianvs/prettier-plugin-sort-imports": "^4.7.0",
+    "@release-it/conventional-changelog": "^8.0.2",
     "@types/bun": "latest",
     "@types/node": "^20.19.30",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
@@ -74,12 +77,33 @@
     "eslint-plugin-promise": "^6.6.0",
     "eslint-plugin-security": "^2.1.1",
     "eslint-plugin-unicorn": "^51.0.1",
-    "@release-it/conventional-changelog": "^8.0.2",
     "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
     "markdownlint-cli": "^0.47.0",
     "prettier": "^3.8.1",
     "release-it": "^17.11.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "yaml-lint": "^1.7.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write",
+      "git add"
+    ],
+    "*.{js,json,md}": [
+      "prettier --write",
+      "git add"
+    ],
+    "*.md": [
+      "markdownlint --fix",
+      "prettier --write",
+      "git add"
+    ],
+    "*.{yml,yaml}": [
+      "yamllint -f parsable",
+      "git add"
+    ]
   },
   "peerDependencies": {
     "typescript": "^5"
