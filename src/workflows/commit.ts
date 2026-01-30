@@ -321,6 +321,7 @@ export const handleCommitWorkflow = async (
       log.error('Commit failed due to commit hook or invalid message.')
 
       const action = await select('Commit failed. Choose an action:', [
+        { label: "I've fixed it, retry", value: 'retry' },
         { label: 'Edit commit message and retry', value: 'edit' },
         { label: 'Abort', value: 'abort' },
       ])
@@ -336,6 +337,11 @@ export const handleCommitWorkflow = async (
           extractCommitTitle(normalized) ?? edited.split('\n').find((l) => l.trim()) ?? ''
         const newBody = newTitle ? extractCommitBody(normalized, newTitle) : null
         return attemptCommit(newTitle as string, newBody)
+      }
+
+      if (action === 'retry') {
+        // User fixed issues outside of this tool; try committing again
+        return attemptCommit(titleStr, bodyStr)
       }
 
       return false

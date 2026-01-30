@@ -54,7 +54,8 @@
     "reselecting",
     "styl",
     "occs",
-    "lobal"
+    "lobal",
+    "modelcontextprotocol"
   ],
   "ignorePaths": [
     "node_modules/**",

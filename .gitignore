@@ -1,3 +1,6 @@
+# Instructions
+.github/instructions/character.instructions.md
+
 # Dependencies
 node_modules/
 bun.lockb

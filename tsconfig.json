@@ -1,10 +1,11 @@
 {
   "compilerOptions": {
     // Environment setup & latest features
-    "lib": ["ES2022"],
-    "target": "ES2022",
-    "module": "node16",
+    "lib": ["ES2022", "DOM"],
+    "target": "ES2021",
+    "module": "NodeNext",
     "allowJs": true,
+    "allowSyntheticDefaultImports": true,
 
     // Output configuration
     "outDir": "./lib",
@@ -15,10 +16,11 @@
     "removeComments": false,
 
     // Module resolution
-    "moduleResolution": "node16",
+    "moduleResolution": "NodeNext",
     "noEmit": false,
     "esModuleInterop": true,
     "resolveJsonModule": true,
+    "downlevelIteration": true,
 
     // Best practices
     "strict": true,

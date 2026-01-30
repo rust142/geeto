@@ -93,20 +93,22 @@
   },
   "lint-staged": {
     "*.{ts,tsx}": [
-      "tsc --noEmit",
+      "node ./scripts/typecheck-wrapper.js",
       "node ./scripts/cspell-check.js",
       "eslint --fix",
       "prettier --write"
     ],
     "*.{js,json,md}": [
+      "bun cspell:check",
       "prettier --write"
     ],
     "*.md": [
-      "node ./scripts/cspell-check.js",
+      "bun cspell:check",
       "markdownlint --fix",
       "prettier --write"
     ],
     "*.{yml,yaml}": [
+      "bun cspell:check",
       "yamllint -f parsable"
     ]
   },
