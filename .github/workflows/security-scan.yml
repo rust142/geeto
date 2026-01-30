@@ -1,0 +1,36 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ develop ]
+
+jobs:
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: latest
+
+    - name: Install dependencies
+      run: bun install
+
+    - name: Run Snyk security scan (if available)
+      continue-on-error: true
+      run: |
+        if command -v snyk &> /dev/null; then
+          snyk test --severity-threshold=high
+        else
+          echo "Snyk not available, skipping security scan"
+        fi
+
+    - name: Run security audit
+      run: bun audit

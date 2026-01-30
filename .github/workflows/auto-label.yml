@@ -1,0 +1,34 @@
+name: Auto Label PR
+
+on:
+  pull_request:
+    branches: [ develop ]
+
+jobs:
+  auto-label:
+    name: Auto Label PR
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Auto label PR based on conventional commits
+      uses: bcoe/conventional-release-labels@v1
+      with:
+        type_labels: |
+          {
+            "feat": "enhancement",
+            "fix": "bug",
+            "docs": "documentation",
+            "style": "style",
+            "refactor": "refactor",
+            "perf": "performance",
+            "test": "test",
+            "chore": "chore"
+          }
+        ignored_types: |
+          []
+        token: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,40 @@
+name: Ensure AI Review Label
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - develop
+
+jobs:
+  ensure-label:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - name: Ensure 'request ai review' label exists
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labelName = 'request ai review';
+            const color = '6f42c1';
+            const description = 'Trigger AI Issue Assessment action';
+            try {
+              await github.rest.issues.getLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: labelName,
+              });
+              core.info(`${labelName} already exists`);
+            } catch (err) {
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: labelName,
+                color,
+                description,
+              });
+              core.info(`${labelName} created`);
+            }

@@ -55,7 +55,9 @@
     "release:alpha": "release-it --preRelease=alpha",
     "prepare": "husky install",
     "postinstall": "bun run prepare",
-    "lint-staged": "lint-staged"
+    "lint-staged": "lint-staged",
+    "danger:ci": "danger ci",
+    "danger:local": "danger pr"
   },
   "keywords": [
     "git",
@@ -76,6 +78,9 @@
     "@types/node": "^20.19.30",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
+    "cspell": "^6.16.0",
+    "danger": "^13.0.5",
+    "danger-plugin-conventional-commitlint": "^3.1.0",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^9.1.2",
     "eslint-plugin-prettier": "^5.5.5",
@@ -88,8 +93,7 @@
     "prettier": "^3.8.1",
     "release-it": "^17.11.0",
     "typescript": "^5.9.3",
-    "yaml-lint": "^1.7.0",
-    "cspell": "^6.16.0"
+    "yaml-lint": "^1.7.0"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
