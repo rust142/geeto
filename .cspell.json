@@ -55,7 +55,9 @@
     "styl",
     "occs",
     "lobal",
-    "modelcontextprotocol"
+    "modelcontextprotocol",
+    "typecheck",
+    "dangerfile"
   ],
   "ignorePaths": [
     "node_modules/**",
