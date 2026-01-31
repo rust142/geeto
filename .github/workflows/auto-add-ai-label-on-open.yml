@@ -93,12 +93,12 @@ jobs:
             core.setOutput('issue_body', issue.body || '');
             return { issue_number: String(issueNumber), issue_body: issue.body || '' };
 
-      - name: Add label to issue (if available)
+      - name: Add 'request ai review' label to issue
         if: ${{ steps.prepare_issue.outputs.issue_number != '' }}
         uses: actions/github-script@v7
         with:
           script: |
-            const labelName = 'review';
+            const labelName = 'request ai review';
             const issueNumber = Number('${{ steps.prepare_issue.outputs.issue_number }}');
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
@@ -106,6 +106,61 @@ jobs:
               issue_number: issueNumber,
               labels: [labelName],
             });
+
+      - name: Auto-detect category labels from title/body (heuristic)
+        if: ${{ steps.prepare_issue.outputs.issue_number != '' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issueNumber = Number('${{ steps.prepare_issue.outputs.issue_number }}');
+            const { data: issue } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+            });
+
+            const title = (issue.title || '').toLowerCase();
+            const body = (issue.body || '').toLowerCase();
+            const text = `${title}\n${body}`;
+
+            const heuristics = [
+              { label: 'feature', re: /\b(feature|feat|fitur|menambah|tambah|add|new)\b/i },
+              { label: 'bug', re: /\b(bug|error|fix|fixes|kesalahan|eror|tidak bekerja)\b/i },
+              { label: 'docs', re: /\b(doc|docs|readme|dokumentasi|dokumentasi)\b/i },
+              { label: 'help', re: /\b(help|cara pakai|cara pake|how to|how-to|minimal)\b/i },
+              { label: 'usage', re: /\b(usage|pakai|pake)\b/i },
+              { label: 'tool', re: /\b(tool|tools|cli|geeto)\b/i },
+              { label: 'question', re: /\b(question|pertanyaan|tanya)\b/i }
+            ];
+
+            const toAdd = new Set();
+            for (const h of heuristics) {
+              if (h.re.test(text)) toAdd.add(h.label);
+            }
+
+            // If none detected, consider 'issue' label (keep as generic)
+            if (toAdd.size === 0) toAdd.add('issue');
+
+            // Get existing labels
+            const { data: existing } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+            });
+            const existingNames = new Set(existing.map(l => l.name));
+
+            const finalAdd = [...toAdd].filter(l => !existingNames.has(l));
+            if (finalAdd.length) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                labels: finalAdd,
+              });
+              core.info(`Auto-added labels to #${issueNumber}: ${finalAdd.join(', ')}`);
+            } else {
+              core.info(`No new category labels to add for #${issueNumber}`);
+            }
 
       - name: Validate prepared inputs
         if: ${{ steps.prepare_issue.outputs.issue_number != '' }}
