@@ -162,44 +162,6 @@ jobs:
               core.info(`No new category labels to add for #${issueNumber}`);
             }
 
-      - name: Validate prepared inputs
-        if: ${{ steps.prepare_issue.outputs.issue_number != '' }}
-        run: |
-          echo "Prepared issue_number=${{ steps.prepare_issue.outputs.issue_number }}"
-          if [ -z "${{ steps.prepare_issue.outputs.issue_number }}" ]; then
-            echo "Error: issue_number is empty" >&2
-            exit 1
-          fi
-          echo "issue_body length: $(echo "${{ steps.prepare_issue.outputs.issue_body }}" | wc -c)"
-
-          # Verify prompts directory and mapped prompt file exist
-          PROMPTS_DIR=./prompts
-          MAPPED_PROMPT='issue-review.prompt.yml'
-          if [ ! -d "$PROMPTS_DIR" ]; then
-            echo "Error: prompts directory '$PROMPTS_DIR' not found" >&2
-            ls -la || true
-            exit 1
-          fi
-
-          if [ ! -f "$PROMPTS_DIR/$MAPPED_PROMPT" ]; then
-            echo "Error: mapped prompt file '$PROMPTS_DIR/$MAPPED_PROMPT' not found" >&2
-            ls -la "$PROMPTS_DIR" || true
-            exit 1
-          fi
-
-      - name: Show issue labels (debug)
-        if: ${{ steps.prepare_issue.outputs.issue_number != '' }}
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const issueNumber = Number('${{ steps.prepare_issue.outputs.issue_number }}');
-            const { data: labels } = await github.rest.issues.listLabelsOnIssue({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issueNumber,
-            });
-            core.info(`Issue #${issueNumber} labels: ${labels.map(l => l.name).join(', ')}`);
-
       - name: Run AI assessment (for the target issue)
         if: ${{ steps.prepare_issue.outputs.issue_number != '' }}
         id: ai-assessment
@@ -210,7 +172,7 @@ jobs:
           issue_number: "${{ steps.prepare_issue.outputs.issue_number }}"
           issue_body: "${{ steps.prepare_issue.outputs.issue_body }}"
           prompts_directory: './prompts'
-          labels_to_prompts_mapping: 'copilot,issue-review.prompt.yml|bug,issue-review.prompt.yml|feature,issue-review.prompt.yml|docs,issue-review.prompt.yml|help,issue-review.prompt.yml|howto,issue-review.prompt.yml|usage,issue-review.prompt.yml|tool,issue-review.prompt.yml|expert,issue-review.prompt.yml|question,issue-review.prompt.yml'
+          labels_to_prompts_mapping: 'copilot|bug|feature|docs|help|howto|usage|tool|expert|question'
           suppress_comments: 'true'
 
       - name: Post consolidated formatted comment
@@ -286,66 +248,4 @@ jobs:
                 body,
               });
               core.info(`Posted new AI assessment comment on #${issueNumber}`);
-            }
-
-      - name: Normalize AI labels (slugify & add)
-        if: ${{ steps.prepare_issue.outputs.issue_number != '' }}
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const assessmentsRaw = `"${{ steps.ai-assessment.outputs.ai_assessments }}"`;
-            let assessments = [];
-            try {
-              const cleaned = assessmentsRaw.replace(/^\"/, '').replace(/\"$/, '').replace(/\\n/g, '\n');
-              assessments = JSON.parse(cleaned || '[]');
-            } catch (e) { core.info('No ai_assessments to normalize'); }
-
-            const issueNumber = Number('${{ steps.prepare_issue.outputs.issue_number }}');
-
-            function slugify(input) {
-              if (!input) return '';
-              const s = input.normalize('NFKD').replace(/\p{Diacritic}/gu, '');
-              return s.toLowerCase()
-                .replace(/[^\p{L}\p{N}\s-]/gu, '')
-                .trim()
-                .replace(/\s+/g, '-')
-                .replace(/-+/g, '-')
-                .slice(0, 40)
-                .replace(/^-+|-+$/g, '');
-            }
-
-            for (const a of assessments) {
-              const promptFile = a.prompt || (a.promptFile) || 'issue-review.prompt.yml';
-              const promptStem = promptFile.replace(/\.prompt\.yml$/i, '').replace(/[^a-z0-9\-]/ig, '').toLowerCase();
-              let assessmentText = '';
-              if (a.assessmentLabel) {
-                const parts = a.assessmentLabel.split(':');
-                assessmentText = parts.slice(2).join(':').trim();
-              } else if (a.response) {
-                const m = (a.response.match(/^###.*[aA]ssessment:\s*(.+)$/im) || [])[1];
-                assessmentText = m || a.response.split('\n')[0] || '';
-              }
-
-              const slug = slugify(assessmentText) || 'unsure';
-              const newLabel = `ai:${promptStem}:${slug}`.toLowerCase();
-
-              // Remove existing ai:<promptStem>:* labels to avoid duplicates
-              const { data: existing } = await github.rest.issues.listLabelsOnIssue({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber });
-              const toRemove = existing.filter(l => l.name.startsWith(`ai:${promptStem}:`)).map(l => l.name);
-              for (const r of toRemove) {
-                await github.rest.issues.removeLabel({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, name: r }).catch(() => {});
-                core.info(`Removed old AI label ${r} from #${issueNumber}`);
-              }
-
-              // Ensure the label exists repo-wide
-              try {
-                await github.rest.issues.getLabel({ owner: context.repo.owner, repo: context.repo.repo, name: newLabel });
-              } catch (e) {
-                await github.rest.issues.createLabel({ owner: context.repo.owner, repo: context.repo.repo, name: newLabel, color: '0e8a16', description: 'AI derived assessment label' }).catch(() => {});
-                core.info(`Created label ${newLabel}`);
-              }
-
-              // Add the normalized label
-              await github.rest.issues.addLabels({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, labels: [newLabel] }).catch(() => {});
-              core.info(`Added normalized AI label ${newLabel} to #${issueNumber}`);
             }
