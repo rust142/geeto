@@ -206,12 +206,11 @@ jobs:
         uses: github/ai-assessment-comment-labeler@v1.0.1
         with:
           token: "${{ secrets.GITHUB_TOKEN }}"
-          ai_review_label: 'review'
+          ai_review_label: 'copilot'
           issue_number: "${{ steps.prepare_issue.outputs.issue_number }}"
           issue_body: "${{ steps.prepare_issue.outputs.issue_body }}"
           prompts_directory: './prompts'
-          labels_to_prompts_mapping: 'review,issue-review.prompt.yml|bug,issue-review.prompt.yml|feature,issue-review.prompt.yml|docs,issue-review.prompt.yml|help,issue-review.prompt.yml|howto,issue-review.prompt.yml|usage,issue-review.prompt.yml|tool,issue-review.prompt.yml|expert,issue-review.prompt.yml|question,issue-review.prompt.yml'
-
+          labels_to_prompts_mapping: 'copilot,issue-review.prompt.yml|bug,issue-review.prompt.yml|feature,issue-review.prompt.yml|docs,issue-review.prompt.yml|help,issue-review.prompt.yml|howto,issue-review.prompt.yml|usage,issue-review.prompt.yml|tool,issue-review.prompt.yml|expert,issue-review.prompt.yml|question,issue-review.prompt.yml'
       - name: Debug - show ai_assessments output
         if: ${{ steps.prepare_issue.outputs.issue_number != '' }}
         run: |
