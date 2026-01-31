@@ -182,6 +182,7 @@ jobs:
         env:
           AI_ASSESSMENTS: ${{ steps.ai-assessment.outputs.ai_assessments }}
           ISSUE_NUMBER: ${{ steps.prepare_issue.outputs.issue_number }}
+          ISSUE_BODY: ${{ steps.prepare_issue.outputs.issue_body }}
         with:
           script: |
             const assessmentsRaw = process.env.AI_ASSESSMENTS || '';
@@ -193,39 +194,77 @@ jobs:
                 cleaned = cleaned.slice(1, -1).replace(/\"/g, '"').replace(/\\n/g, '\n');
               }
               assessments = JSON.parse(cleaned || '[]');
+
+              // Deduplicate identical assessment entries (by label + response)
+              const seen = new Set();
+              const unique = [];
+              for (const a of assessments) {
+                const key = (a.assessmentLabel || '') + '|' + ((a.response || '').trim());
+                if (!seen.has(key)) {
+                  seen.add(key);
+                  unique.push(a);
+                }
+              }
+              assessments = unique;
             } catch (e) {
               core.info('No valid ai_assessments JSON found or failed to parse.');
             }
 
             const issueNumber = Number(process.env.ISSUE_NUMBER || 0);
+            const issueBody = process.env.ISSUE_BODY || '';
 
-            // Build consolidated body
+            // Quick heuristic to detect Indonesian vs English
+            const isIndonesianText = (t) => /\b(apa|bagaimana|gimana|kenapa|tolong|cara|pakai|pake|instal|instalasi|fitur|masalah|error)\b/i.test(t);
+
+            let preferIndo = false;
+            if (assessments.length) {
+              const combined = assessments.map(a => a.response || '').join('\n');
+              if (isIndonesianText(combined) || /Penilaian AI:|Kesimpulan:|Cara pakai/i.test(combined)) preferIndo = true;
+            } else {
+              if (isIndonesianText(issueBody)) preferIndo = true;
+            }
+
+            // Build consolidated body with language-aware headings
             let body = '<!-- ai-assessment-comment -->\n';
-            body += '**Automated AI Assessment (summary)**\n\n';
+            const headerTitle = preferIndo ? '**Penilaian AI Otomatis (ringkasan)**\n\n' : '**Automated AI Assessment (summary)**\n\n';
+            const noAssessmentsText = preferIndo ? '*Tidak ada penilaian AI yang dihasilkan.*\n' : '*No AI assessments were produced.*\n';
+            const assessmentLabelDefault = preferIndo ? 'Penilaian' : 'Assessment';
+
+            body += headerTitle;
 
             if (assessments.length === 0) {
-              body += '*No AI assessments were produced.*\n';
+              body += noAssessmentsText;
             } else {
               for (const a of assessments) {
-                body += '---\n**' + (a.assessmentLabel || 'Assessment') + '**\n\n';
+                body += '---\n**' + (a.assessmentLabel || assessmentLabelDefault) + '**\n\n';
                 // include the response directly
                 body += (a.response || '') + '\n\n';
               }
             }
 
-            // Append README quick usage block for convenience
+            // Append README quick usage block for convenience (language-aware)
             let readmeSummary = '';
             try {
               const fs = require('fs');
               const rd = fs.readFileSync('README.md', 'utf8');
-              const m = rd.match(/(^###?\s*(Installation|Quick Start|Usage|Tools)[\s\S]*?)(?=^###?\s|\Z)/im);
+              const m = rd.match(/(^###?\s*(Installation|Quick Start|Usage|Tools|Cara Pakai|Instalasi)[\s\S]*?)(?=^###?\s|\Z)/im);
               if (m && m[0]) {
-                readmeSummary = m[0];
+                if (preferIndo) {
+                  // Normalize heading to Indonesian label
+                  readmeSummary = m[0].replace(/(^###?\s*Installation|^###?\s*Quick Start|^###?\s*Usage|^###?\s*Tools)/gmi, '### Cara pakai / Instalasi');
+                } else {
+                  // Keep original or translate heading simply to English
+                  readmeSummary = m[0];
+                }
               } else {
-                readmeSummary = '\n**How to use (from README):**\n```bash\n# Clone repo\ngit clone https://github.com/rust142/geeto.git\ncd geeto\n# Install\nbun install\n# Build or run dev\nbun run build\n# Or dev\nbun run dev\n```\n';
+                readmeSummary = preferIndo
+                  ? '\n**Cara pakai (dari README):**\n```bash\n# Clone repo\ngit clone https://github.com/rust142/geeto.git\ncd geeto\n# Install\nbun install\n# Build atau jalankan dev\nbun run build\n# Atau dev\nbun run dev\n```\n'
+                  : '\n**How to use (from README):**\n```bash\n# Clone repo\ngit clone https://github.com/rust142/geeto.git\ncd geeto\n# Install\nbun install\n# Build or run dev\nbun run build\n# Or dev\nbun run dev\n```\n';
               }
             } catch (e) {
-              readmeSummary = '\n**How to use (from README):**\n```bash\n# see README for usage\n```\n';
+              readmeSummary = preferIndo
+                ? '\n**Cara pakai (dari README):**\n```bash\n# lihat README untuk cara pakai\n```\n'
+                : '\n**How to use (from README):**\n```bash\n# see README for usage\n```\n';
             }
 
             body += '---\n' + readmeSummary + '\n';
@@ -246,7 +285,7 @@ jobs:
                 comment_id: existing.id,
                 body,
               });
-              core.info('Updated existing AI assessment comment on #' + issueNumber);
+              core.info(preferIndo ? 'Memperbarui komentar penilaian AI pada #' + issueNumber : 'Updated existing AI assessment comment on #' + issueNumber);
             } else {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
@@ -254,5 +293,5 @@ jobs:
                 issue_number: issueNumber,
                 body,
               });
-              core.info('Posted new AI assessment comment on #' + issueNumber);
+              core.info(preferIndo ? 'Membuat komentar penilaian AI baru pada #' + issueNumber : 'Posted new AI assessment comment on #' + issueNumber);
             }
