@@ -36,7 +36,7 @@ jobs:
           script: |
             // Common single-word labels that should trigger AI assessment
             const labels = [
-              { name: 'review', color: '6f42c1', description: 'Trigger AI Issue Assessment action' },
+              { name: 'copilot', color: '6f42c1', description: 'Co-pilot AI assistance' },
               { name: 'bug', color: 'd73a4a', description: 'Issue type: bug' },
               { name: 'feature', color: 'a2eeef', description: 'Issue type: feature request' },
               { name: 'docs', color: '0075ca', description: 'Documentation related' },
@@ -93,12 +93,12 @@ jobs:
             core.setOutput('issue_body', issue.body || '');
             return { issue_number: String(issueNumber), issue_body: issue.body || '' };
 
-      - name: Add 'request ai review' label to issue
+      - name: Add 'copilot' label to issue
         if: ${{ steps.prepare_issue.outputs.issue_number != '' }}
         uses: actions/github-script@v7
         with:
           script: |
-            const labelName = 'request ai review';
+            const labelName = 'copilot';
             const issueNumber = Number('${{ steps.prepare_issue.outputs.issue_number }}');
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
