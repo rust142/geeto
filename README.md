@@ -54,6 +54,28 @@ npm install -g geeto
 bun install -g geeto
 ```
 
+### One-line installer (recommended for contributors)
+
+You can use the provided `tools/install.sh` to install dependencies, setup Husky hooks, and (optionally) ensure the `request ai review` label is created.
+
+- Using curl:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rust142/geeto/main/tools/install.sh | sh -s --
+```
+
+- Using wget:
+
+```bash
+wget -qO- https://raw.githubusercontent.com/rust142/geeto/main/tools/install.sh | sh -s --
+```
+
+Add `--no-label` to skip label creation when running the installer:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rust142/geeto/main/tools/install.sh | sh -s -- --no-label
+```
+
 **Note**: Geeto v0.0.1-beta.0 is currently in beta. For the latest stable release, check the [GitHub releases](https://github.com/rust142/geeto/releases).
 
 ## Quick Start
@@ -175,17 +197,17 @@ bun run dev
 
 ### Available Scripts
 
-| Command                  | Description                      |
-|--------------------------|----------------------------------|
-| `bun run build`          | Compile TypeScript to JavaScript |
-| `bun run dev`            | Run development version with Bun |
-| `bun run start`          | Run compiled version             |
-| `bun run lint`           | Run ESLint code linting          |
-| `bun run lint:fix`       | Auto-fix ESLint issues           |
-| `bun run format`         | Format code with Prettier        |
-| `bun run typecheck`      | Run TypeScript type checking     |
-| `bun run geeto:build:all`| Build binaries for all platforms |
-| `bun run release:beta`   | Create beta release              |
+| Command                   | Description                      |
+| ------------------------- | -------------------------------- |
+| `bun run build`           | Compile TypeScript to JavaScript |
+| `bun run dev`             | Run development version with Bun |
+| `bun run start`           | Run compiled version             |
+| `bun run lint`            | Run ESLint code linting          |
+| `bun run lint:fix`        | Auto-fix ESLint issues           |
+| `bun run format`          | Format code with Prettier        |
+| `bun run typecheck`       | Run TypeScript type checking     |
+| `bun run geeto:build:all` | Build binaries for all platforms |
+| `bun run release:beta`    | Create beta release              |
 
 ### Quality Assurance
 
