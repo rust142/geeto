@@ -74,6 +74,8 @@ jobs:
             });
 
             core.info(`Prepared issue #${issueNumber}`);
+            core.setOutput('issue_number', String(issueNumber));
+            core.setOutput('issue_body', issue.body || '');
             return { issue_number: String(issueNumber), issue_body: issue.body || '' };
 
       - name: Add label to issue (if available)
