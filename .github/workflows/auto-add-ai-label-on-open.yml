@@ -173,7 +173,8 @@ jobs:
           issue_number: "${{ steps.prepare_issue.outputs.issue_number }}"
           issue_body: "${{ steps.prepare_issue.outputs.issue_body }}"
           prompts_directory: './prompts'
-          labels_to_prompts_mapping: 'copilot,issue-review.prompt.yml|bug,issue-review.prompt.yml|feature,issue-review.prompt.yml|docs,issue-review.prompt.yml|help,issue-review.prompt.yml|howto,issue-review.prompt.yml|usage,issue-review.prompt.yml|tool,issue-review.prompt.yml|expert,issue-review.prompt.yml|question,issue-review.prompt.yml'
+          # Map only the trigger label 'copilot' to the combined prompt (includes project context)
+          labels_to_prompts_mapping: 'copilot,issue-review.with-context.prompt.yml'
           suppress_comments: 'true'
           suppress_labels: 'true'
 
@@ -259,27 +260,6 @@ jobs:
               }
             }
 
-            // Append README quick usage block
-            let readmeSummary = '';
-            try {
-              const fs = require('fs');
-              const rd = fs.readFileSync('README.md', 'utf8');
-              const m = rd.match(/(^###?\s*(Installation|Quick Start|Usage|Tools|Cara Pakai|Instalasi)[\s\S]*?)(?=^###?\s|\Z)/im);
-              if (m && m[0]) {
-                readmeSummary = m[0];
-                if (preferIndo) readmeSummary = readmeSummary.replace(/(^###?\s*Installation|^###?\s*Quick Start|^###?\s*Usage|^###?\s*Tools)/gmi, '### Cara pakai / Instalasi');
-              } else {
-                readmeSummary = preferIndo
-                  ? '\n**Cara pakai (dari README):**\n```bash\n# Clone repo\ngit clone https://github.com/rust142/geeto.git\ncd geeto\n# Install\nbun install\n# Build atau jalankan dev\nbun run build\n# Atau dev\nbun run dev\n```\n'
-                  : '\n**How to use (from README):**\n```bash\n# Clone repo\ngit clone https://github.com/rust142/geeto.git\ncd geeto\n# Install\nbun install\n# Build or run dev\nbun run build\n# Or dev\nbun run dev\n```\n';
-              }
-            } catch (e) {
-              readmeSummary = preferIndo
-                ? '\n**Cara pakai (dari README):**\n```bash\n# lihat README untuk cara pakai\n```\n'
-                : '\n**How to use (from README):**\n```bash\n# see README for usage\n```\n';
-            }
-
-            body += '---\n' + readmeSummary + '\n';
 
             // Post or update comment (idempotent)
             const { data: comments } = await github.rest.issues.listComments({
