@@ -6,7 +6,7 @@ on:
 
 jobs:
   ai-assessment:
-    if: ${{ github.event.label.name == 'review' }}
+    if: ${{ github.event.label.name == 'copilot' }}
     runs-on: ubuntu-latest
     permissions:
       issues: write
