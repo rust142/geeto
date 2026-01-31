@@ -102,6 +102,21 @@ jobs:
           fi
           echo "issue_body length: $(echo "${{ steps.prepare_issue.outputs.issue_body }}" | wc -c)"
 
+          # Verify prompts directory and mapped prompt file exist
+          PROMPTS_DIR=./prompts
+          MAPPED_PROMPT='bug-review.prompt.yml'
+          if [ ! -d "$PROMPTS_DIR" ]; then
+            echo "Error: prompts directory '$PROMPTS_DIR' not found" >&2
+            ls -la || true
+            exit 1
+          fi
+
+          if [ ! -f "$PROMPTS_DIR/$MAPPED_PROMPT" ]; then
+            echo "Error: mapped prompt file '$PROMPTS_DIR/$MAPPED_PROMPT' not found" >&2
+            ls -la "$PROMPTS_DIR" || true
+            exit 1
+          fi
+
       - name: Run AI assessment (for the target issue)
         if: ${{ steps.prepare_issue.outputs.issue_number != '' }}
         id: ai-assessment
@@ -111,7 +126,6 @@ jobs:
           ai_review_label: 'request ai review'
           issue_number: "${{ steps.prepare_issue.outputs.issue_number }}"
           issue_body: "${{ steps.prepare_issue.outputs.issue_body }}"
-          repo_name: "${{ github.event.repository.name }}"
           prompts_directory: './prompts'
           labels_to_prompts_mapping: 'bug,bug-review.prompt.yml'
 
