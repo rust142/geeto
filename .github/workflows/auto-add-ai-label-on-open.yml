@@ -244,18 +244,16 @@ jobs:
             } catch (e) {
               initial = '';
             }
-            const headerTitle = preferIndo ? '**Penilaian AI Otomatis (ringkasan)**\n\n' : '**Automated AI Assessment (summary)**\n\n';
+
             const noAssessmentsText = preferIndo ? '*Tidak ada penilaian AI yang dihasilkan.*\n' : '*No AI assessments were produced.*\n';
             const assessmentLabelDefault = preferIndo ? 'Penilaian' : 'Assessment';
 
-            body += headerTitle;
             if (initial) body = initial + body;
 
             if (assessments.length === 0) {
               body += noAssessmentsText;
             } else {
               for (const a of assessments) {
-                body += '---\n**' + (a.assessmentLabel || assessmentLabelDefault) + '**\n\n';
                 body += (a.response || '') + '\n\n';
               }
             }
