@@ -1,6 +1,7 @@
 name: Auto-add AI Review Label (Ensure + Apply)
 
-# This single workflow ensures the label exists and adds it to new issues.
+# This single workflow ensures the label exists and adds it to new issues, and then
+# runs the AI assessment immediately (so a separate 'issues.labeled' trigger is not required).
 on:
   issues:
     types: [opened]
@@ -10,6 +11,8 @@ on:
 
 permissions:
   issues: write
+  models: read
+  contents: read
 
 jobs:
   add-label:
@@ -52,3 +55,16 @@ jobs:
             } else {
               core.info('No issue to label; run used to ensure label exists.');
             }
+
+      - name: Run AI assessment (for newly opened issue)
+        if: ${{ github.event_name == 'issues' && github.event.action == 'opened' }}
+        id: ai-assessment
+        uses: github/ai-assessment-comment-labeler@v1.0.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ai_review_label: 'request ai review'
+          issue_number: ${{ github.event.issue.number }}
+          issue_body: ${{ github.event.issue.body }}
+          repo_name: ${{ github.event.repository.name }}
+          prompts_directory: './prompts'
+          labels_to_prompts_mapping: 'bug,bug-review.prompt.yml'
