@@ -1,0 +1,177 @@
+name: Auto-add AI Review Label (Ensure + Apply)
+
+# This single workflow ensures the label exists and adds it to new issues, and then
+# runs the AI assessment immediately (so a separate 'issues.labeled' trigger is not required).
+# Also supports manual testing via workflow_dispatch with an `issue_number` input.
+on:
+  issues:
+    types: [opened]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to process (optional; for manual testing)'
+        required: false
+        type: number
+  push:
+    branches: [ main, develop ]
+
+permissions:
+  issues: write
+  models: read
+  contents: read
+
+jobs:
+  add-label:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure AI-related labels exist
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Common single-word labels that should trigger AI assessment
+            const labels = [
+              { name: 'copilot', color: '6f42c1', description: 'Co-pilot AI assistance' },
+              { name: 'bug', color: 'd73a4a', description: 'Issue type: bug' },
+              { name: 'feature', color: 'a2eeef', description: 'Issue type: feature request' },
+              { name: 'docs', color: '0075ca', description: 'Documentation related' },
+              { name: 'help', color: 'fbca04', description: 'Help request or how-to' },
+              { name: 'howto', color: 'fbca04', description: 'How to use the tool' },
+              { name: 'usage', color: '0e8a16', description: 'Usage / examples' },
+              { name: 'tool', color: 'd4c5f9', description: 'Tool-related question' },
+              { name: 'question', color: 'cfd3d7', description: 'General question' }
+            ];
+
+            for (const lbl of labels) {
+              try {
+                await github.rest.issues.getLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: lbl.name,
+                });
+              } catch (e) {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: lbl.name,
+                  color: lbl.color,
+                  description: lbl.description,
+                });
+              }
+            }
+
+      - name: Prepare issue context
+        id: prepare_issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Robustly determine issue number from workflow input or event payload
+            const ctx = (typeof context !== 'undefined' ? context : (github && github.context ? github.context : {}));
+            const payload = (ctx && ctx.payload) ? ctx.payload : {};
+            const inputIssue = payload.inputs ? payload.inputs.issue_number : undefined;
+            const issueNumber = inputIssue ? Number(inputIssue) : (payload.issue ? payload.issue.number : undefined);
+
+            // If no issue number or octokit not available, skip gracefully
+            if (!issueNumber || typeof github === 'undefined') {
+              core.info('No issue number provided or octokit not available; skipping further steps.');
+              return { issue_number: '', issue_body: '' };
+            }
+
+            const { data: issue } = await github.rest.issues.get({
+              owner: (ctx && ctx.repo && ctx.repo.owner) ? ctx.repo.owner : github.context.repo.owner,
+              repo: (ctx && ctx.repo && ctx.repo.repo) ? ctx.repo.repo : github.context.repo.repo,
+              issue_number: issueNumber,
+            });
+
+            core.info(`Prepared issue #${issueNumber}`);
+            core.setOutput('issue_number', String(issueNumber));
+            core.setOutput('issue_body', issue.body || '');
+            return { issue_number: String(issueNumber), issue_body: issue.body || '' };
+
+      - name: Add 'copilot' label to issue
+        if: ${{ steps.prepare_issue.outputs.issue_number != '' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labelName = 'copilot';
+            const issueNumber = Number('${{ steps.prepare_issue.outputs.issue_number }}');
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              labels: [labelName],
+            });
+
+      - name: Auto-detect category labels from title/body (heuristic)
+        if: ${{ steps.prepare_issue.outputs.issue_number != '' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issueNumber = Number('${{ steps.prepare_issue.outputs.issue_number }}');
+            const { data: issue } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+            });
+
+            const title = (issue.title || '').toLowerCase();
+            const body = (issue.body || '').toLowerCase();
+            const text = `${title}\n${body}`;
+
+            const heuristics = [
+              { label: 'feature', re: /\b(feature|feat|fitur|menambah|tambah|add|new)\b/i },
+              { label: 'bug', re: /\b(bug|error|fix|fixes|kesalahan|eror|tidak bekerja)\b/i },
+              { label: 'docs', re: /\b(doc|docs|readme|dokumentasi|dokumentasi)\b/i },
+              { label: 'help', re: /\b(help|cara pakai|cara pake|how to|how-to|minimal)\b/i },
+              { label: 'usage', re: /\b(usage|pakai|pake)\b/i },
+              { label: 'tool', re: /\b(tool|tools|cli|geeto)\b/i },
+              { label: 'question', re: /\b(question|pertanyaan|tanya)\b/i }
+            ];
+
+            const toAdd = new Set();
+            for (const h of heuristics) {
+              if (h.re.test(text)) toAdd.add(h.label);
+            }
+
+            // If none detected, consider 'issue' label (keep as generic)
+            if (toAdd.size === 0) toAdd.add('issue');
+
+            // Get existing labels
+            const { data: existing } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+            });
+            const existingNames = new Set(existing.map(l => l.name));
+
+            const finalAdd = [...toAdd].filter(l => !existingNames.has(l));
+            if (finalAdd.length) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                labels: finalAdd,
+              });
+              core.info(`Auto-added labels to #${issueNumber}: ${finalAdd.join(', ')}`);
+            } else {
+              core.info(`No new category labels to add for #${issueNumber}`);
+            }
+
+      - name: Run AI assessment (for the target issue)
+        if: ${{ steps.prepare_issue.outputs.issue_number != '' }}
+        id: ai-assessment
+        uses: github/ai-assessment-comment-labeler@v1.0.1
+        with:
+          token: "${{ secrets.GITHUB_TOKEN }}"
+          ai_review_label: 'copilot'
+          issue_number: "${{ steps.prepare_issue.outputs.issue_number }}"
+          issue_body: "${{ steps.prepare_issue.outputs.issue_body }}"
+          prompts_directory: './prompts'
+          labels_to_prompts_mapping: 'copilot,issue-review.prompt.yml|bug,issue-review.prompt.yml|feature,issue-review.prompt.yml|docs,issue-review.prompt.yml|help,issue-review.prompt.yml|howto,issue-review.prompt.yml|usage,issue-review.prompt.yml|tool,issue-review.prompt.yml|expert,issue-review.prompt.yml|question,issue-review.prompt.yml'
+          suppress_comments: 'true'
+          supress_labels: 'true'
