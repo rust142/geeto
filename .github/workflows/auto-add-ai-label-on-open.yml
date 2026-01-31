@@ -179,31 +179,37 @@ jobs:
       - name: Post consolidated formatted comment
         if: ${{ steps.prepare_issue.outputs.issue_number != '' }}
         uses: actions/github-script@v7
+        env:
+          AI_ASSESSMENTS: ${{ steps.ai-assessment.outputs.ai_assessments }}
+          ISSUE_NUMBER: ${{ steps.prepare_issue.outputs.issue_number }}
         with:
           script: |
-            const assessmentsRaw = `"${{ steps.ai-assessment.outputs.ai_assessments }}"`;
+            const assessmentsRaw = process.env.AI_ASSESSMENTS || '';
             let assessments = [];
             try {
-              // The output might already be a JSON string or a quoted JSON string
-              const cleaned = assessmentsRaw.replace(/^"/, '').replace(/"$/, '').replace(/\\n/g, '\n');
+              // Normalize quoted JSON and escaped newlines from step outputs
+              let cleaned = assessmentsRaw;
+              if (typeof cleaned === 'string' && cleaned.startsWith('"') && cleaned.endsWith('"')) {
+                cleaned = cleaned.slice(1, -1).replace(/\"/g, '"').replace(/\\n/g, '\n');
+              }
               assessments = JSON.parse(cleaned || '[]');
             } catch (e) {
               core.info('No valid ai_assessments JSON found or failed to parse.');
             }
 
-            const issueNumber = Number('${{ steps.prepare_issue.outputs.issue_number }}');
+            const issueNumber = Number(process.env.ISSUE_NUMBER || 0);
 
             // Build consolidated body
             let body = '<!-- ai-assessment-comment -->\n';
-            body += `**Automated AI Assessment (summary)**\n\n`;
+            body += '**Automated AI Assessment (summary)**\n\n';
 
             if (assessments.length === 0) {
               body += '*No AI assessments were produced.*\n';
             } else {
               for (const a of assessments) {
-                body += `---\n**${a.assessmentLabel || 'Assessment'}**\n\n`;
+                body += '---\n**' + (a.assessmentLabel || 'Assessment') + '**\n\n';
                 // include the response directly
-                body += `${a.response || ''}\n\n`;
+                body += (a.response || '') + '\n\n';
               }
             }
 
@@ -240,7 +246,7 @@ jobs:
                 comment_id: existing.id,
                 body,
               });
-              core.info(`Updated existing AI assessment comment on #${issueNumber}`);
+              core.info('Updated existing AI assessment comment on #' + issueNumber);
             } else {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
@@ -248,5 +254,5 @@ jobs:
                 issue_number: issueNumber,
                 body,
               });
-              core.info(`Posted new AI assessment comment on #${issueNumber}`);
+              core.info('Posted new AI assessment comment on #' + issueNumber);
             }
