@@ -56,18 +56,20 @@ jobs:
         with:
           script: |
             // Robustly determine issue number from workflow input or event payload
-            const payload = github.context.payload || {};
+            const ctx = (typeof context !== 'undefined' ? context : (github && github.context ? github.context : {}));
+            const payload = (ctx && ctx.payload) ? ctx.payload : {};
             const inputIssue = payload.inputs ? payload.inputs.issue_number : undefined;
             const issueNumber = inputIssue ? Number(inputIssue) : (payload.issue ? payload.issue.number : undefined);
 
-            if (!issueNumber) {
-              core.info('No issue number provided or event is not an issue; skipping further steps.');
+            // If no issue number or octokit not available, skip gracefully
+            if (!issueNumber || typeof github === 'undefined') {
+              core.info('No issue number provided or octokit not available; skipping further steps.');
               return { issue_number: '', issue_body: '' };
             }
 
             const { data: issue } = await github.rest.issues.get({
-              owner: github.context.repo.owner,
-              repo: github.context.repo.repo,
+              owner: (ctx && ctx.repo && ctx.repo.owner) ? ctx.repo.owner : github.context.repo.owner,
+              repo: (ctx && ctx.repo && ctx.repo.repo) ? ctx.repo.repo : github.context.repo.repo,
               issue_number: issueNumber,
             });
 
