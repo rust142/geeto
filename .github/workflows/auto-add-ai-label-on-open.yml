@@ -2,10 +2,16 @@ name: Auto-add AI Review Label (Ensure + Apply)
 
 # This single workflow ensures the label exists and adds it to new issues, and then
 # runs the AI assessment immediately (so a separate 'issues.labeled' trigger is not required).
+# Also supports manual testing via workflow_dispatch with an `issue_number` input.
 on:
   issues:
     types: [opened]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to process (optional; for manual testing)'
+        required: false
+        type: number
   push:
     branches: [ main, develop ]
 
@@ -19,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Ensure label exists and add to issue (if any)
+      - name: Ensure label exists
         uses: actions/github-script@v7
         with:
           script: |
@@ -44,27 +50,58 @@ jobs:
               });
             }
 
-            // If triggered by an issue event, add the label to the issue
-            if (context.payload.issue && context.payload.action === 'opened') {
-              await github.rest.issues.addLabels({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                labels: [labelName],
-              });
-            } else {
-              core.info('No issue to label; run used to ensure label exists.');
+      - name: Prepare issue context
+        id: prepare_issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Determine issue number from workflow input or event payload
+            const inputIssue = github.context.payload.inputs ? github.context.payload.inputs.issue_number : undefined;
+            const issueNumber = inputIssue ? Number(inputIssue) : (context.payload.issue ? context.payload.issue.number : undefined);
+            if (!issueNumber) {
+              core.info('No issue number provided or event is not an issue; skipping further steps.');
+              return { issue_number: '', issue_body: '' };
             }
 
-      - name: Run AI assessment (for newly opened issue)
-        if: ${{ github.event_name == 'issues' && github.event.action == 'opened' }}
+            const { data: issue } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+            });
+
+            core.info(`Prepared issue #${issueNumber}`);
+            return { issue_number: String(issueNumber), issue_body: issue.body || '' };
+
+      - name: Add label to issue (if available)
+        if: ${{ steps.prepare_issue.outputs.issue_number != '' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labelName = 'request ai review';
+            const issueNumber = Number('${{ steps.prepare_issue.outputs.issue_number }}');
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              labels: [labelName],
+            });
+
+      - name: Run AI assessment (for the target issue)
+        if: ${{ steps.prepare_issue.outputs.issue_number != '' }}
         id: ai-assessment
         uses: github/ai-assessment-comment-labeler@v1.0.1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: "${{ secrets.GITHUB_TOKEN }}"
           ai_review_label: 'request ai review'
-          issue_number: ${{ github.event.issue.number }}
-          issue_body: ${{ github.event.issue.body }}
-          repo_name: ${{ github.event.repository.name }}
+          issue_number: "${{ steps.prepare_issue.outputs.issue_number }}"
+          issue_body: "${{ steps.prepare_issue.outputs.issue_body }}"
+          repo_name: "${{ github.event.repository.name }}"
           prompts_directory: './prompts'
           labels_to_prompts_mapping: 'bug,bug-review.prompt.yml'
+      - name: Debug - show ai_assessments output
+        if: ${{ steps.prepare_issue.outputs.issue_number != '' }}
+        run: |
+          echo 'AI assessments output:'
+          echo "${{ steps.ai-assessment.outputs.ai_assessments }}"
+          echo '----'
+          echo 'Check issue comments and labels in the web UI for results.'
