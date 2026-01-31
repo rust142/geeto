@@ -98,6 +98,7 @@ jobs:
           repo_name: "${{ github.event.repository.name }}"
           prompts_directory: './prompts'
           labels_to_prompts_mapping: 'bug,bug-review.prompt.yml'
+
       - name: Debug - show ai_assessments output
         if: ${{ steps.prepare_issue.outputs.issue_number != '' }}
         run: |
