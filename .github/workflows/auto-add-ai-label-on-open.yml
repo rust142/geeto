@@ -92,6 +92,16 @@ jobs:
               labels: [labelName],
             });
 
+      - name: Validate prepared inputs
+        if: ${{ steps.prepare_issue.outputs.issue_number != '' }}
+        run: |
+          echo "Prepared issue_number=${{ steps.prepare_issue.outputs.issue_number }}"
+          if [ -z "${{ steps.prepare_issue.outputs.issue_number }}" ]; then
+            echo "Error: issue_number is empty" >&2
+            exit 1
+          fi
+          echo "issue_body length: $(echo "${{ steps.prepare_issue.outputs.issue_body }}" | wc -c)"
+
       - name: Run AI assessment (for the target issue)
         if: ${{ steps.prepare_issue.outputs.issue_number != '' }}
         id: ai-assessment
