@@ -28,7 +28,7 @@ fi
 
 # Function: ensure label using GitHub CLI (optional)
 ensure_label() {
-  LABEL='request ai review'
+  LABEL='review'
   COLOR='6f42c1'
   DESC='Trigger AI Issue Assessment action'
 

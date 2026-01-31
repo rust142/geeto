@@ -98,7 +98,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const labelName = 'request ai review';
+            const labelName = 'review';
             const issueNumber = Number('${{ steps.prepare_issue.outputs.issue_number }}');
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
@@ -119,7 +119,7 @@ jobs:
 
           # Verify prompts directory and mapped prompt file exist
           PROMPTS_DIR=./prompts
-          MAPPED_PROMPT='bug-review.prompt.yml'
+          MAPPED_PROMPT='issue-review.prompt.yml'
           if [ ! -d "$PROMPTS_DIR" ]; then
             echo "Error: prompts directory '$PROMPTS_DIR' not found" >&2
             ls -la || true
