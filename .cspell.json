@@ -57,7 +57,8 @@
     "lobal",
     "modelcontextprotocol",
     "typecheck",
-    "dangerfile"
+    "dangerfile",
+    "Mahfudzat"
   ],
   "ignorePaths": [
     "node_modules/**",
