@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0](https://github.com/rust142/geeto/compare/v1.1.0...v2.0.0) (2026-02-01)
+
+### Bug Fixes
+
+- **actions:** normalize ai_assessments parsing and use env vars ([bfe138e](https://github.com/rust142/geeto/commit/bfe138ee7f6580ddfd69d5751a01d58a3a053580))
+- **commit:** write commit message to temp file and use git -F ([7469b91](https://github.com/rust142/geeto/commit/7469b918c3a279d83f2485bb79b505277c0949fc))
+- **dangerfile:** resolve Danger API from injected globals or require ([34915a3](https://github.com/rust142/geeto/commit/34915a323c4904ebc2ea70e7b8edd44bec980a97))
+- **errors:** normalize catch typing and add AI retry option ([613f250](https://github.com/rust142/geeto/commit/613f250466c288d363abc08b3ccbe92fc1e4e75c))
+- **workflow:** make issue detection resilient to missing context/octokit ([f661cee](https://github.com/rust142/geeto/commit/f661cee7d12183e268755dfd1361bf25501501fb))
+- **workflows:** use supress_labels key in auto-add-ai-label-on-open.yml ([7cbefbe](https://github.com/rust142/geeto/commit/7cbefbefdc22cfece13863fc20cd9d8608d18936))
+
+### Features
+
+- **actions:** auto-detect category labels on new issues ([ba60f7a](https://github.com/rust142/geeto/commit/ba60f7a512a53c535b4f6469fd860c6d399e4cbd))
+- **lint:** add cspell spellcheck and interactive ignore tooling ([27413a2](https://github.com/rust142/geeto/commit/27413a2d4df74974a1b188c5129a10eb562a2d49))
+- **workflows:** add 'copilot' label on comment and security heuristic ([33ce89b](https://github.com/rust142/geeto/commit/33ce89bde63d02199fc908d499d9362b59085407))
+- **workflows:** add AI reply-on-second-comment workflow and refine heuristics ([db40935](https://github.com/rust142/geeto/commit/db40935c705688943c148c009ed20ef590204246))
+- **workflows:** consolidate AI assessments and normalize labels ([059129f](https://github.com/rust142/geeto/commit/059129f8542fc975e34ab030ee7c7372876f24b2))
+- **workflows:** limit AI reply to issue author and exclude collaborators ([c041682](https://github.com/rust142/geeto/commit/c041682cffecde2c05f5a2893c3465576d60c4dd))
+- **workflows:** post consolidated AI assessment comment on issue open ([b544455](https://github.com/rust142/geeto/commit/b544455dd92ee95c6ce3910c7b29d9c2e0e64260))
+
 ## [1.1.0](https://github.com/rust142/geeto/compare/v1.1.0-beta.0...v1.1.0) (2026-01-29)
 
 ### Bug Fixes
