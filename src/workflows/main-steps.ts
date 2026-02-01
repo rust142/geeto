@@ -3,15 +3,15 @@ import type { GeetoState } from '../types/index.js'
 import { confirm, ProgressBar } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { STEP } from '../core/constants.js'
-import { exec } from '../utils/exec.js'
+import { exec, execAsync } from '../utils/exec.js'
 import { getCurrentBranch, pushWithRetry } from '../utils/git.js'
 import { log } from '../utils/logging.js'
 import { saveState } from '../utils/state.js'
 
-export function handlePush(
+export async function handlePush(
   state: GeetoState,
   opts?: { suppressStep?: boolean; suppressLogs?: boolean; force?: boolean }
-): void {
+): Promise<void> {
   if (state.step < STEP.PUSHED || opts?.force) {
     if (!opts?.suppressStep) {
       log.step('Step 4: Push to Remote')
@@ -43,7 +43,11 @@ export function handlePush(
         progressBar.update(0)
 
         // Perform push silently to avoid interleaving git progress output
-        progressBar.update(1)
+        let progress = 0
+        const interval = setInterval(() => {
+          progress = Math.min(95, progress + Math.max(1, Math.floor(Math.random() * 6)))
+          progressBar.update(progress)
+        }, 250)
         console.log('')
 
         try {
@@ -69,7 +73,9 @@ export function handlePush(
             hasCommitsToPush = true
           }
 
-          exec(`git push -u origin "${getCurrentBranch()}"`)
+          await execAsync(`git push -u origin "${getCurrentBranch()}"`, true)
+          clearInterval(interval)
+          progressBar.update(100)
           progressBar.complete()
           console.log('')
 
@@ -94,9 +100,12 @@ export function handlePush(
         const progressBar = new ProgressBar(100, 'Pushing to remote')
         progressBar.update(0)
 
-        // Perform push silently to avoid interleaving git progress output
-        progressBar.update(1)
-        console.log('')
+        // Perform push while updating progress bar
+        let progress = 0
+        const interval = setInterval(() => {
+          progress = Math.min(95, progress + Math.max(1, Math.floor(Math.random() * 6)))
+          progressBar.update(progress)
+        }, 250)
 
         try {
           // Check if remote branch exists; if not, treat as commits to push
@@ -121,7 +130,9 @@ export function handlePush(
             hasCommitsToPush = true
           }
 
-          exec(`git push -u origin "${getCurrentBranch()}"`)
+          await execAsync(`git push -u origin "${getCurrentBranch()}"`, true)
+          clearInterval(interval)
+          progressBar.update(100)
           progressBar.complete()
           console.log('')
 
@@ -206,9 +217,10 @@ export async function handleMerge(
 
     // Handle create development flow
     if (chosen === 'create_development') {
-      // Determine sensible base branch to create from
+      // Determine sensible base branch to create from (exclude current feature branch)
       const preferredBases = ['develop', 'development', 'main', 'master']
-      const base = preferredBases.find((b) => rawBranches.includes(b)) ?? featureBranch
+      const availableBranches = new Set(rawBranches.filter((b) => b !== featureBranch))
+      const base = preferredBases.find((b) => availableBranches.has(b)) ?? featureBranch
 
       const confirmCreate = confirm(`Create 'development' from '${base}'?`)
       if (!confirmCreate) {
@@ -270,8 +282,12 @@ export async function handleMerge(
         const progressBar = new ProgressBar(100, `Pushing ${targetBranch} to remote`)
         progressBar.update(0)
 
-        // Perform push silently to avoid interleaving git progress output
-        progressBar.update(1)
+        // Perform push while updating progress bar
+        let progress = 0
+        const interval = setInterval(() => {
+          progress = Math.min(95, progress + Math.max(1, Math.floor(Math.random() * 6)))
+          progressBar.update(progress)
+        }, 250)
         try {
           // Check if remote branch exists; if not, treat as commits to push
           let hasCommitsToPush = false
@@ -295,7 +311,9 @@ export async function handleMerge(
             hasCommitsToPush = true
           }
 
-          exec(`git push -u origin "${getCurrentBranch()}"`)
+          await execAsync(`git push -u origin "${getCurrentBranch()}"`, true)
+          clearInterval(interval)
+          progressBar.update(100)
           progressBar.complete()
           console.log('')
 

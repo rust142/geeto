@@ -1,6 +1,6 @@
 /** Execute shell commands and helpers. */
 
-import { execSync } from 'node:child_process'
+import { execSync, spawn } from 'node:child_process'
 
 import { log } from './logging.js'
 
@@ -15,6 +15,56 @@ export const exec = (command: string, silent = false): string => {
     }
     throw error
   }
+}
+
+/**
+ * Run a command asynchronously and return a promise that resolves when it exits.
+ * Streams output to stdout/stderr unless `silent` is true, in which case output is captured.
+ */
+export const execAsync = (
+  command: string,
+  silent: boolean = false
+): Promise<{ code: number; stdout: string; stderr: string }> => {
+  return new Promise((resolve, reject) => {
+    try {
+      const child = spawn(command, { shell: true })
+      let out = ''
+      let err = ''
+
+      if (child.stdout) {
+        child.stdout.on('data', (d: Buffer) => {
+          const s = d.toString()
+          out += s
+          if (!silent) process.stdout.write(s)
+        })
+      }
+      if (child.stderr) {
+        child.stderr.on('data', (d: Buffer) => {
+          const s = d.toString()
+          err += s
+          if (!silent) process.stderr.write(s)
+        })
+      }
+
+      child.on('close', (code) => {
+        if (code === 0) {
+          resolve({ code: code ?? 0, stdout: out.trim(), stderr: err.trim() })
+        } else {
+          const errObj = new Error(`Command failed: ${command} (code ${code})`) as Error & {
+            code?: number
+            stdout?: string
+            stderr?: string
+          }
+          errObj.code = code ?? 0
+          errObj.stdout = out
+          errObj.stderr = err
+          reject(errObj)
+        }
+      })
+    } catch (error) {
+      reject(error)
+    }
+  })
 }
 
 /** Run git commands and handle common non-zero exit codes gracefully. */

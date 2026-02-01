@@ -664,7 +664,7 @@ export const main = async (opts?: {
     if (opts?.startAt) {
       // Non-interactive: only push automatically if starting at push
       if (opts.startAt === 'push') {
-        handlePush(state, { suppressStep: true, suppressLogs })
+        await handlePush(state, { suppressStep: true, suppressLogs })
       } else if (opts.startAt === 'merge') {
         // intentionally skip push prompt here; merge step will validate push status
       } else {
@@ -672,7 +672,7 @@ export const main = async (opts?: {
         console.log('')
         const wantPush = confirm(`Push ${currentBranch} to origin now?`)
         if (wantPush) {
-          handlePush(state, { suppressStep: !!opts?.startAt, suppressLogs: true })
+          await handlePush(state, { suppressStep: !!opts?.startAt, suppressLogs: true })
         } else {
           log.info('Skipping push as per user request')
         }
@@ -685,7 +685,7 @@ export const main = async (opts?: {
       const wantPush = confirm(`Push ${currentBranch} to origin now?`)
       if (wantPush) {
         // We already confirmed, so suppress further confirm inside handlePush
-        handlePush(state, { suppressStep: false, suppressLogs: true })
+        await handlePush(state, { suppressStep: false, suppressLogs: true })
       } else {
         log.info('Skipping push as per user request')
       }
@@ -715,7 +715,7 @@ export const main = async (opts?: {
         // Default NO to avoid accidental push; if user declines, abort merge
         console.log('')
         log.info(`Branch ${branchToCheck} has commits not pushed to origin.`)
-        handlePush(state, { suppressStep: false, suppressLogs: false, force: true })
+        await handlePush(state, { suppressStep: false, suppressLogs: false, force: true })
       }
     } catch {
       // On any error checking remote status, be conservative and abort the merge
