@@ -177,7 +177,6 @@ jobs:
           issue_number: "${{ steps.prepare_issue.outputs.issue_number }}"
           issue_body: "${{ steps.prepare_issue.outputs.issue_body }}"
           prompts_directory: './prompts'
-          # Map only the trigger label 'copilot' to the combined prompt (includes project context)
           labels_to_prompts_mapping: 'copilot,issue-review.with-context.prompt.yml'
           suppress_comments: 'true'
           suppress_labels: 'true'
