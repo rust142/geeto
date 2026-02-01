@@ -40,8 +40,6 @@ export async function handlePush(
       if (opts?.suppressLogs) {
         console.log('')
         const progressBar = new ProgressBar(100, 'Pushing to remote')
-        progressBar.update(0)
-
         // Perform push silently to avoid interleaving git progress output
         let progress = 0
         const interval = setInterval(() => {
@@ -98,8 +96,6 @@ export async function handlePush(
 
         console.log('')
         const progressBar = new ProgressBar(100, 'Pushing to remote')
-        progressBar.update(0)
-
         // Perform push while updating progress bar
         let progress = 0
         const interval = setInterval(() => {
@@ -197,11 +193,13 @@ export async function handleMerge(
       return a.localeCompare(b)
     })
 
-    const targetExists = branches.includes('development')
+    // If 'development' already exists or we're currently on 'development', don't offer to create it
+    const developmentPresent =
+      rawBranches.includes('development') || featureBranch === 'development'
 
     // Build select options: list local branches (excluding current), and an option to create 'development' if missing
     const options = branches.map((b) => ({ label: b, value: b }))
-    if (!targetExists) {
+    if (!developmentPresent) {
       options.unshift({ label: "Create 'development' branch", value: 'create_development' })
     }
     options.push({ label: 'Cancel', value: 'cancel' })
@@ -219,8 +217,7 @@ export async function handleMerge(
     if (chosen === 'create_development') {
       // Determine sensible base branch to create from (exclude current feature branch)
       const preferredBases = ['develop', 'development', 'main', 'master']
-      const availableBranches = new Set(rawBranches.filter((b) => b !== featureBranch))
-      const base = preferredBases.find((b) => availableBranches.has(b)) ?? featureBranch
+      const base = preferredBases.find((b) => rawBranches.includes(b)) ?? featureBranch
 
       const confirmCreate = confirm(`Create 'development' from '${base}'?`)
       if (!confirmCreate) {
