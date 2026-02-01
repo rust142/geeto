@@ -15,15 +15,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
         with:
-          node-version: '18'
+          bun-version: latest
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install dependencies (bun)
+        run: bun install
 
-      - name: Run Danger
+      - name: Run Danger (bun)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run danger:ci
+        run: bun run danger:ci
