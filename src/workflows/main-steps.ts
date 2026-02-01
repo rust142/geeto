@@ -44,6 +44,8 @@ export function handlePush(
 
         // Perform push silently to avoid interleaving git progress output
         progressBar.update(1)
+        console.log('')
+
         try {
           // Check if remote branch exists; if not, treat as commits to push
           let hasCommitsToPush = false
@@ -94,6 +96,8 @@ export function handlePush(
 
         // Perform push silently to avoid interleaving git progress output
         progressBar.update(1)
+        console.log('')
+
         try {
           // Check if remote branch exists; if not, treat as commits to push
           let hasCommitsToPush = false
