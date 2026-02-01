@@ -36,7 +36,7 @@ export const execGit = (command: string, silent = false): string => {
   }
 }
 
-/** Run a command silently and return stdout. */
+// /** Run a command silently and return stdout. */
 export const execSilent = (command: string): string => {
   return exec(command, true)
 }
@@ -46,7 +46,7 @@ export const commandExists = (command: string): boolean => {
   const platform = process.platform
   const checkCommand = platform === 'win32' ? 'where' : 'which'
   try {
-    execSilent(`${checkCommand} ${command}`)
+    exec(`${checkCommand} ${command}`)
     return true
   } catch {
     return false

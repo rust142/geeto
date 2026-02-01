@@ -67,7 +67,7 @@ export function handlePush(
             hasCommitsToPush = true
           }
 
-          exec(`git push -u origin "${getCurrentBranch()}"`, true)
+          exec(`git push -u origin "${getCurrentBranch()}"`)
           progressBar.complete()
           console.log('')
 
@@ -117,7 +117,7 @@ export function handlePush(
             hasCommitsToPush = true
           }
 
-          exec(`git push -u origin "${getCurrentBranch()}"`, true)
+          exec(`git push -u origin "${getCurrentBranch()}"`)
           progressBar.complete()
           console.log('')
 
@@ -291,7 +291,7 @@ export async function handleMerge(
             hasCommitsToPush = true
           }
 
-          exec(`git push -u origin "${getCurrentBranch()}"`, true)
+          exec(`git push -u origin "${getCurrentBranch()}"`)
           progressBar.complete()
           console.log('')
 
