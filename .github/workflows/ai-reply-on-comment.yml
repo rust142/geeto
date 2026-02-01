@@ -72,16 +72,16 @@ jobs:
             // }
 
             // Exclude repo collaborators with elevated permissions (write/maintain/admin/triage)
-            try {
-              const permRes = await github.rest.repos.getCollaboratorPermissionLevel({ owner: context.repo.owner, repo: context.repo.repo, username: commenter });
-              const perm = permRes && permRes.data && permRes.data.permission ? permRes.data.permission : null;
-              if (perm && perm !== 'read' && perm !== 'none') {
-                core.info(`Commenter has repo permission ${perm}; skipping AI reply`);
-                return { proceed: 'false' };
-              }
-            } catch (e) {
-              core.info('Could not determine collaborator permission (user may not be a collaborator)');
-            }
+            // try {
+            //  const permRes = await github.rest.repos.getCollaboratorPermissionLevel({ owner: context.repo.owner, repo: context.repo.repo, username: commenter });
+            //  const perm = permRes && permRes.data && permRes.data.permission ? permRes.data.permission : null;
+            //  if (perm && perm !== 'read' && perm !== 'none') {
+            //    core.info(`Commenter has repo permission ${perm}; skipping AI reply`);
+            //    return { proceed: 'false' };
+            //  }
+            // } catch (e) {
+            //   core.info('Could not determine collaborator permission (user may not be a collaborator)');
+            // }
 
             // Count comments by this user on the issue (comments only)
             const { data: comments } = await github.rest.issues.listComments({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber });
