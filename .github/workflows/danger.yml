@@ -5,8 +5,10 @@ on:
     types: [opened, reopened, synchronize, edited]
 
 permissions:
-  pull-requests: write
   contents: read
+  pull-requests: write
+  issues: write
+  statuses: write
 
 jobs:
   danger:
@@ -15,15 +17,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          bun-version: latest
+          node-version: '18'
 
-      - name: Install dependencies (bun)
-        run: bun install
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Run Danger (bun)
+      - name: Run Danger
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bun run danger:ci
+        run: npm run danger:ci
