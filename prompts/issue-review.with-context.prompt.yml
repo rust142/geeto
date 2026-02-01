@@ -8,7 +8,7 @@ messages:
       - `src/` TypeScript sources (api, cli, core, utils, workflows)
       - `lib/` compiled JS used by the CLI
       - `.github/workflows/` contains CI workflows; `auto-add-ai-label-on-open.yml` runs AI assessments on new issues.
-      - `tools/install.sh` installer script; `README.md` is full documentation.
+      - `README.md` is full documentation.
 
       GUIDELINES for using this context:
       - Use this short context to ground AI replies about repository behavior, conventions, and where code lives.

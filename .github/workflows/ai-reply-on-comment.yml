@@ -85,20 +85,6 @@ jobs:
 
             // Count comments by this user on the issue (comments only)
             const { data: comments } = await github.rest.issues.listComments({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber });
-            const byUser = (comments || []).filter(c => c.user && c.user.login === commenter);
-
-            // Also count the issue body as the user's first contribution if they are the issue author
-            const issueAuthorIsUser = issueData && issueData.user && issueData.user.login === commenter;
-
-            const initialCount = issueAuthorIsUser ? 1 : 0;
-            const totalByUser = initialCount + (byUser.length || 0);
-            core.info(`User ${commenter} has ${byUser.length} comments on issue #${issueNumber} (initialCount=${initialCount}, total=${totalByUser})`);
-
-            // Only proceed if this is at least the user's third contribution (including the issue body if they authored it)
-            if ((totalByUser || 0) < 3) {
-              core.info('Not reached required contribution count yet; skipping AI reply');
-              return { proceed: 'false' };
-            }
 
             // Check for existing AI reply marker for this user
             const marker = `<!-- ai-replied-to-${commenter} -->`;

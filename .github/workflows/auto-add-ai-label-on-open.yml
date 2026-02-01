@@ -94,20 +94,6 @@ jobs:
             core.setOutput('issue_author', (issue.user && issue.user.login) ? issue.user.login : '');
             return { issue_number: String(issueNumber), issue_body: issue.body || '', issue_author: (issue.user && issue.user.login) ? issue.user.login : '' };
 
-      - name: Add 'copilot' label to issue
-        if: ${{ steps.prepare_issue.outputs.issue_number != '' }}
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const labelName = 'copilot';
-            const issueNumber = Number('${{ steps.prepare_issue.outputs.issue_number }}');
-            await github.rest.issues.addLabels({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issueNumber,
-              labels: [labelName],
-            });
-
       - name: Auto-detect category labels from title/body (heuristic)
         if: ${{ steps.prepare_issue.outputs.issue_number != '' }}
         uses: actions/github-script@v7
@@ -127,8 +113,7 @@ jobs:
             const heuristics = [
               { label: 'feature', re: /\b(feature|feat|fitur|menambah|tambah|add|new)\b/i },
               { label: 'bug', re: /\b(bug|error|fix|fixes|kesalahan|eror|tidak bekerja|gabisa)\b/i },
-              { label: 'docs', re: /\b(doc|docs|readme|dokumentasi|dokumentasi|installation|instal)\b/i },
-              { label: 'usage', re: /\b(usage|pakai|pake)\b/i },
+              { label: 'docs', re: /\b(doc|docs|readme|dokumentasi|dokumentasi|installation|instal|usage|pakai|pake)\b/i },
               { label: 'executable', re: /\b(tool|tools|cli|geeto)\b/i },
               { label: 'sdk', re: /\b(sdk|development kit)\b/i },
               { label: 'provider/openrouter', re: /\b(openrouter)\b/i },
