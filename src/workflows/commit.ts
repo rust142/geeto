@@ -2,6 +2,7 @@
  * Commit workflow - handles commit-related operations
  */
 
+import path from 'node:path'
 import type { CopilotModel } from '../api/copilot.js'
 import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
@@ -291,11 +292,10 @@ export const handleCommitWorkflow = async (
 
     // Use spawnSync to avoid shell quoting pitfalls
     const tempDir = await import('node:os')
-    const pathMod = await import('node:path')
     const fs = await import('node:fs')
     const { spawnSync } = await import('node:child_process')
 
-    const tmpFile = pathMod.join(tempDir.tmpdir(), `geeto-commit-${Date.now()}.txt`)
+    const tmpFile = path.join(tempDir.tmpdir(), `geeto-commit-${Date.now()}.txt`)
 
     try {
       fs.writeFileSync(tmpFile, msg, 'utf8')
@@ -436,7 +436,7 @@ export const handleCommitWorkflow = async (
     if (needModelPrompt) {
       // loop until a model is chosen or user returns to manual
       let providerPick: string = selectedTool
-      // eslint-disable-next-line no-constant-condition
+
       while (true) {
         effectiveProvider = providerPick as 'gemini' | 'copilot' | 'openrouter'
         state.aiProvider = effectiveProvider
@@ -547,12 +547,11 @@ export const handleCommitWorkflow = async (
     // Loop AI generation/user choices — pass initial result only on first iteration
     let firstAttempt = true
 
-    // eslint-disable-next-line no-constant-condition
     let forceDirect = false
     // allow returning from model/provider menus to the suggested-commit prompt
     let skipRegenerate = false
     let previousAiResult: string | null = initialAiResult
-    // eslint-disable-next-line no-constant-condition
+
     while (true) {
       // Obtain AI result: initial -> direct regenerate -> interactive fallback
       let aiResult: string | null = null
@@ -708,8 +707,6 @@ export const handleCommitWorkflow = async (
       // Persist AI suggestion for commit so user can inspect/raw and we can show a short suggested line
       try {
         const fs = await import('node:fs/promises')
-        const pathMod = await import('node:path')
-        const path = pathMod.default || pathMod
         const outDir = path.join(process.cwd(), '.geeto')
         await fs.mkdir(outDir, { recursive: true })
 

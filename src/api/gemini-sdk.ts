@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { GenerateContentResponse, GoogleGenAI, Model, Pager } from '@google/genai'
 
 import { GeminiModel } from './gemini.js'
@@ -196,6 +196,7 @@ export const getAvailableModelsDetailed = async (): Promise<ModelDetail[] | null
       .filter((m) => !m.value.includes('robotics'))
       .filter((m) => !m.value.includes('experimental'))
       .filter((m) => !m.value.includes('embedding')) // filter to Gemini models only
+      // eslint-disable-next-line unicorn/no-array-sort
       .sort((a, b) => a.name.localeCompare(b.name)) // sort by name
 
     const out = mapped.filter(Boolean) as ModelDetail[]

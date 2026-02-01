@@ -1,3 +1,4 @@
+import path from 'node:path'
 import type { CopilotModel } from '../api/copilot.js'
 import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
@@ -153,7 +154,7 @@ export async function handleTrelloCase(
   let correction = ''
   let aiSuffix: string | null = null
   let skipRegenerate = false
-  // eslint-disable-next-line no-constant-condition
+
   while (true) {
     const aiProvider = (state.aiProvider ?? 'gemini') as 'gemini' | 'copilot' | 'openrouter'
     let modelParam: CopilotModel | OpenRouterModel | GeminiModel
@@ -196,8 +197,6 @@ export async function handleTrelloCase(
     // Save the raw AI response so users can inspect it if the suggestion looks wrong
     try {
       const fs = await import('node:fs/promises')
-      const pathMod = await import('node:path')
-      const path = pathMod.default || pathMod
       const outDir = path.join(process.cwd(), '.geeto')
       await fs.mkdir(outDir, { recursive: true })
       const payload: Record<string, unknown> = {

@@ -41,7 +41,6 @@ const withSession = async (
     return null
   }
   try {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const session = await client.createSession({ model })
     try {
       const res = await fn(session)

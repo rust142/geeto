@@ -211,7 +211,6 @@ export async function interactiveAIFallback(
   let currentModel: CopilotModel | OpenRouterModel | GeminiModel | string | undefined = model
 
   // Loop until manual pick or non-rate result
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     // If we have a valid suffix (not a failure), return it
     if (aiSuffix && !isTransientFailure(aiSuffix)) {

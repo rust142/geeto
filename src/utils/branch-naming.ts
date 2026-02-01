@@ -46,7 +46,6 @@ export const handleBranchNaming = async (
   let skipRegenerate = false
 
   // Loop until branch name accepted
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const {
       getModelDisplayName,

@@ -58,7 +58,9 @@
     "modelcontextprotocol",
     "typecheck",
     "dangerfile",
-    "Mahfudzat"
+    "Mahfudzat",
+    "pids",
+    "ehthumbs"
   ],
   "ignorePaths": [
     "node_modules/**",

@@ -24,7 +24,6 @@ export const handleAIProviderSelection = async (): Promise<{
   let geminiModel: GeminiModel | undefined
 
   // AI provider selection loop
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     aiProvider = (await select('Choose AI Provider for branch naming and commit messages:', [
       { label: 'Gemini', value: 'gemini' },
