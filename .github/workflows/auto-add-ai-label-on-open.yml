@@ -131,7 +131,13 @@ jobs:
               { label: 'help', re: /\b(help|how to|how-to|bagaimana|gimana)\b/i },
               { label: 'usage', re: /\b(usage|pakai|pake)\b/i },
               { label: 'tool', re: /\b(tool|tools|cli|geeto)\b/i },
-              { label: 'question', re: /\b(question|pertanyaan|tanya|\?)\b/i }
+              { label: 'sdk', re: /\b(sdk|development kit)\b/i },
+              { label: 'provider/openrouter', re: /\b(openrouter)\b/i },
+              { label: 'provider/gemini', re: /\b(gemini)\b/i },
+              { label: 'provider/copilot', re: /\b(copilot)\b/i },
+              { label: 'security', re: /\b(security|vulnerability|exploit|attack|breach|hack)\b/i },
+              { label: 'question', re: /\b(question|pertanyaan|tanya|\?)\b/i },
+              { label: 'needs-info', re: /\b(want|butuh|perlu|\?)\b/i }
             ];
 
             const toAdd = new Set();
