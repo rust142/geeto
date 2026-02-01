@@ -39,7 +39,7 @@ export function handlePush(
 
       if (opts?.suppressLogs) {
         console.log('')
-        const progressBar = new ProgressBar(2, 'Pushing to remote')
+        const progressBar = new ProgressBar(100, 'Pushing to remote')
         progressBar.update(0)
 
         // Perform push silently to avoid interleaving git progress output
@@ -91,7 +91,7 @@ export function handlePush(
         }
 
         console.log('')
-        const progressBar = new ProgressBar(2, 'Pushing to remote')
+        const progressBar = new ProgressBar(100, 'Pushing to remote')
         progressBar.update(0)
 
         // Perform push silently to avoid interleaving git progress output
@@ -267,7 +267,7 @@ export async function handleMerge(
         }
 
         console.log('')
-        const progressBar = new ProgressBar(2, `Pushing ${targetBranch} to remote`)
+        const progressBar = new ProgressBar(100, `Pushing ${targetBranch} to remote`)
         progressBar.update(0)
 
         // Perform push silently to avoid interleaving git progress output
