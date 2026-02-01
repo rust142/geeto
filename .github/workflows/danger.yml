@@ -3,6 +3,10 @@ name: Danger
 on:
   pull_request:
     types: [opened, reopened, synchronize, edited]
+  push:
+    branches:
+      - main
+      - develop
 
 permissions:
   contents: read
