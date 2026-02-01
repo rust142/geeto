@@ -41,5 +41,3 @@ try {
 
 // Add a friendly note
 markdown('**Tip:** Run `bun run danger:local` to test Danger locally before pushing.')
-
-
