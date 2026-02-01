@@ -668,6 +668,21 @@ export const main = async (opts?: {
       } else if (opts.startAt === 'merge') {
         // intentionally skip push prompt here; merge step will validate push status
       } else {
+        // Provide visible push progress by allowing git to print progress to terminal
+        console.log('')
+        // Get remote URL silently for a nicer message
+        let remoteUrl = ''
+        try {
+          remoteUrl = exec('git remote get-url origin', true)
+        } catch {
+          /* ignore */
+        }
+
+        if (remoteUrl) {
+          log.info(`Pushing ${getCurrentBranch()} to: ${remoteUrl}`)
+        } else {
+          log.info(`Pushing ${getCurrentBranch()} to remote`)
+        }
         const currentBranch = state.workingBranch || getCurrentBranch()
         console.log('')
         const wantPush = confirm(`Push ${currentBranch} to origin now?`)
