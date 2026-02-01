@@ -9,13 +9,41 @@ function tryRequire(moduleName) {
   }
 }
 
-const dangerModule = tryRequire('danger')
-if (!dangerModule) {
-  // If `danger` isn't available via require, throw so the runner can report the problem.
-  throw new Error('Could not require("danger"). Ensure `danger` is installed in devDependencies.')
+// Resolve Danger API from multiple possible sources:
+// 1. Global injected symbols (when runner provides them)
+// 2. require('danger') when available in node_modules
+function resolveDangerApi() {
+  // If Danger globals are injected, use them
+  if (typeof danger !== 'undefined' || typeof message !== 'undefined') {
+    return {
+      danger: typeof danger !== 'undefined' ? danger : undefined,
+      fail: typeof fail !== 'undefined' ? fail : undefined,
+      markdown: typeof markdown !== 'undefined' ? markdown : undefined,
+      message: typeof message !== 'undefined' ? message : undefined,
+      warn: typeof warn !== 'undefined' ? warn : undefined,
+    }
+  }
+
+  // Otherwise try to require the package from node_modules
+  const dangerModule = tryRequire('danger')
+  if (dangerModule) {
+    // Module may export functions directly or as named exports
+    const d = dangerModule.danger || dangerModule.default || dangerModule
+    return {
+      danger: d.danger || d,
+      fail: d.fail || dangerModule.fail,
+      markdown: d.markdown || dangerModule.markdown,
+      message: d.message || dangerModule.message,
+      warn: d.warn || dangerModule.warn,
+    }
+  }
+
+  throw new Error(
+    'Could not obtain Danger API. Ensure Danger is available in the runner or installed in devDependencies.'
+  )
 }
 
-const { danger, fail, markdown, message, warn } = dangerModule
+const { danger, fail, markdown, message, warn } = resolveDangerApi()
 
 message('Danger is enabled for this repo. Hi! 🛡️')
 
