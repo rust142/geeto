@@ -38,7 +38,6 @@ export async function handlePush(
       }
 
       if (opts?.suppressLogs) {
-        console.log('')
         const progressBar = new ProgressBar(100, 'Pushing to remote')
         // Perform push silently to avoid interleaving git progress output
         let progress = 0
@@ -94,7 +93,6 @@ export async function handlePush(
           log.info(`Pushing to: ${remoteUrl}`)
         }
 
-        console.log('')
         const progressBar = new ProgressBar(100, 'Pushing to remote')
         // Perform push while updating progress bar
         let progress = 0
