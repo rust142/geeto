@@ -160,15 +160,20 @@ export async function handleMerge(
 
     const featureBranch = getCurrentBranch()
 
-    // Gather local branches and offer them as merge targets
+    // Gather local branches and offer them as merge targets (exclude current branch)
     const rawBranches = exec('git for-each-ref --format="%(refname:short)" refs/heads', true)
       .split(/\r?\n/)
       .map((b) => b.trim())
       .filter(Boolean)
 
+    // Exclude the current (feature) branch and feature-style branches (containing '#' or '/') from merge targets
+    const branches = rawBranches.filter(
+      (b) => b !== featureBranch && !b.includes('#') && !b.includes('/')
+    )
+
     // Sort branches to prioritize canonical targets: development, develop, dev, then main/master, then others
     const priorityOrder = ['development', 'develop', 'dev', 'main', 'master']
-    rawBranches.sort((a, b) => {
+    branches.sort((a, b) => {
       const wa = priorityOrder.includes(a) ? priorityOrder.indexOf(a) : priorityOrder.length
       const wb = priorityOrder.includes(b) ? priorityOrder.indexOf(b) : priorityOrder.length
       if (wa !== wb) {
@@ -177,10 +182,10 @@ export async function handleMerge(
       return a.localeCompare(b)
     })
 
-    const targetExists = rawBranches.includes('development')
+    const targetExists = branches.includes('development')
 
-    // Build select options: list local branches, and an option to create 'development' if missing
-    const options = rawBranches.map((b) => ({ label: b, value: b }))
+    // Build select options: list local branches (excluding current), and an option to create 'development' if missing
+    const options = branches.map((b) => ({ label: b, value: b }))
     if (!targetExists) {
       options.unshift({ label: "Create 'development' branch", value: 'create_development' })
     }
