@@ -27,17 +27,26 @@ if (changes > 500) {
 // }
 
 // Run conventional commitlint plugin (optional)
-try {
-  const { default: commitlint } = await import('danger-plugin-conventional-commitlint')
-  const { default: configConventional } = await import('@commitlint/config-conventional')
+// Use promise chaining instead of top-level await to avoid creating an ESM graph with TLA
+Promise.all([
+  import('danger-plugin-conventional-commitlint').catch((e) => ({ error: e })),
+  import('@commitlint/config-conventional').catch((e) => ({ error: e })),
+])
+  .then(([commitlintMod, configMod]) => {
+    if (commitlintMod?.error || configMod?.error) {
+      throw new Error('commitlint imports failed')
+    }
 
-  const options = { severity: 'warn' }
-  await commitlint(configConventional.rules, options)
-} catch (e) {
-  warn(
-    '`danger-plugin-conventional-commitlint` not installed or failed — commit message linting skipped.'
-  )
-}
+    const commitlint = commitlintMod.default
+    const configConventional = configMod.default
+    const options = { severity: 'warn' }
+    return commitlint(configConventional.rules, options)
+  })
+  .catch(() => {
+    warn(
+      '`danger-plugin-conventional-commitlint` not installed or failed — commit message linting skipped.'
+    )
+  })
 
 // Add a friendly note
 markdown('**Tip:** Run `bun run danger:local` to test Danger locally before pushing.')
