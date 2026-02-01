@@ -33,7 +33,7 @@ jobs:
       run: |
         # Lint the most recent commit message by piping it to commitlint via stdin
         git fetch --no-tags --depth=1 origin ${GITHUB_SHA} || true
-        git log -1 --pretty=%B ${GITHUB_SHA} | npx --no-install commitlint --verbose --stdin
+        git log -1 --pretty=%B ${GITHUB_SHA} | npx --no-install commitlint --verbose
 
     - name: Validate PR commits with commitlint
       if: github.event_name == 'pull_request'
@@ -43,5 +43,5 @@ jobs:
         TO=${{ github.event.pull_request.head.sha }}
         git fetch --no-tags --depth=1 origin $FROM $TO || true
         for c in $(git rev-list --no-merges $FROM..$TO); do
-          git log -1 --pretty=%B $c | npx --no-install commitlint --verbose --stdin || exit $?
+          git log -1 --pretty=%B $c | npx --no-install commitlint --verbose || exit $?
         done
