@@ -131,7 +131,7 @@ jobs:
               { label: 'help', re: /\b(help|how to|how-to|bagaimana|gimana)\b/i },
               { label: 'usage', re: /\b(usage|pakai|pake)\b/i },
               { label: 'tool', re: /\b(tool|tools|cli|geeto)\b/i },
-              { label: 'question', re: /\b(question|pertanyaan|tanya)\b/i }
+              { label: 'question', re: /\b(question|pertanyaan|tanya|\?)\b/i }
             ];
 
             const toAdd = new Set();

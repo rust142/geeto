@@ -1,4 +1,4 @@
-name: AI reply once on user's second comment
+name: AI reply once on user's third comment
 
 on:
   issue_comment:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  reply-on-second-comment:
+  reply-on-third-comment:
     runs-on: ubuntu-latest
 
     steps:
@@ -48,9 +48,9 @@ jobs:
             const byUser = (comments || []).filter(c => c.user && c.user.login === commenter);
             core.info(`User ${commenter} has ${byUser.length} comments on issue #${issueNumber}`);
 
-            // Only proceed if this is at least the user's second comment
-            if ((byUser.length || 0) < 2) {
-              core.info('Not the second comment yet; skipping AI reply');
+            // Only proceed if this is at least the user's third comment
+            if ((byUser.length || 0) < 3) {
+              core.info('Not the third comment yet; skipping AI reply');
               return { proceed: 'false' };
             }
 
