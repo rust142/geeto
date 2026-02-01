@@ -35,11 +35,8 @@ jobs:
         sudo apt update
         sudo apt install gh
 
-    - name: Authenticate GitHub CLI
-      run: |
-        echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    # Note: Do not run `gh auth login` in Actions while GITHUB_TOKEN is present
+    # Instead, provide the token via the GH_TOKEN env var to the step that needs gh.
 
     - name: Install dependencies
       run: bun install
@@ -49,11 +46,10 @@ jobs:
 
     - name: Determine release type from PR labels
       id: release-type
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        # Authenticate (in case gh isn't already authenticated in this runner)
-        echo "${GITHUB_TOKEN}" | gh auth login --with-token || true
-
-        # Get the last merged PR
+        # Get the last merged PR (gh will read token from GH_TOKEN)
         PR_DATA=$(gh pr list --state merged --limit 1 --json labels,title,headRefName --jq '.[0]')
         if [ -z "$PR_DATA" ]; then
           echo "No merged PR found, defaulting to patch"
@@ -75,8 +71,6 @@ jobs:
 
         echo "Detected release type: $RELEASE_TYPE"
         echo "RELEASE_TYPE=$RELEASE_TYPE" >> $GITHUB_ENV
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Run release
       run: bun run release:$RELEASE_TYPE --ci
