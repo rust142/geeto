@@ -41,6 +41,7 @@ export const handleBranchCreationWorkflow = async (
   if (opts?.suppressConfirm) {
     createNewBranch = true
   } else {
+    console.log('')
     createNewBranch = confirm('Create new branch?')
   }
 
