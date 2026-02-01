@@ -46,7 +46,6 @@ export const handleBranchNaming = async (
   let skipRegenerate = false
 
   // Loop until branch name accepted
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const {
       getModelDisplayName,
@@ -176,6 +175,10 @@ export const handleBranchNaming = async (
       const acceptAi = await select(
         'This model cannot process the input due to token/context limits. Please choose a different model or provider:',
         [
+          {
+            label: `Try again with ${getAIProviderShortName(aiProvider)}${modelDisplay ? ` (${modelDisplay})` : ''} model`,
+            value: 'try-same',
+          },
           { label: 'Change model', value: 'change-model' },
           { label: 'Change AI provider', value: 'change-provider' },
           { label: 'Edit manually', value: 'edit' },
@@ -184,6 +187,11 @@ export const handleBranchNaming = async (
       )
 
       switch (acceptAi) {
+        case 'try-same': {
+          // Attempt to retry generation with the same provider/model
+          correction = ''
+          continue
+        }
         case 'change-model': {
           // change only the current provider's model — use centralized helper
           const provKey = (aiProvider ?? 'gemini') as 'gemini' | 'copilot' | 'openrouter' | string

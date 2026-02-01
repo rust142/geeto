@@ -110,7 +110,7 @@ lib/                 # Compiled output (auto-generated)
 
 ### 1. Make Changes
 
-Edit files dalam `src/` directory:
+Edit files in `src/` directory:
 
 ```bash
 # Watch mode - auto-compiles on changes
@@ -154,6 +154,9 @@ bun run clean
 // ✅ Good
 import type { GeetoState } from '../types'
 
+// ❌ Bad
+import { GeetoState } from '../types'
+
 /**
  * Get current git branch name
  * @returns Branch name string
@@ -162,8 +165,6 @@ export const getCurrentBranch = (): string => {
   return execSilent('git branch --show-current')
 }
 
-// ❌ Bad
-import { GeetoState } from '../types'
 const gb = execSilent('git branch --show-current')
 ```
 
@@ -243,13 +244,13 @@ bun run typecheck
 
 ## Module Responsibilities
 
-| Module | Should Have          | Shouldn't Have       |
-|--------|----------------------|----------------------|
-| types  | Interfaces, types    | Logic, side effects  |
-| utils  | Helpers, simple logic| API calls, UI        |
-| api    | API integrations     | UI, state management |
-| cli    | Input/output         | Business logic       |
-| core   | Setup, constants     | Complex logic        |
+| Module | Should Have           | Shouldn't Have       |
+| ------ | --------------------- | -------------------- |
+| types  | Interfaces, types     | Logic, side effects  |
+| utils  | Helpers, simple logic | API calls, UI        |
+| api    | API integrations      | UI, state management |
+| cli    | Input/output          | Business logic       |
+| core   | Setup, constants      | Complex logic        |
 
 ## Common Patterns
 

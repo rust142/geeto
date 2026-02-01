@@ -1,3 +1,4 @@
+import path from 'node:path'
 import type { CopilotModel } from '../api/copilot.js'
 import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
@@ -153,7 +154,7 @@ export async function handleTrelloCase(
   let correction = ''
   let aiSuffix: string | null = null
   let skipRegenerate = false
-  // eslint-disable-next-line no-constant-condition
+
   while (true) {
     const aiProvider = (state.aiProvider ?? 'gemini') as 'gemini' | 'copilot' | 'openrouter'
     let modelParam: CopilotModel | OpenRouterModel | GeminiModel
@@ -196,8 +197,6 @@ export async function handleTrelloCase(
     // Save the raw AI response so users can inspect it if the suggestion looks wrong
     try {
       const fs = await import('node:fs/promises')
-      const pathMod = await import('node:path')
-      const path = pathMod.default || pathMod
       const outDir = path.join(process.cwd(), '.geeto')
       await fs.mkdir(outDir, { recursive: true })
       const payload: Record<string, unknown> = {
@@ -277,6 +276,10 @@ export async function handleTrelloCase(
       acceptChoice = await select(
         'This model cannot process the input due to token/context limits. Please choose a different model or provider:',
         [
+          {
+            label: `Try again with ${getAIProviderShortName(aiProvider)}${model ? ` (${model})` : ''} model`,
+            value: 'try-same',
+          },
           { label: 'Change model', value: 'change-model' },
           { label: 'Change AI provider', value: 'change-provider' },
           { label: 'Edit manually', value: 'edit' },
@@ -311,6 +314,11 @@ export async function handleTrelloCase(
         }
         // creation failed, return to menus
         return { branchFlowComplete: false, branchMenuShown: false }
+      }
+      case 'try-same': {
+        // User requested re-trying with the same provider/model
+        correction = ''
+        break
       }
       case 'regenerate': {
         correction = ''

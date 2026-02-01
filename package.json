@@ -1,6 +1,6 @@
 {
   "name": "@geeto/core",
-  "version": "1.1.0-beta.0",
+  "version": "2.0.0",
   "description": "Git flow automation CLI tool with AI-powered (Gemini, GitHub Copilot, OpenRouter)",
   "author": {
     "email": "amdev142@gmail.com",
@@ -27,9 +27,17 @@
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "lint:md": "markdownlint \"**/*.md\" --ignore node_modules",
+    "lint:spell": "cspell \"**/*.{md,mdx,txt,ts,tsx,js,jsx,json}\" --no-progress",
+    "lint:yaml": "yamllint \"**/*.{yml,yaml}\" --ignore node_modules",
     "lint:md:fix": "markdownlint \"**/*.md\" --ignore node_modules --fix",
     "format": "prettier --write \"src/**/*.{ts,json,md}\"",
     "format:check": "prettier --check \"src/**/*.{ts,json,md}\"",
+    "cspell": "cspell",
+    "cspell:check": "node ./scripts/cspell-check.js",
+    "cspell:interactive": "node ./scripts/cspell-ignore.js",
+    "check:fast": "bun run format:check && bun run lint && bun run lint:md && bun run lint:yaml && bun run lint:spell",
+    "check:full": "bun run typecheck && bun run build",
+    "prepush": "bun run check:fast && bun run check:full",
     "commitlint": "commitlint --edit",
     "geeto:build": "bun build --compile --minify --sourcemap lib/index.js --outfile geeto",
     "geeto:build:linux": "bun build --compile --minify --target=bun-linux-x64 lib/index.js --outfile geeto-linux",
@@ -45,7 +53,11 @@
     "release:beta": "release-it --preRelease=beta --ci",
     "release:alpha": "release-it --preRelease=alpha",
     "prepare": "husky install",
-    "postinstall": "bun run prepare"
+    "postinstall": "bun run prepare",
+    "lint-staged": "lint-staged",
+    "tools:install": "sh tools/install.sh",
+    "danger:ci": "danger ci",
+    "danger:local": "danger pr"
   },
   "keywords": [
     "git",
@@ -58,25 +70,51 @@
     "cli"
   ],
   "devDependencies": {
-    "@commitlint/cli": "^19.8.1",
-    "@commitlint/config-conventional": "^19.8.1",
+    "@commitlint/cli": "^20.4.0",
+    "@commitlint/config-conventional": "^20.4.0",
     "@ianvs/prettier-plugin-sort-imports": "^4.7.0",
-    "@types/bun": "latest",
-    "@types/node": "^20.19.30",
-    "@typescript-eslint/eslint-plugin": "^7.18.0",
-    "@typescript-eslint/parser": "^7.18.0",
-    "eslint": "^8.57.1",
-    "eslint-config-prettier": "^9.1.2",
+    "@release-it/conventional-changelog": "^10.0.4",
+    "@types/bun": "^1.3.8",
+    "@types/node": "^25.1.0",
+    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/parser": "^8.54.0",
+    "cspell": "^9.6.2",
+    "danger": "^13.0.5",
+    "danger-plugin-conventional-commitlint": "^3.1.0",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.5",
-    "eslint-plugin-promise": "^6.6.0",
-    "eslint-plugin-security": "^2.1.1",
-    "eslint-plugin-unicorn": "^51.0.1",
-    "@release-it/conventional-changelog": "^8.0.2",
+    "eslint-plugin-promise": "^7.2.1",
+    "eslint-plugin-security": "^3.0.1",
+    "eslint-plugin-unicorn": "^62.0.0",
     "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
     "markdownlint-cli": "^0.47.0",
     "prettier": "^3.8.1",
-    "release-it": "^17.11.0",
-    "typescript": "^5.9.3"
+    "release-it": "^19.2.4",
+    "typescript": "^5.9.3",
+    "yaml-lint": "^1.7.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "bun ./scripts/typecheck-wrapper.js",
+      "bun cspell:check",
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{js,json,md}": [
+      "bun cspell:check",
+      "prettier --write"
+    ],
+    "*.md": [
+      "bun cspell:check",
+      "markdownlint --fix",
+      "prettier --write"
+    ],
+    "*.{yml,yaml}": [
+      "bun cspell:check",
+      "yamllint -f parsable"
+    ]
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -86,9 +124,9 @@
     "bun": ">=1.0.0"
   },
   "dependencies": {
-    "@github/copilot-sdk": "^0.1.19",
-    "@google/genai": "^1.38.0",
-    "@openrouter/sdk": "^0.4.0",
+    "@github/copilot-sdk": "^0.1.20",
+    "@google/genai": "^1.39.0",
+    "@openrouter/sdk": "^0.5.1",
     "geeto": "."
   }
 }

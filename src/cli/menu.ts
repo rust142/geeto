@@ -88,7 +88,6 @@ export const select = async (question: string, options: SelectOption[]): Promise
           console.log('\n\nCancelled by user')
           process.exit(0)
         }
-        // eslint-disable-next-line no-fallthrough
         case 'c':
         case 'C': {
           console.clear()

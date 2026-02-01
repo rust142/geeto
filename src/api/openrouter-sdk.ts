@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/ban-ts-comment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { OpenRouter } from '@openrouter/sdk'
 
 import { GeminiModel } from './gemini.js'
@@ -373,6 +372,7 @@ export const getAvailableModelsDetailed = async (): Promise<ModelDetail[] | null
         }
       })
       .filter((m) => m.outputTokenLimit)
+      // eslint-disable-next-line unicorn/no-array-sort
       .sort((a, b) => a.name.localeCompare(b.name)) // sort by name
 
     const out = mapped.filter(Boolean) as ModelDetail[]

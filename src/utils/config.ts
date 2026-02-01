@@ -55,8 +55,9 @@ export const ensureGeetoIgnored = (): void => {
     if (gitignoreContent !== originalContent) {
       fs.writeFileSync(gitignorePath, gitignoreContent, 'utf8')
     }
-  } catch (error) {
-    log.warn(`Could not update .gitignore: ${(error as Error).message}`)
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    log.warn(`Could not update .gitignore: ${msg}`)
   }
 }
 
@@ -242,8 +243,9 @@ separator = "${config.separator}"
 ${config.lastNamingStrategy ? `last_naming_strategy = "${config.lastNamingStrategy}"\n` : ''}${config.lastTrelloList ? `last_trello_list = "${config.lastTrelloList}"\n` : ''}`
 
     fs.writeFileSync(path, configContent, 'utf8')
-  } catch (error) {
-    log.warn(`Failed to save branch strategy config: ${(error as Error).message}`)
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    log.warn(`Failed to save branch strategy config: ${msg}`)
   }
 }
 
@@ -273,7 +275,7 @@ export const isGoBinInPath = (): boolean => {
   const pathEnv = process.env.PATH ?? ''
 
   if (platform === 'win32') {
-    const goBin = `${os.homedir()}\\go\\bin`
+    const goBin = String.raw`${os.homedir()}\go\bin`
     return pathEnv.toLowerCase().includes(goBin.toLowerCase())
   } else {
     const goBin = `${os.homedir()}/go/bin`
@@ -294,7 +296,7 @@ export const addGoBinToPath = (): void => {
       log.info('  1. Press Win + X, select "System"')
       log.info('  2. Click "Advanced system settings"')
       log.info('  3. Click "Environment Variables"')
-      log.info('  4. Edit PATH and add: %USERPROFILE%\\go\\bin')
+      log.info(String.raw`  4. Edit PATH and add: %USERPROFILE%\\go\\bin`)
       log.info('  5. Restart your terminal')
     }
     return

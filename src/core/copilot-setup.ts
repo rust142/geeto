@@ -194,9 +194,9 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
   if (copilotAvailable) {
     // Note about premium models that may require enablement.
     log.success('GitHub Copilot ready to use')
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+
     checkCopilotVersion()
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+
     ensureGeetoIgnored()
     return true
   }
@@ -285,13 +285,17 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
       // Add npm global bin to PATH if npm was used
       if (choice === 'npm') {
         if (platform === 'win32') {
-          const npmBinPath = `${os.homedir()}\\AppData\\Roaming\\npm`
+          const npmBinPath = String.raw`${os.homedir()}\\AppData\\Roaming\\npm`
           if (!process.env.PATH?.includes(npmBinPath)) {
             process.env.PATH = `${process.env.PATH};${npmBinPath}`
             log.info('Added npm global bin to PATH')
           }
         } else {
-          const possibleNpmPaths = ['/usr/local/bin', '/usr/bin', `${os.homedir()}/.npm-global/bin`]
+          const possibleNpmPaths = [
+            '/usr/local/bin',
+            '/usr/bin',
+            String.raw`${os.homedir()}/.npm-global/bin`,
+          ]
           let npmPathAdded = false
           for (const npmPath of possibleNpmPaths) {
             if (!process.env.PATH?.includes(npmPath)) {
@@ -323,7 +327,6 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
       // Re-check availability via CLI or SDK-managed client
       let copilotNowAvailable = commandExists('copilot')
       try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
         const sdk = await import('../api/copilot-sdk.js')
         if (sdk && typeof sdk.isAvailable === 'function') {
           copilotNowAvailable = copilotNowAvailable || (await sdk.isAvailable())
@@ -337,9 +340,9 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
       }
 
       log.info('GitHub Copilot CLI is ready to use!')
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+
       checkCopilotVersion()
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+
       ensureGeetoIgnored()
 
       return true
@@ -356,7 +359,7 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
   try {
     exec('copilot --version', true)
     log.success('GitHub Copilot CLI configured and ready to use')
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+
     checkCopilotVersion()
     ensureGeetoIgnored()
     return true

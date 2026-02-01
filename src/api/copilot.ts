@@ -2,6 +2,8 @@
  * GitHub Copilot integration for AI-powered branch naming and commit messages
  */
 
+import path from 'node:path'
+
 import {
   generateBranchName as sdkGenerateBranchName,
   generateCommitMessage as sdkGenerateCommitMessage,
@@ -60,8 +62,6 @@ export const generateBranchName = async (
     // Persist original provider response so the user can inspect the unmodified AI output.
     try {
       const fs = await import('node:fs/promises')
-      const pathMod = await import('node:path')
-      const path = pathMod.default || pathMod
       const outDir = path.join(process.cwd(), '.geeto')
       await fs.mkdir(outDir, { recursive: true })
       const payload = {

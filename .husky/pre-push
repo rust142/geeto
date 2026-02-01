@@ -1,0 +1,5 @@
+echo "Running pre-push checks..."
+# Fast checks first (formatting, linting)
+bun run prepush
+
+echo "Pre-push checks passed."

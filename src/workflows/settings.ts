@@ -3,7 +3,7 @@
  */
 
 import { existsSync, unlinkSync } from 'node:fs'
-import { join } from 'node:path'
+import path from 'node:path'
 
 import { confirm } from '../cli/input.js'
 import { select } from '../cli/menu.js'
@@ -15,9 +15,9 @@ import {
 } from '../utils/config.js'
 import { log } from '../utils/logging.js'
 
-const configDirPath = () => join(process.cwd(), '.geeto')
+const configDirPath = () => path.join(process.cwd(), '.geeto')
 
-const configFilePath = (name: string) => join(configDirPath(), `${name}.toml`)
+const configFilePath = (name: string) => path.join(configDirPath(), `${name}.toml`)
 
 const removeConfigFile = (name: string): boolean => {
   const p = configFilePath(name)
@@ -91,7 +91,6 @@ const syncOpenRouterModels = async (): Promise<void> => {
     // Dynamically import SDK wrapper
     let sdkModule: unknown = null
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
       sdkModule = await import('../api/openrouter-sdk.js')
     } catch {
       log.warn('OpenRouter SDK unavailable; cannot get live sample models from SDK.')
@@ -100,7 +99,6 @@ const syncOpenRouterModels = async (): Promise<void> => {
 
     const sdk = sdkModule as { getAvailableModelChoices?: () => Promise<unknown> }
     const fs = await import('node:fs')
-    const path = await import('node:path')
     const outDir = path.join(process.cwd(), '.geeto')
     await fs.promises.mkdir(outDir, { recursive: true })
 
@@ -155,8 +153,9 @@ const syncOpenRouterModels = async (): Promise<void> => {
           )
           return
         }
-      } catch (error) {
-        log.warn(`Failed to fetch OpenRouter models from SDK: ${(error as Error).message}`)
+      } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error)
+        log.warn(`Failed to fetch OpenRouter models from SDK: ${msg}`)
       }
     }
 
@@ -176,15 +175,17 @@ const syncOpenRouterModels = async (): Promise<void> => {
           )
           return
         }
-      } catch (error) {
-        log.warn(`Could not read OpenRouter model config: ${(error as Error).message}`)
+      } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error)
+        log.warn(`Could not read OpenRouter model config: ${msg}`)
       }
     }
 
     log.info('No OpenRouter model configuration found and no SDK sync possible.')
     log.info('Run the sync again after installing/configuring the OpenRouter SDK to fetch models.')
-  } catch (error) {
-    log.warn(`OpenRouter model sync failed: ${(error as Error).message}`)
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    log.warn(`OpenRouter model sync failed: ${msg}`)
   }
 }
 
@@ -443,7 +444,6 @@ const handleOpenRouterSetting = async (): Promise<boolean | void> => {
 }
 
 export const showSettingsMenu = async () => {
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     log.info('Settings Menu')
 

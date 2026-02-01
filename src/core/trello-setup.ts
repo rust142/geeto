@@ -61,8 +61,9 @@ export const setupTrelloConfigInteractive = (): boolean => {
       fs.mkdirSync(configDir, { recursive: true })
       log.success(`Created config directory: ${configDir}`)
     }
-  } catch (error) {
-    log.error(`Failed to create config directory: ${(error as Error).message}`)
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    log.error(`Failed to create config directory: ${msg}`)
     return false
   }
 
@@ -78,8 +79,9 @@ board_id = "${boardId}"
     fs.writeFileSync(path, configContent, 'utf8')
     log.success(`Trello config saved to: ${path}`)
     return true
-  } catch (error) {
-    log.error(`Failed to save config: ${(error as Error).message}`)
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    log.error(`Failed to save config: ${msg}`)
     return false
   }
 }

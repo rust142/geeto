@@ -1,0 +1,50 @@
+name: Cross Platform Test
+
+on:
+  workflow_run:
+    workflows: ["Quality Checks"]
+    types: [completed]
+
+jobs:
+  cross-platform-test:
+    name: Cross Platform Test
+    runs-on: ${{ matrix.os }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: geeto-binaries-20.x
+        path: .
+
+    - name: Make binary executable (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: |
+        chmod +x geeto-linux
+        chmod +x geeto-linux-arm
+        chmod +x geeto-mac
+        chmod +x geeto-mac-arm
+
+    - name: Test Linux binary
+      if: runner.os == 'Linux'
+      run: ./geeto-linux --help | head -10
+
+    - name: Test Linux ARM binary
+      if: runner.os == 'Linux'
+      run: ./geeto-linux-arm --help | head -10
+
+    - name: Test Windows binary
+      if: runner.os == 'Windows'
+      run: .\geeto-windows.exe --help | Select-Object -First 10
+
+    - name: Test macOS binary
+      if: runner.os == 'macOS'
+      run: ./geeto-mac --help | head -10
+
+    - name: Test macOS ARM binary
+      if: runner.os == 'macOS'
+      run: ./geeto-mac-arm --help | head -10

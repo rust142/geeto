@@ -2,6 +2,7 @@
  * Commit workflow - handles commit-related operations
  */
 
+import path from 'node:path'
 import type { CopilotModel } from '../api/copilot.js'
 import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
@@ -11,10 +12,11 @@ import { askQuestion, confirm, editInEditor } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
 import { DEFAULT_GEMINI_MODEL } from '../utils/config.js'
-import { exec, execGit } from '../utils/exec.js'
+import { execGit } from '../utils/exec.js'
 import {
   chooseModelForProvider,
   getAIProviderShortName,
+  getModelValue,
   interactiveAIFallback,
   isContextLimitFailure,
   isTransientAIFailure,
@@ -283,18 +285,44 @@ export const handleCommitWorkflow = async (
     | 'manual'
   let selectedTool = getDefaultCommitTool(aiProvider)
 
-  // Helper: attempt to run git commit; on failure present concise options (edit/retry/no-verify/abort)
+  // Helper: attempt to run git commit using a temporary file to avoid shell quoting issues
   const attemptCommit = async (titleStr: string, bodyStr?: string | null): Promise<boolean> => {
-    const commitArgs = bodyStr ? `-m "${titleStr}" -m "${bodyStr}"` : `-m "${titleStr}"`
+    // Compose full commit message
+    const msg = bodyStr ? `${titleStr}\n\n${bodyStr}\n` : `${titleStr}\n`
+
+    // Use spawnSync to avoid shell quoting pitfalls
+    const tempDir = await import('node:os')
+    const fs = await import('node:fs')
+    const { spawnSync } = await import('node:child_process')
+
+    const tmpFile = path.join(tempDir.tmpdir(), `geeto-commit-${Date.now()}.txt`)
+
     try {
-      exec(`git commit ${commitArgs}`)
-      return true
-    } catch {
+      fs.writeFileSync(tmpFile, msg, 'utf8')
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : String(error)
+      log.error(`Failed to write temporary commit message: ${errMsg}`)
+      return false
+    }
+
+    try {
+      const res = spawnSync('git', ['commit', '-F', tmpFile], { stdio: 'inherit' })
+      // cleanup
+      try {
+        fs.unlinkSync(tmpFile)
+      } catch {
+        /* ignore cleanup errors */
+      }
+
+      if (res.status === 0) {
+        return true
+      }
+
       log.error('Commit failed due to commit hook or invalid message.')
 
       const action = await select('Commit failed. Choose an action:', [
+        { label: "I've fixed it, retry", value: 'retry' },
         { label: 'Edit commit message and retry', value: 'edit' },
-        { label: 'Commit with --no-verify (skip hooks)', value: 'no-verify' },
         { label: 'Abort', value: 'abort' },
       ])
 
@@ -311,16 +339,15 @@ export const handleCommitWorkflow = async (
         return attemptCommit(newTitle as string, newBody)
       }
 
-      if (action === 'no-verify') {
-        try {
-          exec(`git commit --no-verify ${commitArgs}`)
-          return true
-        } catch {
-          log.error('Commit with --no-verify failed. See git output for details.')
-          return false
-        }
+      if (action === 'retry') {
+        // User fixed issues outside of this tool; try committing again
+        return attemptCommit(titleStr, bodyStr)
       }
 
+      return false
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : String(error)
+      log.error(`Failed to run git commit: ${errMsg}`)
       return false
     }
   }
@@ -409,7 +436,7 @@ export const handleCommitWorkflow = async (
     if (needModelPrompt) {
       // loop until a model is chosen or user returns to manual
       let providerPick: string = selectedTool
-      // eslint-disable-next-line no-constant-condition
+
       while (true) {
         effectiveProvider = providerPick as 'gemini' | 'copilot' | 'openrouter'
         state.aiProvider = effectiveProvider
@@ -469,6 +496,7 @@ export const handleCommitWorkflow = async (
 
     // Try generating commit message via AI
     let initialAiResult: string | null = null
+    let currentModel: string | undefined
     try {
       let currentProvider: 'gemini' | 'copilot' | 'openrouter' | undefined
       if (state.aiProvider && state.aiProvider !== 'manual') {
@@ -476,7 +504,7 @@ export const handleCommitWorkflow = async (
       } else {
         currentProvider = aiProvider as 'gemini' | 'copilot' | 'openrouter'
       }
-      let currentModel: string | undefined
+
       if (currentProvider === 'copilot') {
         currentModel = state.copilotModel
       } else if (currentProvider === 'openrouter') {
@@ -519,12 +547,11 @@ export const handleCommitWorkflow = async (
     // Loop AI generation/user choices — pass initial result only on first iteration
     let firstAttempt = true
 
-    // eslint-disable-next-line no-constant-condition
     let forceDirect = false
     // allow returning from model/provider menus to the suggested-commit prompt
     let skipRegenerate = false
     let previousAiResult: string | null = initialAiResult
-    // eslint-disable-next-line no-constant-condition
+
     while (true) {
       // Obtain AI result: initial -> direct regenerate -> interactive fallback
       let aiResult: string | null = null
@@ -680,8 +707,6 @@ export const handleCommitWorkflow = async (
       // Persist AI suggestion for commit so user can inspect/raw and we can show a short suggested line
       try {
         const fs = await import('node:fs/promises')
-        const pathMod = await import('node:path')
-        const path = pathMod.default || pathMod
         const outDir = path.join(process.cwd(), '.geeto')
         await fs.mkdir(outDir, { recursive: true })
 
@@ -734,18 +759,28 @@ export const handleCommitWorkflow = async (
         /* ignore file write failures */
       }
 
+      // If we have a short subject line in the suggestion, allow accepting
+      // the suggested commit message even when a context limit was detected.
+      const subjectLine = commitMessage.split('\n').find((l) => l.trim()) ?? ''
+
       let acceptAi: string
-      if (contextLimitDetected) {
+      if (contextLimitDetected && !subjectLine) {
+        // No usable suggestion present: force the user to change model/provider or edit
         const editorName = process.env.EDITOR ?? (process.platform === 'win32' ? 'notepad' : 'vi')
         acceptAi = await select(
           'This model cannot process the input due to token/context limits. Please choose a different model or provider:',
           [
+            {
+              label: `Try again with ${getAIProviderShortName(aiProvider)}${getModelValue(currentModel) ? ` (${getModelValue(currentModel)})` : ''} model`,
+              value: 'try-same',
+            },
             { label: 'Change model', value: 'change-model' },
             { label: 'Change AI provider', value: 'change-provider' },
             { label: `Edit in editor (${editorName})`, value: 'edit' },
           ]
         )
       } else {
+        // Either no context limits, or we have a usable suggestion (allow accepting)
         const editorName = process.env.EDITOR ?? (process.platform === 'win32' ? 'notepad' : 'vi')
         acceptAi = await select('Accept this commit message?', [
           { label: 'Yes, use it', value: 'accept' },
@@ -789,6 +824,11 @@ export const handleCommitWorkflow = async (
         case 'regenerate': {
           correction = ''
           // next loop should try direct generation with the currently selected model
+          forceDirect = true
+          continue
+        }
+        case 'try-same': {
+          // User chose to attempt the same model again — try a direct regenerate
           forceDirect = true
           continue
         }

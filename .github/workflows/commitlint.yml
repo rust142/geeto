@@ -1,0 +1,47 @@
+name: Commit Message Lint
+
+on:
+  pull_request:
+    branches: [ develop ]
+  push:
+    branches: [ main, develop ]
+
+jobs:
+  commitlint:
+    name: Commit Message Lint
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: latest
+
+    - name: Install dependencies
+      run: bun install
+
+    - name: Setup Husky
+      run: bun run prepare
+
+    - name: Validate current commit (last commit) with commitlint
+      if: github.event_name == 'push'
+      run: |
+        # Lint the most recent commit message by piping it to commitlint via stdin
+        git fetch --no-tags --depth=1 origin ${GITHUB_SHA} || true
+        git log -1 --pretty=%B ${GITHUB_SHA} | npx --no-install commitlint --verbose
+
+    - name: Validate PR commits with commitlint
+      if: github.event_name == 'pull_request'
+      run: |
+        # Lint each commit in the PR by piping each commit message to commitlint
+        FROM=${{ github.event.pull_request.base.sha }}
+        TO=${{ github.event.pull_request.head.sha }}
+        git fetch --no-tags --depth=1 origin $FROM $TO || true
+        for c in $(git rev-list --no-merges $FROM..$TO); do
+          git log -1 --pretty=%B $c | npx --no-install commitlint --verbose || exit $?
+        done

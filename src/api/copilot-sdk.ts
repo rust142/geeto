@@ -23,14 +23,10 @@ const ensureClient = async (): Promise<boolean> => {
     }
     await startedClient.start()
     return true
-  } catch (error) {
+  } catch (error: unknown) {
     // SDK optional: log info and fall back
-    try {
-      const msg = error && (error as Error).message ? (error as Error).message : String(error)
-      log.info(msg)
-    } catch {
-      log.info('Copilot SDK not available — falling back to Copilot CLI.')
-    }
+    const msg = error instanceof Error && error.message ? error.message : String(error)
+    log.info(msg)
     client = null
     return false
   }
@@ -45,7 +41,6 @@ const withSession = async (
     return null
   }
   try {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const session = await client.createSession({ model })
     try {
       const res = await fn(session)

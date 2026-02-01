@@ -609,9 +609,10 @@ export const main = async (opts?: {
 
     // STEP 2: Create branch
     if (state.step < STEP.BRANCH_CREATED) {
+      const suppressConfirm = !!opts?.startAt && opts.startAt !== 'stage'
       const { branchName, created } = await handleBranchCreationWorkflow(state, {
         suppressStep: !!opts?.startAt,
-        suppressConfirm: !!opts?.startAt,
+        suppressConfirm,
       })
       // handleBranchCreationWorkflow returns { branchName, created }
       state.workingBranch = branchName
