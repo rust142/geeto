@@ -15,8 +15,6 @@ export default [
     ignores: ['node_modules/**', 'dist/**', 'lib/**', 'geeto*', '*.lock'],
     languageOptions: { ecmaVersion: 2022, sourceType: 'module' },
   },
-
-  // TypeScript files
   {
     files: ['**/*.ts', '**/*.tsx'],
     languageOptions: {
