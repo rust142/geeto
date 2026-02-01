@@ -125,15 +125,15 @@ jobs:
             const text = `${title}\n${body}`;
 
             const heuristics = [
-              { label: 'feature', re: /\b(feature|feat|fitur|menambah|tambah|add|new)\b/i },
               { label: 'bug', re: /\b(bug|error|fix|fixes|kesalahan|eror|tidak bekerja|gabisa)\b/i },
+              { label: 'security', re: /\b(security|vulnerability|exploit|attack|breach|hack)\b/i },
+              { label: 'feature', re: /\b(feature|feat|fitur|menambah|tambah|add|new)\b/i },
               { label: 'docs', re: /\b(doc|docs|readme|dokumentasi|dokumentasi|installation|instal|usage|pakai|pake)\b/i },
               { label: 'executable', re: /\b(tool|tools|cli|geeto)\b/i },
               { label: 'sdk', re: /\b(sdk|development kit)\b/i },
               { label: 'provider/openrouter', re: /\b(openrouter)\b/i },
               { label: 'provider/gemini', re: /\b(gemini)\b/i },
               { label: 'provider/copilot', re: /\b(copilot)\b/i },
-              { label: 'security', re: /\b(security|vulnerability|exploit|attack|breach|hack)\b/i },
               { label: 'question', re: /\b(help|how to|how-to|bagaimana|gimana|question|pertanyaan|tanya|\?)\b/i },
               { label: 'needs-info', re: /\b(want|butuh|perlu|\?)\b/i }
             ];
