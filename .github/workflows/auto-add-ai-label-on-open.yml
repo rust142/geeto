@@ -126,9 +126,9 @@ jobs:
 
             const heuristics = [
               { label: 'feature', re: /\b(feature|feat|fitur|menambah|tambah|add|new)\b/i },
-              { label: 'bug', re: /\b(bug|error|fix|fixes|kesalahan|eror|tidak bekerja)\b/i },
-              { label: 'docs', re: /\b(doc|docs|readme|dokumentasi|dokumentasi)\b/i },
-              { label: 'help', re: /\b(help|cara pakai|cara pake|how to|how-to|minimal)\b/i },
+              { label: 'bug', re: /\b(bug|error|fix|fixes|kesalahan|eror|tidak bekerja|gabisa)\b/i },
+              { label: 'docs', re: /\b(doc|docs|readme|dokumentasi|dokumentasi|installation|instal)\b/i },
+              { label: 'help', re: /\b(help|how to|how-to|bagaimana|gimana)\b/i },
               { label: 'usage', re: /\b(usage|pakai|pake)\b/i },
               { label: 'tool', re: /\b(tool|tools|cli|geeto)\b/i },
               { label: 'question', re: /\b(question|pertanyaan|tanya)\b/i }
