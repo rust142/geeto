@@ -39,6 +39,8 @@ export async function handlePush(
 
       if (opts?.suppressLogs) {
         const progressBar = new ProgressBar(100, 'Pushing to remote')
+        progressBar.update(0)
+
         // Perform push silently to avoid interleaving git progress output
         let progress = 0
         const interval = setInterval(() => {
@@ -94,6 +96,8 @@ export async function handlePush(
         }
 
         const progressBar = new ProgressBar(100, 'Pushing to remote')
+        progressBar.update(0)
+
         // Perform push while updating progress bar
         let progress = 0
         const interval = setInterval(() => {
