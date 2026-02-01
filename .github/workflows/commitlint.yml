@@ -30,9 +30,18 @@ jobs:
 
     - name: Validate current commit (last commit) with commitlint
       if: github.event_name == 'push'
-      run: bun run commitlint --from HEAD~1 --to HEAD --verbose
+      run: |
+        # Lint the most recent commit message by piping it to commitlint via stdin
+        git fetch --no-tags --depth=1 origin ${GITHUB_SHA} || true
+        git log -1 --pretty=%B ${GITHUB_SHA} | npx --no-install commitlint --verbose --stdin
 
     - name: Validate PR commits with commitlint
       if: github.event_name == 'pull_request'
       run: |
-        bun run commitlint --from ${{ github.event.pull_request.head.sha }}~${{ github.event.pull_request.commits }} --to ${{ github.event.pull_request.head.sha }} --verbose
+        # Lint each commit in the PR by piping each commit message to commitlint
+        FROM=${{ github.event.pull_request.base.sha }}
+        TO=${{ github.event.pull_request.head.sha }}
+        git fetch --no-tags --depth=1 origin $FROM $TO || true
+        for c in $(git rev-list --no-merges $FROM..$TO); do
+          git log -1 --pretty=%B $c | npx --no-install commitlint --verbose --stdin || exit $?
+        done
