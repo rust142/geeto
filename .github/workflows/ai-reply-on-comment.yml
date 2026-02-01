@@ -100,20 +100,6 @@ jobs:
             core.setOutput('proceed', 'true');
             return { issue_number: String(issueNumber), commenter, comment_body: commentBody, proceed: 'true' };
 
-      - name: Add 'copilot' label to issue
-        if: ${{ steps.prepare.outputs.issue_number != '' }}
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const labelName = 'copilot';
-            const issueNumber = Number('${{ steps.prepare.outputs.issue_number }}');
-            await github.rest.issues.addLabels({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issueNumber,
-              labels: [labelName],
-            });
-
       - name: Run AI assessment on comment
         if: ${{ steps.prepare.outputs.proceed == 'true' }}
         id: ai_assess
@@ -154,7 +140,7 @@ jobs:
             const marker = `<!-- ai-replied-to-${commenter} -->`;
 
             let body = `${marker}\n@${commenter} ` + '\n\n';
-            if (!assessments.length) {
+            if (!assessmentsRaw.length) {
               body += '_No AI assessment produced._\n\n';
             } else {
               // Combine assessment responses
