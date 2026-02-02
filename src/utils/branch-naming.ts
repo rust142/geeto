@@ -164,7 +164,7 @@ export const handleBranchNaming = async (
     const contextLimitDetected = isContextLimitFailure(aiSuffix)
 
     if (!contextLimitDetected) {
-      log.ai(`Suggested: ${colors.cyan}${currentSuggestion}${colors.reset}`)
+      log.ai(`Suggested: ${colors.cyan}${colors.bright}${currentSuggestion}${colors.reset}`)
       log.info(
         'Incorrect Suggestion? check .geeto/last-ai-suggestion.json (possible AI/context limit).\n'
       )

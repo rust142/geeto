@@ -344,10 +344,18 @@ export const handleBranchCreationWorkflow = async (
                     branchMenuShown = false
                     continue
                   }
-                  const cleanSuffix = aiSuffix
-                    .replaceAll(/[^\w-]/gi, separator)
-                    .replace(separator === '-' ? /^-|-$/g : /^_|_$/g, '')
+                  const tmp = aiSuffix
+                    .replaceAll(/[^A-Za-z0-9]+/g, separator)
+                    .replaceAll(/[-_]+/g, separator)
                     .toLowerCase()
+
+                  let cleanSuffix = tmp
+                  while (cleanSuffix.startsWith(separator)) {
+                    cleanSuffix = cleanSuffix.slice(separator.length)
+                  }
+                  while (cleanSuffix.endsWith(separator)) {
+                    cleanSuffix = cleanSuffix.slice(0, -separator.length)
+                  }
 
                   workingBranch = `${defaultPrefix}${cleanSuffix}`
 

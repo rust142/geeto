@@ -204,6 +204,7 @@ export async function handleMerge(
     }
     options.push({ label: 'Cancel', value: 'cancel' })
 
+    console.log('')
     const chosen = await select('Choose target branch for merge:', options)
 
     if (chosen === 'cancel') {
@@ -351,6 +352,7 @@ export function handleCleanup(featureBranch: string, state: GeetoState): void {
       if (protectedBranches.has(featureBranch.toLowerCase())) {
         log.info(`Skipping deletion of protected branch '${featureBranch}'`)
       } else {
+        console.log('')
         const deleteAnswer = confirm(`Delete branch '${featureBranch}'?`)
         if (deleteAnswer) {
           exec(`git branch -d ${featureBranch}`)

@@ -1,4 +1,3 @@
-import path from 'node:path'
 import type { CopilotModel } from '../api/copilot.js'
 import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
@@ -194,40 +193,6 @@ export async function handleTrelloCase(
       )
     }
 
-    // Save the raw AI response so users can inspect it if the suggestion looks wrong
-    try {
-      const fs = await import('node:fs/promises')
-      const outDir = path.join(process.cwd(), '.geeto')
-      await fs.mkdir(outDir, { recursive: true })
-      const payload: Record<string, unknown> = {
-        provider: aiProvider,
-        model: modelParam ?? null,
-        raw: aiSuffix,
-        cardTitle: cardData.title,
-        timestamp: new Date().toISOString(),
-      }
-
-      try {
-        const existing = await fs.readFile(path.join(outDir, 'last-ai-suggestion.json'), 'utf8')
-        const parsed: unknown = JSON.parse(existing || '{}')
-        if (parsed && typeof parsed === 'object' && 'content' in parsed) {
-          payload.content = (parsed as Record<string, unknown>).content
-        }
-      } catch {
-        /* ignore read errors */
-      }
-
-      await fs.writeFile(
-        path.join(outDir, 'last-ai-suggestion.json'),
-        JSON.stringify(payload, null, 2)
-      )
-      log.info(
-        'Incorrect Suggestion? check .geeto/last-ai-suggestion.json (possible AI/context limit).\n'
-      )
-    } catch {
-      log.warn('Failed to write AI suggestion file')
-    }
-
     if (!aiSuffix || isTransientAIFailure(aiSuffix) || isContextLimitFailure(aiSuffix)) {
       aiSuffix = await interactiveAIFallback(
         aiSuffix,
@@ -253,16 +218,19 @@ export async function handleTrelloCase(
     if (aiSuffix === null) {
       workingBranch = promptManualBranch(state.currentBranch)
     } else {
-      const cleanSuffix = aiSuffix
-        .replaceAll(/[^\w-]/gi, separator)
-        .replace(separator === '-' ? /-+/g : /_+/g, separator)
-        .replace(separator === '-' ? /^-|-$/g : /^_|_$/g, '')
+      const tmp = aiSuffix
+        .replaceAll(/[^A-Za-z0-9]+/g, separator)
+        .replaceAll(/[-_]+/g, separator)
         .toLowerCase()
+
+      let cleanSuffix = tmp
+      while (cleanSuffix.startsWith(separator)) cleanSuffix = cleanSuffix.slice(separator.length)
+      while (cleanSuffix.endsWith(separator)) cleanSuffix = cleanSuffix.slice(0, -separator.length)
 
       workingBranch = `${defaultPrefix}${trelloCardId}${separator}${cleanSuffix}`
       const contextLimitDetected = isContextLimitFailure(aiSuffix)
       if (!contextLimitDetected) {
-        log.ai(`Suggested: ${colors.cyan}${workingBranch}${colors.reset}`)
+        log.ai(`Suggested: ${colors.cyan}${colors.bright}${workingBranch}${colors.reset}`)
         log.info(
           'Incorrect Suggestion? check .geeto/last-ai-suggestion.json (possible AI/context limit).\n'
         )
@@ -420,12 +388,12 @@ export async function handleTrelloCase(
         break
       }
       case 'correct': {
-        const suggestionFirstLine = workingBranch.split('\n').find((l) => l.trim()) ?? ''
         correction = askQuestion(
           'Provide corrections for the AI (e.g., shorten, prefer verb tense): ',
-          suggestionFirstLine,
+          undefined,
           true
         )
+        console.log('')
         break
       }
       case 'edit': {

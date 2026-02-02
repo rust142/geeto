@@ -1026,7 +1026,7 @@ export const handleCommitWorkflow = async (
 
       const committed = await attemptCommit(message)
       if (committed) {
-        log.success(`Committed: ${colors.cyan}${message}${colors.reset}`)
+        log.success(`Committed: ${colors.cyan}${colors.bright}${message}${colors.reset}`)
         return true
       }
 
@@ -1076,7 +1076,7 @@ export const handleCommitWorkflow = async (
 
     const committed = await attemptCommit(commitMsg)
     if (committed) {
-      log.success(`Committed: ${colors.cyan}${commitMsg}${colors.reset}`)
+      log.success(`Committed: ${colors.cyan}${colors.bright}${commitMsg}${colors.reset}`)
     } else {
       log.error('Commit failed or aborted.')
       process.exit(1)

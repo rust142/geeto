@@ -65,6 +65,6 @@ export const createBranch = (name: string, currentBranch: string): boolean => {
 
   log.info(`Creating branch: ${name}`)
   exec(`git checkout -b "${name}"`)
-  log.success(`Branch created: ${colors.cyan}${name}${colors.reset}`)
+  log.success(`Branch created: ${colors.cyan}${colors.bright}${name}${colors.reset}`)
   return true
 }

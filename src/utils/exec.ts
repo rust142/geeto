@@ -96,7 +96,7 @@ export const commandExists = (command: string): boolean => {
   const platform = process.platform
   const checkCommand = platform === 'win32' ? 'where' : 'which'
   try {
-    exec(`${checkCommand} ${command}`)
+    exec(`${checkCommand} ${command}`, true)
     return true
   } catch {
     return false
