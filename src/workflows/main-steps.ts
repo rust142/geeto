@@ -397,14 +397,52 @@ export async function handleCleanup(featureBranch: string, state: GeetoState): P
         console.log('')
         const deleteAnswer = confirm(`Delete branch '${featureBranch}'?`)
         if (deleteAnswer) {
-          exec(`git branch -d ${featureBranch}`)
-
-          // Also delete remote branch if it exists
           try {
-            pushWithRetry(`git push origin --delete ${featureBranch}`, true)
-            log.success(`Remote branch '${featureBranch}' deleted`)
-          } catch {
-            // Remote branch might not exist, ignore error
+            exec(`git branch -d ${featureBranch}`)
+            log.success(`Local branch '${featureBranch}' deleted`)
+
+            // Also delete remote branch if it exists
+            try {
+              pushWithRetry(`git push origin --delete ${featureBranch}`, true)
+              log.success(`Remote branch '${featureBranch}' deleted`)
+            } catch {
+              // Remote branch might not exist, ignore error
+            }
+          } catch (error) {
+            // Branch deletion failed - likely not fully merged
+            const errMsg = error instanceof Error ? error.message : String(error)
+
+            if (errMsg.includes('not fully merged') || errMsg.includes('is not yet merged')) {
+              console.log('')
+              log.warn(`Branch '${featureBranch}' is not fully merged to its remote.`)
+
+              const forceDeleteChoice = await select('What would you like to do?', [
+                { label: 'Force delete anyway (git branch -D)', value: 'force' },
+                { label: 'Keep the branch', value: 'keep' },
+              ])
+
+              if (forceDeleteChoice === 'force') {
+                try {
+                  exec(`git branch -D ${featureBranch}`)
+                  log.success(`Local branch '${featureBranch}' force-deleted`)
+
+                  // Also delete remote branch if it exists
+                  try {
+                    pushWithRetry(`git push origin --delete ${featureBranch}`, true)
+                    log.success(`Remote branch '${featureBranch}' deleted`)
+                  } catch {
+                    // Remote branch might not exist, ignore error
+                  }
+                } catch (forceError) {
+                  log.error(`Failed to force delete branch: ${forceError}`)
+                }
+              } else {
+                log.info(`Kept branch '${featureBranch}'`)
+              }
+            } else {
+              // Unknown error
+              log.error(`Failed to delete branch: ${errMsg}`)
+            }
           }
         } else {
           // User chose not to delete the feature branch — switch back to it so they can continue working

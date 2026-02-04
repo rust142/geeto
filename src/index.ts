@@ -15,6 +15,7 @@ let showVersion = false
 let showHelp = false
 let showAuthor = false
 let showSaweria = false
+let showCleanup = false
 let settingsAction:
   | 'separator'
   | 'models'
@@ -79,6 +80,9 @@ for (const arg of argv) {
   if (arg === '--setup-trello') {
     settingsAction = 'trello'
   }
+  if (arg === '--cleanup' || arg === '-cl') {
+    showCleanup = true
+  }
 }
 
 // Validate unknown flags
@@ -95,6 +99,8 @@ const validFlags = new Set([
   '-as',
   '-p',
   '--push',
+  '--cleanup',
+  '-cl',
   '-f',
   '--fresh',
   '-r',
@@ -139,6 +145,9 @@ for (const arg of argv) {
     console.log('  -s, --stage          Start at stage step')
     console.log('  -sa, -as             Start at stage step and automatically stage all changes')
     console.log('  -p, --push           Start at push step')
+    console.log(
+      '  -cl, --cleanup       Interactive branch cleanup (delete local & remote branches)'
+    )
     console.log('  -f, --fresh          Start fresh workflow (ignore checkpoint)')
     console.log('  -r, --resume         Resume from checkpoint (default if exists)')
     console.log('  -v, --version        Show version')
@@ -179,6 +188,17 @@ for (const arg of argv) {
   if (showSaweria) {
     console.log('Support the author: https://saweria.co/rust142')
     process.exit(0)
+  }
+
+  if (showCleanup) {
+    try {
+      const { handleInteractiveCleanup } = await import('./workflows/cleanup.js')
+      handleInteractiveCleanup()
+      process.exit(0)
+    } catch (error) {
+      console.error('Cleanup error:', error)
+      process.exit(1)
+    }
   }
 
   if (settingsAction) {
