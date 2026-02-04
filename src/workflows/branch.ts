@@ -20,6 +20,7 @@ import {
 import { exec, execGit } from '../utils/exec.js'
 import {
   getBranchPrefix,
+  getChangedFiles,
   handleBranchNaming,
   interactiveAIFallback,
   isContextLimitFailure,
@@ -298,12 +299,46 @@ export const handleBranchCreationWorkflow = async (
                 // AI failed — try interactive fallback first, then manual
                 log.warn('AI generation failed. Trying interactive fallback...')
 
-                const diff = execGit('git diff --cached', true)
+                let diff = execGit('git diff --cached', true)
                 if (!diff?.trim()) {
-                  log.warn(
-                    'No staged changes found. Cannot generate a branch name from empty diff. Aborting.'
-                  )
-                  process.exit(0)
+                  const changedFiles = getChangedFiles()
+                  if (changedFiles.length === 0) {
+                    log.warn('No changes found. Cannot generate a branch name. Aborting.')
+                    process.exit(0)
+                  }
+
+                  const stageChoice = (await select('What to stage?', [
+                    { label: 'Stage all changes', value: 'all' },
+                    { label: 'Already staged', value: 'skip' },
+                    { label: 'Continue without staging', value: 'without' },
+                    { label: 'Cancel', value: 'cancel' },
+                  ])) as 'all' | 'skip' | 'without' | 'cancel'
+
+                  switch (stageChoice) {
+                    case 'all': {
+                      exec('git add -A')
+                      log.success('All changes staged')
+                      diff = execGit('git diff --cached', true)
+                      if (!diff?.trim()) {
+                        log.error('Still no staged changes after staging. Aborting.')
+                        process.exit(0)
+                      }
+                      break
+                    }
+                    case 'without':
+                    case 'cancel': {
+                      log.warn('Cancelled.')
+                      process.exit(0)
+                    }
+                    case 'skip': {
+                      diff = execGit('git diff --cached', true)
+                      if (!diff?.trim()) {
+                        log.error('No staged changes found. Aborting.')
+                        process.exit(0)
+                      }
+                      break
+                    }
+                  }
                 }
 
                 const aiSuffix = await interactiveAIFallback(
