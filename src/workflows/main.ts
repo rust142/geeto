@@ -778,7 +778,7 @@ export const main = async (opts?: {
     featureBranch = await handleMerge(state, { suppressStep: !!opts?.startAt, suppressLogs })
 
     // STEP 6: Cleanup (simplified)
-    handleCleanup(featureBranch, state)
+    await handleCleanup(featureBranch, state)
 
     console.log(`\n✅ Git flow complete!\n`)
     // Close any interactive input resources and exit to ensure the CLI terminates

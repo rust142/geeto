@@ -1,6 +1,6 @@
 import { askQuestion } from '../cli/input.js'
 import { colors } from '../utils/colors.js'
-import { exec } from '../utils/exec.js'
+import { safeCheckout } from '../utils/git-errors.js'
 import {
   branchExists,
   getBranchPrefix,
@@ -31,7 +31,7 @@ export function promptManualBranch(curBranch: string): string {
 /**
  * Create a branch if valid and not existing. Returns true when created.
  */
-export const createBranch = (name: string, currentBranch: string): boolean => {
+export const createBranch = async (name: string, currentBranch: string): Promise<boolean> => {
   if (!name || name === currentBranch) {
     return false
   }
@@ -64,7 +64,11 @@ export const createBranch = (name: string, currentBranch: string): boolean => {
   }
 
   log.info(`Creating branch: ${name}`)
-  exec(`git checkout -b "${name}"`)
+  const result = await safeCheckout(name, { create: true })
+  if (!result.success) {
+    log.error(`Failed to create branch: ${result.error}`)
+    return false
+  }
   log.success(`Branch created: ${colors.cyan}${colors.bright}${name}${colors.reset}`)
   return true
 }

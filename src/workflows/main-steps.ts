@@ -1,9 +1,11 @@
 import type { GeetoState } from '../types/index.js'
 
+import { handleCommitWorkflow } from './commit.js'
 import { confirm, ProgressBar } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { STEP } from '../core/constants.js'
 import { exec, execAsync } from '../utils/exec.js'
+import { safeCheckout, safeMerge } from '../utils/git-errors.js'
 import { getCurrentBranch, pushWithRetry } from '../utils/git.js'
 import { log } from '../utils/logging.js'
 import { saveState } from '../utils/state.js'
@@ -226,7 +228,11 @@ export async function handleMerge(
         return featureBranch
       }
 
-      exec(`git checkout -b development ${base}`)
+      const createResult = await safeCheckout('development', { create: true })
+      if (!createResult.success) {
+        log.error(`Failed to create branch 'development': ${createResult.error}`)
+        return featureBranch
+      }
       log.success(`Branch 'development' created from ${base}`)
       targetBranch = 'development'
     }
@@ -239,10 +245,36 @@ export async function handleMerge(
         { label: 'Squash and merge --no-ff', value: 'squash' },
       ])
 
-      exec(`git checkout ${targetBranch}`)
+      // Safe checkout to target branch with uncommitted changes handling
+      let checkoutResult = await safeCheckout(targetBranch)
+
+      // If user chose to commit first, trigger commit workflow then retry checkout
+      if (checkoutResult.commitNeeded) {
+        console.log('')
+        log.info('Committing changes before merge...')
+        await handleCommitWorkflow(state, { suppressStep: true, suppressConfirm: false })
+
+        // Retry checkout after commit
+        checkoutResult = await safeCheckout(targetBranch)
+      }
+
+      if (!checkoutResult.success) {
+        log.error(`Failed to checkout ${targetBranch}: ${checkoutResult.error}`)
+        return featureBranch
+      }
 
       if (mergeType === 'merge-no-ff') {
-        exec(`git merge --no-ff ${featureBranch}`)
+        const mergeResult = await safeMerge(featureBranch, { noFf: true })
+        if (!mergeResult.success) {
+          if (mergeResult.conflict) {
+            log.error('Merge aborted due to conflicts. Please resolve manually if needed.')
+          } else {
+            log.error(`Merge failed: ${mergeResult.error}`)
+          }
+          // Switch back to feature branch
+          await safeCheckout(featureBranch)
+          return featureBranch
+        }
         log.success(`Merged ${featureBranch} into ${targetBranch} with --no-ff`)
       } else {
         // Squash commits on feature branch first
@@ -253,7 +285,17 @@ export async function handleMerge(
           exec(`git reset --soft HEAD~${commitCount - 1}`)
           exec('git commit --amend --no-edit --no-verify')
         }
-        exec(`git merge --no-ff ${featureBranch}`)
+        const mergeResult = await safeMerge(featureBranch, { noFf: true })
+        if (!mergeResult.success) {
+          if (mergeResult.conflict) {
+            log.error('Merge aborted due to conflicts. Please resolve manually if needed.')
+          } else {
+            log.error(`Merge failed: ${mergeResult.error}`)
+          }
+          // Switch back to feature branch
+          await safeCheckout(featureBranch)
+          return featureBranch
+        }
         log.success(`Squashed ${featureBranch} and merged into ${targetBranch} with --no-ff`)
       }
 
@@ -341,7 +383,7 @@ export async function handleMerge(
   return state.targetBranch || getCurrentBranch()
 }
 
-export function handleCleanup(featureBranch: string, state: GeetoState): void {
+export async function handleCleanup(featureBranch: string, state: GeetoState): Promise<void> {
   if (state.step < STEP.CLEANUP) {
     log.step('Step 6: Cleanup')
     log.info(`Current branch: ${getCurrentBranch()}`)
@@ -366,11 +408,11 @@ export function handleCleanup(featureBranch: string, state: GeetoState): void {
           }
         } else {
           // User chose not to delete the feature branch — switch back to it so they can continue working
-          try {
-            exec(`git checkout "${featureBranch}"`)
+          const checkoutResult = await safeCheckout(featureBranch)
+          if (checkoutResult.success) {
             log.info(`Kept branch '${featureBranch}' and switched to it`)
-          } catch {
-            log.warn(`Could not switch back to branch '${featureBranch}'.`)
+          } else {
+            log.warn(`Could not switch back to branch '${featureBranch}': ${checkoutResult.error}`)
           }
         }
       }

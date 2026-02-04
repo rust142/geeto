@@ -140,7 +140,7 @@ export async function handleTrelloCase(
     const branchSuffix = generateBranchNameFromTrelloTitle(cardData.title, cardData.id, separator)
     const workingBranch = `${defaultPrefix}${branchSuffix}`
     log.success(`Branch name: ${colors.cyan}${workingBranch}${colors.reset}`)
-    if (createBranch(workingBranch, state.currentBranch)) {
+    if (await createBranch(workingBranch, state.currentBranch)) {
       state.workingBranch = workingBranch
       state.step = STEP.BRANCH_CREATED
       saveState(state)
@@ -278,7 +278,7 @@ export async function handleTrelloCase(
     switch (acceptChoice) {
       case 'accept': {
         // create branch and return
-        if (createBranch(workingBranch, state.currentBranch)) {
+        if (await createBranch(workingBranch, state.currentBranch)) {
           state.workingBranch = workingBranch
           state.step = STEP.BRANCH_CREATED
           saveState(state)
@@ -408,7 +408,7 @@ export async function handleTrelloCase(
       case 'edit': {
         const edited = askQuestion(`Edit branch (${workingBranch}): `)
         workingBranch = edited || workingBranch
-        if (createBranch(workingBranch, state.currentBranch)) {
+        if (await createBranch(workingBranch, state.currentBranch)) {
           state.workingBranch = workingBranch
           state.step = STEP.BRANCH_CREATED
           saveState(state)

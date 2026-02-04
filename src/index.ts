@@ -137,6 +137,7 @@ for (const arg of argv) {
     console.log('  -m, --merge          Start at merge step')
     console.log('  -b, --branch         Start at branch step')
     console.log('  -s, --stage          Start at stage step')
+    console.log('  -sa, -as             Start at stage step and automatically stage all changes')
     console.log('  -p, --push           Start at push step')
     console.log('  -f, --fresh          Start fresh workflow (ignore checkpoint)')
     console.log('  -r, --resume         Resume from checkpoint (default if exists)')
