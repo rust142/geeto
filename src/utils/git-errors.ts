@@ -212,15 +212,6 @@ export const safeMerge = async (
   options?: { noFf?: boolean; squash?: boolean }
 ): Promise<{ success: boolean; conflict?: boolean; error?: string }> => {
   try {
-    // Check for uncommitted changes
-    if (hasUncommittedChanges()) {
-      log.warn('You have uncommitted changes. Please commit or stash them before merging.')
-      const canProceed = await handleUncommittedChangesBeforeCheckout()
-      if (canProceed === 'cancel') {
-        return { success: false, error: 'Cancelled by user' }
-      }
-    }
-
     // Check if merge/rebase is already in progress
     if (isMergeInProgress()) {
       log.error('A merge is already in progress. Please resolve it first.')

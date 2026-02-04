@@ -777,6 +777,18 @@ export const main = async (opts?: {
 
     featureBranch = await handleMerge(state, { suppressStep: !!opts?.startAt, suppressLogs })
 
+    // Only proceed to cleanup if merge was successful
+    if (state.step !== STEP.MERGED) {
+      log.warn('Merge was not completed. Skipping cleanup.')
+      console.log('\n⚠️  Workflow incomplete. Please resolve any issues and retry.\n')
+      try {
+        closeInput()
+      } catch {
+        /* ignore */
+      }
+      process.exit(1)
+    }
+
     // STEP 6: Cleanup (simplified)
     await handleCleanup(featureBranch, state)
 
