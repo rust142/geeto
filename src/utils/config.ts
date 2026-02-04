@@ -82,6 +82,55 @@ export const getBranchStrategyConfigPath = (): string => {
   return '.geeto/branch-strategy.toml'
 }
 
+/**
+ * Get path to user settings (project-local)
+ */
+/**
+ * Check trello.toml for skip flag
+ */
+export const hasSkippedTrelloPrompt = (): boolean => {
+  try {
+    const path = getTrelloConfigPath()
+    if (fs.existsSync(path)) {
+      const content = fs.readFileSync(path, 'utf8')
+      const m = content.match(/skip_setup\s*=\s*(?:true|false|"true"|"false")/)
+      if (m) {
+        const val = m[0].match(/(?:true|false|"true"|"false")/)?.[0]?.replaceAll('"', '')
+        return val === 'true'
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return false
+}
+
+export const setSkipTrelloPrompt = (v = true): void => {
+  try {
+    ensureGeetoIgnored()
+    const path = getTrelloConfigPath()
+    const configDir = path.slice(0, path.lastIndexOf('/'))
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true })
+    }
+
+    let content = ''
+    if (fs.existsSync(path)) {
+      content = fs.readFileSync(path, 'utf8')
+      // remove existing skip_setup line if present
+      content = content.replace(/\n?skip_setup\s*=.*(?:\n|$)/, '\n')
+    }
+
+    // append skip_setup at end
+    if (!content.endsWith('\n')) content += '\n'
+    content += `skip_setup = ${v ? 'true' : 'false'}\n`
+    fs.writeFileSync(path, content, 'utf8')
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    log.warn(`Failed to write trello config skip flag: ${msg}`)
+  }
+}
+
 const GEMINI_CONFIG_PATH = getGeminiConfigPath()
 export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash'
 

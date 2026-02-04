@@ -497,6 +497,7 @@ export const handleCommitWorkflow = async (
     // Try generating commit message via AI
     let initialAiResult: string | null = null
     let currentModel: string | undefined
+    const spinner = log.spinner()
     try {
       let currentProvider: 'gemini' | 'copilot' | 'openrouter' | undefined
       if (state.aiProvider && state.aiProvider !== 'manual') {
@@ -513,7 +514,7 @@ export const handleCommitWorkflow = async (
         currentModel = state.geminiModel ?? DEFAULT_GEMINI_MODEL
       }
 
-      log.ai(
+      spinner.start(
         `Generating commit message with ${getAIProviderShortName(currentProvider)}${currentModel ? ` (${currentModel})` : ''}...`
       )
 
@@ -539,7 +540,9 @@ export const handleCommitWorkflow = async (
           state.geminiModel as GeminiModel
         )
       }
+      spinner.stop()
     } catch {
+      spinner.stop()
       log.warn('Initial AI generation attempt failed, will enter interactive fallback')
       initialAiResult = null
     }
@@ -575,26 +578,27 @@ export const handleCommitWorkflow = async (
         let directAttempt = 0
         const maxDirectAttempts = 2
         while (directAttempt < maxDirectAttempts && !aiResult) {
+          // Log which provider/model we're attempting for regenerate
+          let directModelName = ''
+          if (state.aiProvider === 'copilot' && state.copilotModel) {
+            directModelName = state.copilotModel as string
+          } else if (state.aiProvider === 'openrouter' && state.openrouterModel) {
+            directModelName = state.openrouterModel as string
+          } else if (state.aiProvider === 'gemini') {
+            directModelName = (state.geminiModel as string) ?? DEFAULT_GEMINI_MODEL
+          }
+
+          if (correction) {
+            console.log('')
+          }
+          const spinner = log.spinner()
+          spinner.start(
+            `Regenerating commit message with ${getAIProviderShortName(
+              state.aiProvider ?? 'gemini'
+            )}${directModelName ? ` (${directModelName})` : ''}...`
+          )
+
           try {
-            // Log which provider/model we're attempting for regenerate
-            let directModelName = ''
-            if (state.aiProvider === 'copilot' && state.copilotModel) {
-              directModelName = state.copilotModel as string
-            } else if (state.aiProvider === 'openrouter' && state.openrouterModel) {
-              directModelName = state.openrouterModel as string
-            } else if (state.aiProvider === 'gemini') {
-              directModelName = (state.geminiModel as string) ?? DEFAULT_GEMINI_MODEL
-            }
-
-            if (correction) {
-              console.log('')
-            }
-            log.ai(
-              `Regenerating commit message with ${getAIProviderShortName(
-                state.aiProvider ?? 'gemini'
-              )}${directModelName ? ` (${directModelName})` : ''}...`
-            )
-
             switch (state.aiProvider) {
               case 'copilot': {
                 const { generateCommitMessage } = await import('../api/copilot.js')
@@ -628,7 +632,9 @@ export const handleCommitWorkflow = async (
                 break
               }
             }
+            spinner.stop()
           } catch {
+            spinner.stop()
             aiResult = null
           }
 

@@ -366,7 +366,8 @@ export async function interactiveAIFallback(
         case 'gemini': {
           const gem = await import('../api/gemini.js')
           const { generateBranchName, generateCommitMessage } = gem
-          log.ai(
+          const spinner = log.spinner()
+          spinner.start(
             `Retrying with ${getAIProviderShortName(aiProvider)}${getModelValue(currentModel) ? ` (${getModelValue(currentModel)})` : ''}...`
           )
           if (isCommit) {
@@ -384,12 +385,14 @@ export async function interactiveAIFallback(
             )
             aiSuffix = res
           }
+          spinner.stop()
           break
         }
         case 'copilot': {
           const cop = await import('../api/copilot.js')
           const { generateBranchName, generateCommitMessage } = cop
-          log.ai(
+          const spinner = log.spinner()
+          spinner.start(
             `Retrying with ${getAIProviderShortName(aiProvider)}${getModelValue(currentModel) ? ` (${getModelValue(currentModel)})` : ''}...`
           )
           if (isCommit) {
@@ -407,12 +410,14 @@ export async function interactiveAIFallback(
             )
             aiSuffix = res
           }
+          spinner.stop()
           break
         }
         case 'openrouter': {
           const or = await import('../api/openrouter.js')
           const { generateBranchName, generateCommitMessage } = or
-          log.ai(
+          const spinner = log.spinner()
+          spinner.start(
             `Retrying with ${getAIProviderShortName(aiProvider)}${getModelValue(currentModel) ? ` (${getModelValue(currentModel)})` : ''}...`
           )
           if (isCommit) {
@@ -430,6 +435,7 @@ export async function interactiveAIFallback(
             )
             aiSuffix = res
           }
+          spinner.stop()
           break
         }
         default: {
@@ -460,7 +466,8 @@ export async function interactiveAIFallback(
         // user already selected a model from the menu — apply it immediately
         currentModel = chosen as GeminiModel
         updateModel?.('gemini', chosen as GeminiModel)
-        log.ai(
+        const spinner = log.spinner()
+        spinner.start(
           `${isCommit ? 'Generating commit message' : 'Generating branch name'} with Gemini (${chosen})...`
         )
 
@@ -475,6 +482,7 @@ export async function interactiveAIFallback(
           )
           aiSuffix = res
         }
+        spinner.stop()
         if (isTransientFailure(aiSuffix)) {
           failedModels.add(chosen as string)
         }
@@ -495,7 +503,8 @@ export async function interactiveAIFallback(
         // user already selected a model from the menu — apply it immediately
         currentModel = chosen as CopilotModel
         updateModel?.('copilot', chosen as CopilotModel)
-        log.ai(
+        const spinner = log.spinner()
+        spinner.start(
           `${isCommit ? 'Generating commit message' : 'Generating branch name'} with GitHub Copilot (${chosen})...`
         )
 
@@ -506,6 +515,7 @@ export async function interactiveAIFallback(
           const res = await generateBranchName(diff, correction, chosen as CopilotModel)
           aiSuffix = res
         }
+        spinner.stop()
         if (isTransientFailure(aiSuffix)) {
           failedModels.add(chosen as string)
         }
@@ -526,7 +536,8 @@ export async function interactiveAIFallback(
         // user already selected a model from the menu — apply it immediately
         currentModel = chosen as OpenRouterModel
         updateModel?.('openrouter', chosen as OpenRouterModel)
-        log.ai(
+        const spinner = log.spinner()
+        spinner.start(
           `${isCommit ? 'Generating commit message' : 'Generating branch name'} with OpenRouter (${chosen})...`
         )
 
@@ -584,7 +595,8 @@ export async function interactiveAIFallback(
         aiProvider = 'gemini'
         currentModel = chosenModel as GeminiModel
         updateModel?.('gemini', chosenModel as GeminiModel)
-        log.ai(
+        const spinner = log.spinner()
+        spinner.start(
           `${isCommit ? 'Generating commit message' : 'Generating branch name'} with Gemini (${chosenModel})...`
         )
 
@@ -596,6 +608,7 @@ export async function interactiveAIFallback(
           const res = await gem.generateBranchName(diff, correction, chosenModel as GeminiModel)
           aiSuffix = res
         }
+        spinner.stop()
       } else if (pickProv === 'copilot') {
         log.info(`Selected AI Provider: Copilot`)
         const { ensureAIProvider } = await import('../core/setup.js')
@@ -618,7 +631,8 @@ export async function interactiveAIFallback(
         aiProvider = 'copilot'
         currentModel = chosen as CopilotModel
         updateModel?.('copilot', chosen as CopilotModel)
-        log.ai(
+        const spinner = log.spinner()
+        spinner.start(
           `${isCommit ? 'Generating commit message' : 'Generating branch name'} with GitHub Copilot (${chosen})...`
         )
 
@@ -629,6 +643,7 @@ export async function interactiveAIFallback(
           const res = await generateBranchName(diff, correction, chosen as CopilotModel)
           aiSuffix = res
         }
+        spinner.stop()
       } else {
         log.info(`Selected AI Provider: OpenRouter`)
         const { ensureAIProvider } = await import('../core/setup.js')
@@ -650,7 +665,8 @@ export async function interactiveAIFallback(
         aiProvider = 'openrouter'
         currentModel = chosen as OpenRouterModel
         updateModel?.('openrouter', chosen as OpenRouterModel)
-        log.ai(
+        const spinner = log.spinner()
+        spinner.start(
           `${isCommit ? 'Generating commit message' : 'Generating branch name'} with OpenRouter (${chosen})...`
         )
 
@@ -661,6 +677,7 @@ export async function interactiveAIFallback(
           const res = await generateBranchName(diff, correction, chosen as OpenRouterModel)
           aiSuffix = res
         }
+        spinner.stop()
       }
 
       continue

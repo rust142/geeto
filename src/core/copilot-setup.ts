@@ -2,7 +2,9 @@
  * GitHub Copilot CLI setup helper (moved from `setup.ts`)
  */
 
+import fs from 'node:fs'
 import os from 'node:os'
+import path from 'node:path'
 
 import { confirm } from '../cli/input.js'
 import { select } from '../cli/menu.js'
@@ -10,42 +12,175 @@ import { ensureGeetoIgnored } from '../utils/config.js'
 import { commandExists, exec } from '../utils/exec.js'
 import { log } from '../utils/logging.js'
 
-// Helper: Check Copilot version and warn if outdated
-export const checkCopilotVersion = (): void => {
-  try {
-    // Check CLI availability
-    try {
-      exec('copilot --version', true)
-      // log.info('GitHub Copilot CLI available')
-      return
-    } catch {
-      // CLI not available
-    }
+// Minimum Copilot CLI version required for SDK compatibility (--acp/--server support)
+const MIN_COPILOT_VERSION = '0.0.400'
 
-    const verOut = exec('copilot --version', true)
-    const m = verOut.match(/v?(\d+\.\d+\.\d+)/)
-    const ver = m?.[1]
-    if (ver) {
-      const current = ver.split('.').map((n) => Number.parseInt(n, 10))
-      while (current.length < 3) {
-        current.push(0)
-      }
-      const major = current[0] ?? 0
-      const minor = current[1] ?? 0
-      const patch = current[2] ?? 0
-      const currentNum = major * 1_000_000 + minor * 1_000 + patch
-      const minNum = 0 * 1e6 + 0 * 1e3 + 382
-      if (currentNum < minNum) {
-        log.warn(
-          'Detected Copilot CLI version is older than v0.0.382 — the latest Copilot models (GPT-5.2-Codex) are only supported on v0.0.382 and above. See: https://github.com/github/copilot-cli/releases'
-        )
-      } else {
-        log.info(`GitHub Copilot CLI version: v${ver}`)
+// Cache file path for storing copilot binary info
+const CACHE_FILE = path.join(os.homedir(), '.cache', 'geeto', 'copilot-bin.json')
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
+
+interface CopilotBinCache {
+  path: string
+  version: string
+  timestamp: number
+}
+
+/**
+ * Parse version string to numeric value for comparison.
+ * Returns null if parsing fails.
+ */
+const parseVersion = (ver: string): number | null => {
+  const parts = ver.split('.').map((n) => Number.parseInt(n, 10))
+  if (parts.some((p) => Number.isNaN(p))) {
+    return null
+  }
+  while (parts.length < 3) {
+    parts.push(0)
+  }
+  const [major = 0, minor = 0, patch = 0] = parts
+  return major * 1_000_000 + minor * 1_000 + patch
+}
+
+/**
+ * Read cached copilot binary info from file.
+ */
+const readCache = (): CopilotBinCache | null => {
+  try {
+    if (!fs.existsSync(CACHE_FILE)) return null
+    const data = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')) as CopilotBinCache
+    // Check if cache is still valid (within TTL and binary still exists)
+    if (Date.now() - data.timestamp < CACHE_TTL_MS && fs.existsSync(data.path)) {
+      return data
+    }
+  } catch {
+    // ignore
+  }
+  return null
+}
+
+/**
+ * Write copilot binary info to cache file.
+ */
+const writeCache = (info: { path: string; version: string }): void => {
+  try {
+    const cacheDir = path.dirname(CACHE_FILE)
+    if (!fs.existsSync(cacheDir)) {
+      fs.mkdirSync(cacheDir, { recursive: true })
+    }
+    fs.writeFileSync(CACHE_FILE, JSON.stringify({ ...info, timestamp: Date.now() }))
+  } catch {
+    // ignore cache write failures
+  }
+}
+
+/**
+ * Get version from a specific copilot binary path.
+ */
+const getVersionFromPath = (binPath: string): string | null => {
+  try {
+    const verOut = exec(`"${binPath}" --version`, true)
+    const m = verOut.match(/(\d+\.\d+\.\d+)/)
+    return m?.[1] ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Find the best (newest) copilot binary from known locations.
+ * Uses file-based caching to avoid slow exec calls on every startup.
+ */
+const findBestCopilotBinary = (): { path: string; version: string } | null => {
+  const minNum = parseVersion(MIN_COPILOT_VERSION) ?? 0
+
+  // Super fast path: check cache first
+  const cached = readCache()
+  if (cached && (parseVersion(cached.version) ?? 0) >= minNum) {
+    return { path: cached.path, version: cached.version }
+  }
+
+  // Check PATH first (most common case)
+  try {
+    const pathBin = exec('which copilot', true).trim()
+    if (pathBin && fs.existsSync(pathBin)) {
+      const ver = getVersionFromPath(pathBin)
+      if (ver) {
+        const num = parseVersion(ver) ?? 0
+        if (num >= minNum) {
+          const result = { path: pathBin, version: ver }
+          writeCache(result)
+          return result
+        }
       }
     }
   } catch {
-    // ignore version parse errors
+    // ignore, will check other locations
   }
+
+  // PATH version is outdated or not found - scan known locations
+  const home = os.homedir()
+  const knownPaths = [
+    '/usr/local/bin/copilot',
+    '/usr/bin/copilot',
+    path.join(home, '.config/Code/User/globalStorage/github.copilot-chat/copilotCli/copilot'),
+    path.join(home, '.npm-global/bin/copilot'),
+    path.join(home, '.local/bin/copilot'),
+  ]
+
+  for (const binPath of knownPaths) {
+    if (fs.existsSync(binPath)) {
+      const ver = getVersionFromPath(binPath)
+      if (ver) {
+        const num = parseVersion(ver) ?? 0
+        if (num >= minNum) {
+          const result = { path: binPath, version: ver }
+          writeCache(result)
+          return result
+        }
+      }
+    }
+  }
+
+  return null
+}
+
+/**
+ * Check Copilot CLI version and warn if outdated.
+ * Automatically finds the newest copilot binary to bypass PATH cache issues.
+ * Returns true if version is compatible, false otherwise.
+ */
+export const checkCopilotVersion = (): boolean => {
+  const best = findBestCopilotBinary()
+
+  if (!best) {
+    // No copilot binary found anywhere
+    return false
+  }
+
+  const currentNum = parseVersion(best.version)
+  const minNum = parseVersion(MIN_COPILOT_VERSION)
+
+  if (currentNum === null || minNum === null) {
+    return false
+  }
+
+  if (currentNum < minNum) {
+    log.error(
+      `Copilot CLI version ${best.version} is outdated. Minimum required: ${MIN_COPILOT_VERSION}`
+    )
+    log.info('The Copilot SDK requires CLI version 0.0.400+ for session/server support.')
+    log.info('Please upgrade with: sudo npm install -g @github/copilot')
+    log.info('Or visit: https://github.com/github/copilot-cli/releases')
+    return false
+  }
+
+  // Update PATH so CopilotClient can find the newest binary
+  const binDir = path.dirname(best.path)
+  if (!process.env.PATH?.startsWith(binDir)) {
+    process.env.PATH = `${binDir}:${process.env.PATH}`
+  }
+
+  return true
 }
 
 // Helper: Setup GitHub CLI if needed

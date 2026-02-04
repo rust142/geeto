@@ -303,8 +303,10 @@ const handleGeminiSetting = async (): Promise<boolean | void> => {
   const hasConfig = hasGeminiConfig()
 
   if (!hasConfig) {
-    log.info('No Gemini configuration found. Setting up Gemini AI integration...')
+    const spinner = log.spinner()
+    spinner.start('Setting up Gemini AI integration...')
     await runInteractiveSetup('gemini')
+    spinner.stop()
     return false
   }
 
@@ -352,8 +354,10 @@ const handleTrelloSetting = async (): Promise<boolean | void> => {
   const hasConfig = hasTrelloConfig()
 
   if (!hasConfig) {
-    log.info('No Trello configuration found. Setting up Trello integration...')
+    const spinner = log.spinner()
+    spinner.start('Setting up Trello integration...')
     await runInteractiveSetup('trello')
+    spinner.stop()
     return false
   }
 
@@ -403,8 +407,10 @@ const handleOpenRouterSetting = async (): Promise<boolean | void> => {
   const hasConfig = hasOpenRouterConfig()
 
   if (!hasConfig) {
-    log.info('No OpenRouter configuration found. Setting up OpenRouter integration...')
+    const spinner = log.spinner()
+    spinner.start('Setting up OpenRouter integration...')
     await runInteractiveSetup('openrouter')
+    spinner.stop()
     return false
   }
 
@@ -499,6 +505,7 @@ export const showSettingsMenu = async () => {
       }
     }
 
+    console.log('')
     // Ask if user wants to continue with settings
     const continueSettings = confirm('Configure another setting?')
     if (!continueSettings) {

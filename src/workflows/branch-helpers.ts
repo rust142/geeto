@@ -46,9 +46,11 @@ export async function handleTrelloCase(
 ): Promise<TrelloCaseResult> {
   // Returns result explaining what to do next for the branch workflow
   if (!hasTrelloConfig()) {
-    log.info('No Trello configuration found. Setting up Trello integration...')
+    const spinner = log.spinner()
+    spinner.start('Setting up Trello integration...')
     const { setupTrelloConfigInteractive } = await import('../core/trello-setup.js')
     const setupSuccess = setupTrelloConfigInteractive()
+    spinner.stop()
     if (!setupSuccess) {
       log.warn('Trello setup failed or cancelled.')
       return { branchFlowComplete: false, branchMenuShown: false }
@@ -56,9 +58,11 @@ export async function handleTrelloCase(
     log.success('Trello integration configured!')
   }
 
-  log.info('🔍 Checking Trello for tasks...')
+  const spinner = log.spinner()
+  spinner.start('Checking Trello for tasks...')
 
   const trelloLists = await fetchTrelloLists()
+  spinner.stop()
   if (trelloLists.length === 0) {
     log.warn('No Trello lists found on board')
     return { branchFlowComplete: false, branchMenuShown: false }
@@ -90,8 +94,10 @@ export async function handleTrelloCase(
   }
 
   const filterListId = selectedListId === 'all' ? undefined : selectedListId
-  log.info('⏳ Loading Trello cards...')
+  const cardSpinner = log.spinner()
+  cardSpinner.start('Loading Trello cards...')
   const trelloCards = await fetchTrelloCards(filterListId)
+  cardSpinner.stop()
 
   if (trelloCards.length === 0) {
     log.warn('No cards found in selected list')
@@ -174,7 +180,8 @@ export async function handleTrelloCase(
       model = (state.geminiModel as unknown as string) ?? DEFAULT_GEMINI_MODEL
     }
     const modelDisplay = getModelDisplayName(aiProvider, model)
-    log.ai(
+    const spinner = log.spinner()
+    spinner.start(
       `Generating short branch name using ${getAIProviderShortName(aiProvider)}${
         modelDisplay ? ` (${modelDisplay})` : ''
       }...`
@@ -183,6 +190,7 @@ export async function handleTrelloCase(
     if (skipRegenerate) {
       // consume skip once and reuse previous aiSuffix
       skipRegenerate = false
+      spinner.stop()
     } else {
       aiSuffix = await generateBranchNameWithProvider(
         aiProvider,
@@ -191,6 +199,7 @@ export async function handleTrelloCase(
         state.copilotModel,
         state.openrouterModel
       )
+      spinner.stop()
     }
 
     if (!aiSuffix || isTransientAIFailure(aiSuffix) || isContextLimitFailure(aiSuffix)) {

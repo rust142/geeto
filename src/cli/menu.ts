@@ -14,13 +14,39 @@ let currentDataListener: ((key: Buffer) => void) | null = null
 export const select = async (question: string, options: SelectOption[]): Promise<string> => {
   return new Promise((resolve) => {
     let selectedIndex = 0
+    const maxVisibleItems = 15 // Show max 15 items at once
+    let scrollOffset = 0
+
+    const getVisibleRange = () => {
+      // Keep selected item in view
+      if (selectedIndex < scrollOffset) {
+        scrollOffset = selectedIndex
+      } else if (selectedIndex >= scrollOffset + maxVisibleItems) {
+        scrollOffset = selectedIndex - maxVisibleItems + 1
+      }
+
+      const start = scrollOffset
+      const end = Math.min(scrollOffset + maxVisibleItems, options.length)
+      return { start, end }
+    }
 
     const renderMenu = () => {
-      process.stdout.write('\u001B[2K')
-      for (let i = 0; i < options.length; i++) {
+      const { start, end } = getVisibleRange()
+      const visibleCount = end - start
+
+      // Clear only the rendered lines (visible items + hint + blank line)
+      for (let i = 0; i < visibleCount + 2; i++) {
         process.stdout.write('\u001B[1A\u001B[2K')
       }
-      for (const [idx, opt] of options.entries()) {
+
+      // Re-render hint and items (question stays at top)
+      console.log(
+        `${colors.gray}  (↑↓/jk arrows, Enter select, 'c' clear, 'q' quit)${colors.reset}\n`
+      )
+
+      for (let idx = start; idx < end; idx++) {
+        const opt = options[idx]
+        if (!opt) continue
         const prefix = idx === selectedIndex ? `${colors.cyan}❯${colors.reset}` : ' '
         const label =
           idx === selectedIndex
@@ -30,11 +56,16 @@ export const select = async (question: string, options: SelectOption[]): Promise
       }
     }
 
+    // Initial render (question + hint + items)
     console.log(`${colors.cyan}?${colors.reset} ${question}`)
     console.log(
       `${colors.gray}  (↑↓/jk arrows, Enter select, 'c' clear, 'q' quit)${colors.reset}\n`
     )
-    for (const [idx, opt] of options.entries()) {
+
+    const { start, end } = getVisibleRange()
+    for (let idx = start; idx < end; idx++) {
+      const opt = options[idx]
+      if (!opt) continue
       const prefix = idx === selectedIndex ? `${colors.cyan}❯${colors.reset}` : ' '
       const label =
         idx === selectedIndex
@@ -93,9 +124,13 @@ export const select = async (question: string, options: SelectOption[]): Promise
           console.clear()
           console.log(`${colors.cyan}?${colors.reset} ${question}`)
           console.log(
-            `${colors.gray}  (Use arrow keys, Enter to select, 'c' to clear screen)${colors.reset}\n`
+            `${colors.gray}  (↑↓/jk arrows, Enter select, 'c' clear, 'q' quit)${colors.reset}\n`
           )
-          for (const [idx, opt] of options.entries()) {
+
+          const { start, end } = getVisibleRange()
+          for (let idx = start; idx < end; idx++) {
+            const opt = options[idx]
+            if (!opt) continue
             const prefix = idx === selectedIndex ? `${colors.cyan}❯${colors.reset}` : ' '
             const label =
               idx === selectedIndex

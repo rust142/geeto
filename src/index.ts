@@ -3,7 +3,7 @@
  * Geeto - Git flow automation CLI tool with AI-powered branch naming
  * Main entry point - delegates to modular workflows
  */
-import { main } from './workflows/main.js'
+const { main } = await import('./workflows/main.js')
 
 // Parse simple CLI flags for quick step shortcuts
 const argv = process.argv.slice(2)
