@@ -360,7 +360,7 @@ export const handleBranchCreationWorkflow = async (
                   workingBranch = `${defaultPrefix}${cleanSuffix}`
 
                   // Create the branch
-                  if (createBranch(workingBranch, state.currentBranch)) {
+                  if (await createBranch(workingBranch, state.currentBranch)) {
                     selectedNamingStrategy = 'ai'
                     state.workingBranch = workingBranch
                     state.currentBranch = workingBranch
@@ -504,7 +504,7 @@ export const handleBranchCreationWorkflow = async (
                           break
                         }
                         workingBranch = edited
-                        if (createBranch(workingBranch, state.currentBranch)) {
+                        if (await createBranch(workingBranch, state.currentBranch)) {
                           selectedNamingStrategy = 'manual'
                           state.workingBranch = workingBranch
                           state.currentBranch = workingBranch
@@ -524,7 +524,7 @@ export const handleBranchCreationWorkflow = async (
                 } else {
                   // Fallback to manual input
                   workingBranch = promptManualBranch(state.currentBranch)
-                  if (createBranch(workingBranch, state.currentBranch)) {
+                  if (await createBranch(workingBranch, state.currentBranch)) {
                     selectedNamingStrategy = 'manual'
                     state.workingBranch = workingBranch
                     wasCreated = true
@@ -539,7 +539,7 @@ export const handleBranchCreationWorkflow = async (
             case 'custom': {
               workingBranch = promptManualBranch(state.currentBranch)
 
-              if (createBranch(workingBranch, state.currentBranch)) {
+              if (await createBranch(workingBranch, state.currentBranch)) {
                 selectedNamingStrategy = 'manual'
                 state.workingBranch = workingBranch
                 wasCreated = true

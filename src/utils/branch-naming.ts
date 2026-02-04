@@ -62,7 +62,9 @@ export const handleBranchNaming = async (
     if (correction) {
       console.log('')
     }
-    log.ai(
+
+    const spinner = log.spinner()
+    spinner.start(
       `Generating branch name with ${getAIProviderShortName(aiProvider)}${modelDisplay ? ` (${modelDisplay})` : ''}...`
     )
 
@@ -70,28 +72,35 @@ export const handleBranchNaming = async (
     if (skipRegenerate) {
       // consume the skip once - will reuse existing aiSuffix
       skipRegenerate = false
+      spinner.stop()
     } else {
       aiSuffix = null
-      switch (aiProvider) {
-        case 'gemini': {
-          const { generateBranchName } = await import('../api/gemini.js')
-          const word = diff
-          aiSuffix = await generateBranchName(word, correction, model as GeminiModel)
-          break
-        }
-        case 'copilot': {
-          const { generateBranchName } = await import('../api/copilot.js')
-          const word = diff
-          aiSuffix = await generateBranchName(word, correction, model as CopilotModel)
-          break
-        }
-        case 'openrouter': {
-          const { generateBranchName } = await import('../api/openrouter.js')
-          const word = diff
-          aiSuffix = await generateBranchName(word, correction, model as OpenRouterModel)
+      try {
+        switch (aiProvider) {
+          case 'gemini': {
+            const { generateBranchName } = await import('../api/gemini.js')
+            const word = diff
+            aiSuffix = await generateBranchName(word, correction, model as GeminiModel)
+            break
+          }
+          case 'copilot': {
+            const { generateBranchName } = await import('../api/copilot.js')
+            const word = diff
+            aiSuffix = await generateBranchName(word, correction, model as CopilotModel)
+            break
+          }
+          case 'openrouter': {
+            const { generateBranchName } = await import('../api/openrouter.js')
+            const word = diff
+            aiSuffix = await generateBranchName(word, correction, model as OpenRouterModel)
 
-          break
+            break
+          }
         }
+        spinner.stop()
+      } catch (error) {
+        spinner.stop()
+        throw error
       }
     }
 

@@ -16,7 +16,13 @@ import { closeInput, confirm } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { STEP, TASK_PLATFORMS } from '../core/constants.js'
 import { colors } from '../utils/colors.js'
-import { DEFAULT_GEMINI_MODEL, getTrelloConfig, hasTrelloConfig } from '../utils/config.js'
+import {
+  DEFAULT_GEMINI_MODEL,
+  getTrelloConfig,
+  hasSkippedTrelloPrompt,
+  hasTrelloConfig,
+  setSkipTrelloPrompt,
+} from '../utils/config.js'
 import { exec } from '../utils/exec.js'
 import { getChangedFiles, getCurrentBranch, getStagedFiles } from '../utils/git.js'
 import { log } from '../utils/logging.js'
@@ -50,6 +56,9 @@ const getStepName = (step: number): string => {
 }
 
 const displayCurrentProviderStatus = async (): Promise<void> => {
+  const spinner = log.spinner()
+  spinner.start('Loading git information...')
+
   // Get git user and remote info for display
   let gitUser = { name: '', email: '' }
   let remoteUrl = ''
@@ -76,6 +85,8 @@ const displayCurrentProviderStatus = async (): Promise<void> => {
 
   // Trello board id if configured
   const trelloConfig = getTrelloConfig()
+
+  spinner.stop()
 
   console.log(
     `${colors.cyan}┌─ Git Information ───────────────────────────────────────┐${colors.reset}`
@@ -115,12 +126,17 @@ export const main = async (opts?: {
   startAt?: 'commit' | 'merge' | 'branch' | 'stage' | 'push'
   fresh?: boolean
   resume?: boolean
+  stageAll?: boolean
 }): Promise<void> => {
   try {
     log.banner()
 
     // Try to load saved state to show current provider status
+    const spinner = log.spinner()
+    spinner.start('Initializing...')
     const initialSavedState = loadState()
+    spinner.stop()
+
     if (initialSavedState?.aiProvider) {
       // If there's a saved checkpoint, avoid duplicating the configured model
       // in the 'Current AI Setup' box since the resume flow will show it.
@@ -489,36 +505,47 @@ export const main = async (opts?: {
         log.success('Trello platform configured')
       }
     } else {
-      const wantTaskIntegration = confirm('Integrate with task management platform?')
+      // If user previously skipped Trello setup, don't prompt again here.
+      if (hasSkippedTrelloPrompt()) {
+        log.info('Trello integration not configured (previously skipped).')
+      } else {
+        const wantTaskIntegration = confirm('Integrate with task management platform?')
 
-      if (wantTaskIntegration) {
-        // Show available platforms
-        const enabledPlatforms = TASK_PLATFORMS.filter((p) => p.enabled)
+        if (wantTaskIntegration) {
+          // Show available platforms
+          const enabledPlatforms = TASK_PLATFORMS.filter((p) => p.enabled)
 
-        if (enabledPlatforms.length > 0) {
-          // Show selection menu
-          const platformOptions = [
-            ...enabledPlatforms.map((p) => ({ label: p.name, value: p.value })),
-            { label: 'Skip integration', value: 'none' },
-          ]
+          if (enabledPlatforms.length > 0) {
+            // Show selection menu
+            const platformOptions = [
+              ...enabledPlatforms.map((p) => ({ label: p.name, value: p.value })),
+              { label: 'Skip integration', value: 'none' },
+            ]
 
-          selectedPlatform = (await select('Select task management platform:', platformOptions)) as
-            | 'trello'
-            | 'none'
-        }
-
-        // Setup selected platform if needed
-        if (selectedPlatform === 'trello' && !hasTrelloConfig()) {
-          log.info('Setting up Trello integration...')
-          const { setupTrelloConfigInteractive } = await import('../core/trello-setup.js')
-          const trelloSetupSuccess = setupTrelloConfigInteractive()
-          if (trelloSetupSuccess) {
-            log.success('Trello integration configured!')
-          } else {
-            log.warn('Trello setup failed or cancelled.')
+            selectedPlatform = (await select(
+              'Select task management platform:',
+              platformOptions
+            )) as 'trello' | 'none'
           }
+
+          // Setup selected platform if needed
+          if (selectedPlatform === 'trello' && !hasTrelloConfig()) {
+            const trelloSpinner = log.spinner()
+            trelloSpinner.start('Setting up Trello integration...')
+            const { setupTrelloConfigInteractive } = await import('../core/trello-setup.js')
+            const trelloSetupSuccess = setupTrelloConfigInteractive()
+            trelloSpinner.stop()
+            if (trelloSetupSuccess) {
+              log.success('Trello integration configured!')
+            } else {
+              log.warn('Trello setup failed or cancelled.')
+            }
+            console.log('')
+          }
+        } else {
+          // User declined task integration, save skip flag
+          setSkipTrelloPrompt()
         }
-        // Future: Add setup for other platforms here
       }
     }
 
@@ -530,18 +557,20 @@ export const main = async (opts?: {
       log.info(`Changed files: ${changedFiles.length}`)
 
       if (changedFiles.length === 0) {
-        // No file changes detected — allow the user to continue without
-        // staging (useful for push/merge workflows) or cancel.
-        const noChangesChoice = await select(
-          'No changes detected. How would you like to proceed?',
-          [
-            { label: 'Continue without staging', value: 'without' },
-            { label: 'Cancel', value: 'cancel' },
-          ]
-        )
-        if (noChangesChoice === 'cancel') {
-          log.warn('Cancelled.')
-          process.exit(0)
+        // No file changes detected — if CLI requested auto-stage, just continue;
+        // otherwise prompt the user to continue or cancel.
+        if (!opts?.stageAll) {
+          const noChangesChoice = await select(
+            'No changes detected. How would you like to proceed?',
+            [
+              { label: 'Continue without staging', value: 'without' },
+              { label: 'Cancel', value: 'cancel' },
+            ]
+          )
+          if (noChangesChoice === 'cancel') {
+            log.warn('Cancelled.')
+            process.exit(0)
+          }
         }
       } else {
         console.log('\nChanged files:')
@@ -553,12 +582,20 @@ export const main = async (opts?: {
           log.step('Step 1: Stage Changes')
         }
 
-        const stageChoice = await select('What to stage?', [
-          { label: 'Stage all changes', value: 'all' },
-          { label: 'Already staged', value: 'skip' },
-          { label: 'Continue without staging', value: 'without' },
-          { label: 'Cancel', value: 'cancel' },
-        ])
+        let stageChoice: 'all' | 'skip' | 'without' | 'cancel'
+        if (opts?.stageAll) {
+          stageChoice = 'all'
+          if (!suppressLogs) {
+            log.info('Auto-staging all changes (from CLI flag)')
+          }
+        } else {
+          stageChoice = (await select('What to stage?', [
+            { label: 'Stage all changes', value: 'all' },
+            { label: 'Already staged', value: 'skip' },
+            { label: 'Continue without staging', value: 'without' },
+            { label: 'Cancel', value: 'cancel' },
+          ])) as 'all' | 'skip' | 'without' | 'cancel'
+        }
 
         switch (stageChoice) {
           case 'all': {
@@ -741,7 +778,7 @@ export const main = async (opts?: {
     featureBranch = await handleMerge(state, { suppressStep: !!opts?.startAt, suppressLogs })
 
     // STEP 6: Cleanup (simplified)
-    handleCleanup(featureBranch, state)
+    await handleCleanup(featureBranch, state)
 
     console.log(`\n✅ Git flow complete!\n`)
     // Close any interactive input resources and exit to ensure the CLI terminates

@@ -34,7 +34,7 @@ export const handleAIProviderSelection = async (): Promise<{
 
     // Setup the selected AI provider using centralized helper where possible
     if (aiProvider === 'manual') {
-      log.info(`Selected AI Provider: Manual`)
+      log.success('Selected AI Provider: Manual')
       // No model selection required; proceed
       break
     }
@@ -56,20 +56,20 @@ export const handleAIProviderSelection = async (): Promise<{
     switch (aiProvider) {
       case 'gemini': {
         geminiModel = chosen as GeminiModel
-        log.info(`Selected Gemini Model: ${geminiModel}`)
+        log.success(`Selected Gemini Model: ${geminiModel}`)
 
         break
       }
       case 'copilot': {
         copilotModel = chosen as CopilotModel
-        log.info(`Selected Copilot Model: ${copilotModel}`)
+        log.success(`Selected Copilot Model: ${copilotModel}`)
         console.log('')
 
         break
       }
       case 'openrouter': {
         openrouterModel = chosen as OpenRouterModel
-        log.info(`Selected OpenRouter Model: ${openrouterModel}`)
+        log.success(`Selected OpenRouter Model: ${openrouterModel}`)
 
         break
       }
