@@ -126,6 +126,7 @@ export const main = async (opts?: {
   startAt?: 'commit' | 'merge' | 'branch' | 'stage' | 'push'
   fresh?: boolean
   resume?: boolean
+  stageAll?: boolean
 }): Promise<void> => {
   try {
     log.banner()
@@ -556,18 +557,20 @@ export const main = async (opts?: {
       log.info(`Changed files: ${changedFiles.length}`)
 
       if (changedFiles.length === 0) {
-        // No file changes detected — allow the user to continue without
-        // staging (useful for push/merge workflows) or cancel.
-        const noChangesChoice = await select(
-          'No changes detected. How would you like to proceed?',
-          [
-            { label: 'Continue without staging', value: 'without' },
-            { label: 'Cancel', value: 'cancel' },
-          ]
-        )
-        if (noChangesChoice === 'cancel') {
-          log.warn('Cancelled.')
-          process.exit(0)
+        // No file changes detected — if CLI requested auto-stage, just continue;
+        // otherwise prompt the user to continue or cancel.
+        if (!opts?.stageAll) {
+          const noChangesChoice = await select(
+            'No changes detected. How would you like to proceed?',
+            [
+              { label: 'Continue without staging', value: 'without' },
+              { label: 'Cancel', value: 'cancel' },
+            ]
+          )
+          if (noChangesChoice === 'cancel') {
+            log.warn('Cancelled.')
+            process.exit(0)
+          }
         }
       } else {
         console.log('\nChanged files:')
@@ -579,12 +582,20 @@ export const main = async (opts?: {
           log.step('Step 1: Stage Changes')
         }
 
-        const stageChoice = await select('What to stage?', [
-          { label: 'Stage all changes', value: 'all' },
-          { label: 'Already staged', value: 'skip' },
-          { label: 'Continue without staging', value: 'without' },
-          { label: 'Cancel', value: 'cancel' },
-        ])
+        let stageChoice: 'all' | 'skip' | 'without' | 'cancel'
+        if (opts?.stageAll) {
+          stageChoice = 'all'
+          if (!suppressLogs) {
+            log.info('Auto-staging all changes (from CLI flag)')
+          }
+        } else {
+          stageChoice = (await select('What to stage?', [
+            { label: 'Stage all changes', value: 'all' },
+            { label: 'Already staged', value: 'skip' },
+            { label: 'Continue without staging', value: 'without' },
+            { label: 'Cancel', value: 'cancel' },
+          ])) as 'all' | 'skip' | 'without' | 'cancel'
+        }
 
         switch (stageChoice) {
           case 'all': {

@@ -10,6 +10,7 @@ const argv = process.argv.slice(2)
 let startAt: 'commit' | 'merge' | 'branch' | 'stage' | 'push' | undefined
 let fresh = false
 let resume = false
+let stageAll = false
 let showVersion = false
 let showHelp = false
 let showAuthor = false
@@ -34,6 +35,10 @@ for (const arg of argv) {
   }
   if (arg === '-s' || arg === '--stage') {
     startAt = 'stage'
+  }
+  if (arg === '-sa' || arg === '-as') {
+    startAt = 'stage'
+    stageAll = true
   }
   if (arg === '-p' || arg === '--push') {
     startAt = 'push'
@@ -86,6 +91,8 @@ const validFlags = new Set([
   '--branch',
   '-s',
   '--stage',
+  '-sa',
+  '-as',
   '-p',
   '--push',
   '-f',
@@ -216,8 +223,10 @@ for (const arg of argv) {
     }
   }
 
+  // Pass stageAll flag into main so workflows can auto-stage all changes
+
   // Start the application with optional start step
-  main({ startAt, fresh, resume }).catch((error: unknown) => {
+  main({ startAt, fresh, resume, stageAll }).catch((error: unknown) => {
     console.error('Fatal error:', error)
     process.exit(1)
   })
