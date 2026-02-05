@@ -128,23 +128,61 @@ export const handleGenerateTaskInstructions = async (): Promise<void> => {
 
 Generated from Trello board on ${dateStr}
 
+---
+
+## ⚠️ IMPORTANT INSTRUCTIONS FOR AI AGENTS ⚠️
+
+**CRITICAL: You MUST follow these rules strictly:**
+
+1. **EXECUTE ONLY ONE TASK AT A TIME** - Never work on multiple tasks simultaneously
+2. **STOP after completing each task** - Do NOT automatically proceed to the next task
+3. **Wait for explicit user confirmation** before moving to the next task
+4. **Delete the completed task** from this file after finishing it
+5. **Ask the user** "Task completed. Should I proceed to the next task?" before continuing
+
+**WORKFLOW:**
+\`\`\`
+Step 1: Read only the FIRST uncompleted task (with - [ ])
+Step 2: Execute ONLY that one task
+Step 3: Mark it done by changing - [ ] to - [x]
+Step 4: STOP and ask user for confirmation
+Step 5: Wait for user response before proceeding
+Step 6: If confirmed, delete the completed task and go to Step 1
+\`\`\`
+
+**❌ DO NOT:**
+- Execute multiple tasks in one go
+- Continue to next task without confirmation
+- Assume you should complete everything at once
+
+**✅ DO:**
+- Work on exactly one task
+- Stop and wait after each task
+- Ask for permission to continue
+
+---
+
 ## Tasks
+
+**Total: ${cards.length} tasks**
 
 `
 
-  for (const card of cards) {
-    markdown += `- [ ] ${card.name} (#${card.idShort})\n`
-    markdown += `  - URL: ${card.url}\n`
+  for (const [index, card] of cards.entries()) {
+    markdown += `### Task ${index + 1} of ${cards.length}\n\n`
+    markdown += `- [ ] **${card.name}** (#${card.idShort})\n`
+    markdown += `  - Trello URL: ${card.url}\n\n`
+    markdown += `---\n\n`
   }
 
   markdown += `
-## Instructions
+## Instructions for Human Users
 
 This file contains tasks from your Trello board. To work through these:
 
-1. **Execute each task one by one** from top to bottom
-2. **When a task is completed**, delete it from this file
-3. **Continue with the next task** until all tasks are done
+1. **Execute each task one by one** from top to bottom (or let your AI agent do it)
+2. **When a task is completed**, mark it done or delete it from this file
+3. **If using an AI agent**, confirm after each task before proceeding
 4. **Keep this file updated** as you progress
 
 ---
