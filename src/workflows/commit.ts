@@ -11,6 +11,7 @@ import type { GeetoState } from '../types/index.js'
 import { askQuestion, confirm, editInEditor } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
+import { extractCommitTitle, getCommitTypes, normalizeAIOutput } from '../utils/commit-helpers.js'
 import { DEFAULT_GEMINI_MODEL } from '../utils/config.js'
 import { execGit } from '../utils/exec.js'
 import {
@@ -23,21 +24,6 @@ import {
 } from '../utils/git-ai.js'
 import { log } from '../utils/logging.js'
 import { saveState } from '../utils/state.js'
-
-export const getCommitTypes = () => [
-  { label: 'feat     - New feature', value: 'feat' },
-  { label: 'fix      - Bug fix', value: 'fix' },
-  { label: 'docs     - Documentation', value: 'docs' },
-  { label: 'style    - Code style changes', value: 'style' },
-  { label: 'refactor - Code refactoring', value: 'refactor' },
-  { label: 'test     - Testing', value: 'test' },
-  { label: 'chore    - Maintenance', value: 'chore' },
-  { label: 'perf     - Performance improvement', value: 'perf' },
-  { label: 'ci       - CI/CD changes', value: 'ci' },
-  { label: 'build    - Build system changes', value: 'build' },
-  { label: 'revert   - Revert changes', value: 'revert' },
-  { label: 'cancel', value: 'cancel' },
-]
 
 export const getDefaultCommitTool = (
   aiProvider: 'gemini' | 'copilot' | 'openrouter' | 'manual'
@@ -56,135 +42,6 @@ export const getDefaultCommitTool = (
       return 'manual'
     }
   }
-}
-
-const normalizeAIOutput = (input: string): string => {
-  let t = String(input ?? '')
-
-  // Remove fenced code blocks and triple backticks
-  t = t.replaceAll(/```[\w-]*\n?/g, '').replaceAll('```', '')
-  // Remove inline backticks
-  t = t.replaceAll('`', '')
-  // Trim surrounding quotes and whitespace
-  t = t.replaceAll(/^"+|"+$/g, '').trim()
-
-  // Strip any explanatory preface before the conventional commit line
-  const lower = t.toLowerCase()
-  const typesList = [
-    'feat',
-    'fix',
-    'docs',
-    'style',
-    'refactor',
-    'test',
-    'chore',
-    'perf',
-    'ci',
-    'build',
-    'revert',
-  ]
-
-  let earliestIndex = -1
-  for (const typ of typesList) {
-    const pat1 = `${typ}(`
-    const pat2 = `${typ}:`
-    const i1 = lower.indexOf(pat1)
-    const i2 = lower.indexOf(pat2)
-    let i = -1
-    if (i1 === -1) {
-      i = i2
-    } else if (i2 === -1) {
-      i = i1
-    } else {
-      i = Math.min(i1, i2)
-    }
-
-    if (i !== -1 && (earliestIndex === -1 || i < earliestIndex)) {
-      earliestIndex = i
-    }
-  }
-
-  if (earliestIndex !== -1) {
-    return t.slice(earliestIndex).trim()
-  }
-
-  return t
-}
-
-const extractCommitTitle = (text: string): string | null => {
-  // Try line-by-line first
-  const lines = text
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean)
-
-  const typesList = [
-    'feat',
-    'fix',
-    'docs',
-    'style',
-    'refactor',
-    'test',
-    'chore',
-    'perf',
-    'ci',
-    'build',
-    'revert',
-  ]
-
-  for (const line of lines) {
-    const colonIndex = line.indexOf(':')
-    if (colonIndex === -1) {
-      continue
-    }
-
-    const left = line.slice(0, colonIndex).trim()
-    const type = (left.split('(')[0] ?? '').trim()
-    if (typesList.includes(type)) {
-      const after = line.slice(colonIndex + 1).trim()
-      if (after.length > 0) {
-        return line
-      }
-    }
-  }
-
-  // If not found line-by-line, scan the whole text for a conventional commit substring
-  const lower = text.toLowerCase()
-  let earliestIndex = -1
-  let foundType: string | null = null
-
-  for (const t of typesList) {
-    // look for 't(' or 't:' patterns
-    const pat1 = `${t}(`
-    const pat2 = `${t}:`
-    const i1 = lower.indexOf(pat1)
-    const i2 = lower.indexOf(pat2)
-    let i = -1
-    if (i1 === -1) {
-      i = i2
-    } else if (i2 === -1) {
-      i = i1
-    } else {
-      i = Math.min(i1, i2)
-    }
-    if (i !== -1 && (earliestIndex === -1 || i < earliestIndex)) {
-      earliestIndex = i
-      foundType = t
-    }
-  }
-
-  if (earliestIndex !== -1 && foundType) {
-    // extract the full line starting at earliestIndex
-    const rest = text.slice(earliestIndex)
-    const endIdx = rest.indexOf('\n')
-    const line = (endIdx === -1 ? rest : rest.slice(0, endIdx)).trim()
-    // basic validation
-    if (line.includes(':') && line.length > foundType.length + 2) {
-      return line
-    }
-  }
-
-  return null
 }
 
 const extractCommitBody = (text: string, title: string): string | null => {

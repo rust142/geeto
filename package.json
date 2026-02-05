@@ -57,7 +57,8 @@
     "lint-staged": "lint-staged",
     "tools:install": "sh tools/install.sh",
     "danger:ci": "danger ci",
-    "danger:local": "danger pr"
+    "danger:local": "danger pr",
+    "copilot": "gh"
   },
   "keywords": [
     "git",

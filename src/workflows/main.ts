@@ -18,109 +18,16 @@ import { STEP, TASK_PLATFORMS } from '../core/constants.js'
 import { colors } from '../utils/colors.js'
 import {
   DEFAULT_GEMINI_MODEL,
-  getTrelloConfig,
   hasSkippedTrelloPrompt,
   hasTrelloConfig,
   setSkipTrelloPrompt,
 } from '../utils/config.js'
+import { displayCurrentProviderStatus, getStepName } from '../utils/display.js'
 import { exec } from '../utils/exec.js'
 import { getChangedFiles, getCurrentBranch, getStagedFiles } from '../utils/git.js'
 import { log } from '../utils/logging.js'
 import { loadState, preserveProviderState, saveState } from '../utils/state.js'
 import { formatTimestampLocale } from '../utils/time.js'
-
-const getStepName = (step: number): string => {
-  switch (step) {
-    case STEP.STAGED: {
-      return 'Staging completed'
-    }
-    case STEP.BRANCH_CREATED: {
-      return 'Branch created'
-    }
-    case STEP.COMMITTED: {
-      return 'Commit completed'
-    }
-    case STEP.PUSHED: {
-      return 'Push completed'
-    }
-    case STEP.MERGED: {
-      return 'Merge completed'
-    }
-    case STEP.CLEANUP: {
-      return 'Cleanup'
-    }
-    default: {
-      return 'Unknown'
-    }
-  }
-}
-
-const displayCurrentProviderStatus = async (): Promise<void> => {
-  const spinner = log.spinner()
-  spinner.start('Loading git information...')
-
-  // Get git user and remote info for display
-  let gitUser = { name: '', email: '' }
-  let remoteUrl = ''
-  let upstream = ''
-  try {
-    const utils = await import('../utils/exec.js')
-    gitUser.name = utils.exec('git config user.name', true).trim()
-    gitUser.email = utils.exec('git config user.email', true).trim()
-  } catch {
-    gitUser = { name: '', email: '' }
-  }
-  try {
-    const utils = await import('../utils/exec.js')
-    remoteUrl = utils.exec('git remote get-url origin', true).trim()
-  } catch {
-    remoteUrl = ''
-  }
-  try {
-    const utils = await import('../utils/exec.js')
-    upstream = utils.exec('git rev-parse --abbrev-ref --symbolic-full-name @{u}', true).trim()
-  } catch {
-    upstream = ''
-  }
-
-  // Trello board id if configured
-  const trelloConfig = getTrelloConfig()
-
-  spinner.stop()
-
-  console.log(
-    `${colors.cyan}┌─ Git Information ───────────────────────────────────────┐${colors.reset}`
-  )
-
-  if (gitUser) {
-    console.log(
-      `${colors.cyan}│${colors.reset} Username: ${colors.cyan}${gitUser.name}${colors.reset}`
-    )
-    console.log(
-      `${colors.cyan}│${colors.reset} Email: ${colors.cyan}${gitUser.email}${colors.reset}`
-    )
-  }
-  if (remoteUrl) {
-    console.log(`${colors.cyan}│${colors.reset} Remote: ${colors.cyan}${remoteUrl}${colors.reset}`)
-  }
-  if (upstream) {
-    console.log(
-      `${colors.cyan}│${colors.reset} Remote branch: ${colors.cyan}${upstream}${colors.reset}`
-    )
-  }
-  if (trelloConfig.boardId) {
-    console.log(
-      `${colors.cyan}│${colors.reset} Trello board: ${colors.cyan}${trelloConfig.boardId}${colors.reset}`
-    )
-  }
-
-  // Only show git-related info in this box (provider/model are shown in Resume Status)
-
-  console.log(
-    `${colors.cyan}└─────────────────────────────────────────────────────────┘${colors.reset}`
-  )
-  // Header now shows Git info only
-}
 
 export const main = async (opts?: {
   startAt?: 'commit' | 'merge' | 'branch' | 'stage' | 'push'
@@ -140,7 +47,7 @@ export const main = async (opts?: {
     if (initialSavedState?.aiProvider) {
       // If there's a saved checkpoint, avoid duplicating the configured model
       // in the 'Current AI Setup' box since the resume flow will show it.
-      await displayCurrentProviderStatus()
+      displayCurrentProviderStatus()
     }
 
     const suppressLogs = !!opts?.startAt
@@ -365,7 +272,7 @@ export const main = async (opts?: {
         geminiModel = savedState.geminiModel
 
         // Display current provider status (Git info only)
-        await displayCurrentProviderStatus()
+        displayCurrentProviderStatus()
       } else {
         process.exit(0)
       }
@@ -385,7 +292,7 @@ export const main = async (opts?: {
       }
 
       // Display current provider status (Git info only)
-      await displayCurrentProviderStatus()
+      displayCurrentProviderStatus()
     }
 
     // Determine actual current branch and staged files at startup
