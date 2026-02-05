@@ -16,6 +16,9 @@ let showHelp = false
 let showAuthor = false
 let showSaweria = false
 let showCleanup = false
+let showTrello = false
+let showTrelloLists = false
+let showTrelloGenerate = false
 let settingsAction:
   | 'separator'
   | 'models'
@@ -83,6 +86,15 @@ for (const arg of argv) {
   if (arg === '--cleanup' || arg === '-cl') {
     showCleanup = true
   }
+  if (arg === '--trello') {
+    showTrello = true
+  }
+  if (arg === '--trello-list') {
+    showTrelloLists = true
+  }
+  if (arg === '--trello-generate') {
+    showTrelloGenerate = true
+  }
 }
 
 // Validate unknown flags
@@ -115,6 +127,9 @@ const validFlags = new Set([
   '--setup-gemini',
   '--setup-openrouter',
   '--setup-trello',
+  '--trello',
+  '--trello-list',
+  '--trello-generate',
   '--author',
   '--saweria',
 ])
@@ -161,6 +176,11 @@ for (const arg of argv) {
     console.log('  --setup-openrouter   Setup OpenRouter AI integration')
     console.log('  --setup-trello       Setup Trello integration')
     console.log('')
+    console.log('Trello:')
+    console.log('  --trello             Open Trello menu')
+    console.log('  --trello-list        Get Trello lists from board')
+    console.log('  --trello-generate    Generate tasks.instructions.md from Trello list')
+    console.log('')
     console.log('Other:')
     console.log('  --author             Show author information and tools')
     console.log('  --saweria            Print Saweria (support) link')
@@ -197,6 +217,39 @@ for (const arg of argv) {
       process.exit(0)
     } catch (error) {
       console.error('Cleanup error:', error)
+      process.exit(1)
+    }
+  }
+
+  if (showTrello) {
+    try {
+      const { showTrelloMenu } = await import('./workflows/trello-menu.js')
+      await showTrelloMenu()
+      process.exit(0)
+    } catch (error) {
+      console.error('Trello menu error:', error)
+      process.exit(1)
+    }
+  }
+
+  if (showTrelloLists) {
+    try {
+      const { handleGetTrelloLists } = await import('./workflows/trello-menu.js')
+      await handleGetTrelloLists()
+      process.exit(0)
+    } catch (error) {
+      console.error('Trello list error:', error)
+      process.exit(1)
+    }
+  }
+
+  if (showTrelloGenerate) {
+    try {
+      const { handleGenerateTaskInstructions } = await import('./workflows/trello-menu.js')
+      await handleGenerateTaskInstructions()
+      process.exit(0)
+    } catch (error) {
+      console.error('Trello generate error:', error)
       process.exit(1)
     }
   }

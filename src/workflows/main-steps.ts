@@ -246,16 +246,23 @@ export async function handleMerge(
       ])
 
       // Safe checkout to target branch with uncommitted changes handling
-      let checkoutResult = await safeCheckout(targetBranch)
+      let checkoutResult = await safeCheckout(targetBranch, {
+        context: `To merge, we need to switch to '${targetBranch}'. Commit your changes in '${featureBranch}' first.`,
+      })
 
       // If user chose to commit first, trigger commit workflow then retry checkout
       if (checkoutResult.commitNeeded) {
         console.log('')
-        log.info('Committing changes before merge...')
+        log.info(`Committing changes in '${featureBranch}' before merge...`)
+        console.log('')
+
         await handleCommitWorkflow(state, { suppressStep: true, suppressConfirm: false })
 
-        // Retry checkout after commit
-        checkoutResult = await safeCheckout(targetBranch)
+        console.log('')
+        log.info('Retrying checkout to target branch...')
+
+        // Retry checkout after commit - will auto-handle any remaining conflicts
+        checkoutResult = await safeCheckout(targetBranch, { force: false })
       }
 
       if (!checkoutResult.success) {
@@ -414,17 +421,35 @@ export async function handleCleanup(featureBranch: string, state: GeetoState): P
 
             if (errMsg.includes('not fully merged') || errMsg.includes('is not yet merged')) {
               console.log('')
-              log.warn(`Branch '${featureBranch}' is not fully merged to its remote.`)
+
+              // Check if it's merged to HEAD but not to remote (safe to delete)
+              const isMergedToHead =
+                errMsg.includes('merged to HEAD') ||
+                errMsg.includes('even though it is merged to HEAD')
+
+              if (isMergedToHead) {
+                log.info(
+                  `Branch '${featureBranch}' is merged locally but remote is not updated yet.`
+                )
+                log.info('This is safe to delete since changes are already in your target branch.')
+              } else {
+                log.warn(`Branch '${featureBranch}' is not fully merged.`)
+              }
 
               const forceDeleteChoice = await select('What would you like to do?', [
-                { label: 'Force delete anyway (git branch -D)', value: 'force' },
+                {
+                  label: isMergedToHead
+                    ? 'Delete (safe - already merged)'
+                    : 'Force delete anyway (git branch -D)',
+                  value: 'force',
+                },
                 { label: 'Keep the branch', value: 'keep' },
               ])
 
               if (forceDeleteChoice === 'force') {
                 try {
                   exec(`git branch -D ${featureBranch}`)
-                  log.success(`Local branch '${featureBranch}' force-deleted`)
+                  log.success(`Local branch '${featureBranch}' deleted`)
 
                   // Also delete remote branch if it exists
                   try {
@@ -434,7 +459,7 @@ export async function handleCleanup(featureBranch: string, state: GeetoState): P
                     // Remote branch might not exist, ignore error
                   }
                 } catch (forceError) {
-                  log.error(`Failed to force delete branch: ${forceError}`)
+                  log.error(`Failed to delete branch: ${forceError}`)
                 }
               } else {
                 log.info(`Kept branch '${featureBranch}'`)

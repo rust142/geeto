@@ -63,7 +63,10 @@
     "ehthumbs",
     "imagen",
     "LOCALAPPDATA",
-    "notlike"
+    "notlike",
+    "webstorm",
+    "phpstorm",
+    "rubymine"
   ],
   "ignorePaths": [
     "node_modules/**",

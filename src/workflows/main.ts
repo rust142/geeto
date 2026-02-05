@@ -61,6 +61,7 @@ export const main = async (opts?: {
       ? 'start'
       : await select('Welcome to Geeto! What would you like to do?', [
           { label: 'Start new workflow', value: 'start' },
+          { label: 'Trello tasks', value: 'trello' },
           { label: 'About author', value: 'author' },
           { label: 'Settings', value: 'settings' },
           { label: 'Exit', value: 'exit' },
@@ -80,6 +81,12 @@ export const main = async (opts?: {
 
     if (!opts?.startAt && initialChoice === 'author') {
       await showAuthorTools()
+      return
+    }
+
+    if (!opts?.startAt && initialChoice === 'trello') {
+      const { showTrelloMenu } = await import('./trello-menu.js')
+      await showTrelloMenu()
       return
     }
 
@@ -698,6 +705,9 @@ export const main = async (opts?: {
 
     // STEP 6: Cleanup (simplified)
     await handleCleanup(featureBranch, state)
+
+    // Reset state to initial but preserve AI provider settings
+    preserveProviderState(state)
 
     console.log(`\n✅ Git flow complete!\n`)
     // Close any interactive input resources and exit to ensure the CLI terminates
