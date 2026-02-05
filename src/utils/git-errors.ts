@@ -154,7 +154,78 @@ export const safeCheckout = async (
         checkoutErrMsg.includes('would be overwritten') ||
         checkoutErrMsg.includes('Your local changes')
       ) {
-        // Now show the interactive menu for handling uncommitted changes
+        // Try checkout with -m flag (three-way merge) first
+        console.log('')
+        log.info('Trying checkout with merge (-m flag)...')
+        try {
+          exec(`git checkout -m "${branchName}"`, true)
+
+          // Check if merge resulted in conflicts
+          const status = execSilent('git status --porcelain')
+          const hasConflicts =
+            status.includes('UU ') || status.includes('AA ') || status.includes('DD ')
+
+          if (hasConflicts) {
+            // Conflicts detected - ask user what to do
+            console.log('')
+            log.warn('Checkout with merge resulted in conflicts.')
+            console.log('')
+
+            // Show conflicted files
+            const conflictedFiles = status
+              .split('\n')
+              .filter(
+                (line) => line.includes('UU ') || line.includes('AA ') || line.includes('DD ')
+              )
+              .slice(0, 10)
+
+            console.log(`${colors.red}Conflicted files:${colors.reset}`)
+            for (const file of conflictedFiles) {
+              console.log(`  ${file}`)
+            }
+            console.log('')
+
+            const conflictChoice = await select('What would you like to do?', [
+              { label: 'Resolve conflicts manually (stay on this branch)', value: 'resolve' },
+              { label: 'Abort and go back to selection', value: 'abort' },
+            ])
+
+            if (conflictChoice === 'abort') {
+              // Abort the merge checkout
+              try {
+                exec('git merge --abort', true)
+              } catch {
+                // If merge --abort fails, try checkout --merge --abort
+                try {
+                  exec('git checkout --merge --abort', true)
+                } catch {
+                  // Last resort: hard reset to clean state
+                  exec('git reset --merge', true)
+                }
+              }
+              log.info('Merge checkout aborted')
+              return { success: false, error: 'Merge conflict - aborted by user' }
+            }
+
+            // User chose to resolve manually
+            log.info('Resolve conflicts and commit when ready.')
+            log.info('  1. Edit conflicted files')
+            log.info('  2. Stage resolved files: git add <files>')
+            log.info('  3. Commit: git commit')
+            return { success: true } // Consider it successful since user is on target branch
+          }
+
+          // No conflicts - checkout with merge succeeded
+          log.success(`Checked out to ${branchName} with uncommitted changes merged`)
+          return { success: true }
+        } catch {
+          // -m flag failed for reasons other than conflict (e.g., can't three-way merge)
+          // Fall back to original menu
+          log.warn('Checkout with merge not possible')
+          console.log('')
+        }
+
+        // Show the interactive menu for handling uncommitted changes
         const canProceed = await handleUncommittedChangesBeforeCheckout(options?.context)
         if (canProceed === 'cancel') {
           return { success: false, error: 'Cancelled by user' }

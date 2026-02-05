@@ -179,11 +179,21 @@ export const main = async (opts?: {
         // When resuming from a checkpoint that already completed staging,
         // avoid duplicating the staged-files summary message later.
         suppressStagingDoneMessage = savedState.step >= STEP.STAGED
-        // Use saved AI provider and model
-        aiProvider = savedState.aiProvider ?? 'gemini'
-        copilotModel = savedState.copilotModel
-        openrouterModel = savedState.openrouterModel
-        geminiModel = savedState.geminiModel
+
+        // Use saved AI provider and model, or prompt if not set
+        if (savedState.aiProvider) {
+          aiProvider = savedState.aiProvider
+          copilotModel = savedState.copilotModel
+          openrouterModel = savedState.openrouterModel
+          geminiModel = savedState.geminiModel
+        } else {
+          // No provider saved, prompt user to select
+          const aiSelection = await handleAIProviderSelection()
+          aiProvider = aiSelection.aiProvider
+          copilotModel = aiSelection.copilotModel
+          openrouterModel = aiSelection.openrouterModel
+          geminiModel = aiSelection.geminiModel
+        }
 
         // Show a compact resume status box separate from the full "Current AI Setup"
         const gitUtils = await import('../utils/git-ai.js')
@@ -272,11 +282,20 @@ export const main = async (opts?: {
         preserveProviderState(savedState)
         log.info('Starting fresh...')
 
-        // Keep the currently configured provider and model from the saved checkpoint.
-        aiProvider = savedState.aiProvider ?? 'gemini'
-        copilotModel = savedState.copilotModel
-        openrouterModel = savedState.openrouterModel
-        geminiModel = savedState.geminiModel
+        // Keep the currently configured provider and model from saved checkpoint, or prompt if not set
+        if (savedState.aiProvider) {
+          aiProvider = savedState.aiProvider
+          copilotModel = savedState.copilotModel
+          openrouterModel = savedState.openrouterModel
+          geminiModel = savedState.geminiModel
+        } else {
+          // No provider saved, prompt user to select
+          const aiSelection = await handleAIProviderSelection()
+          aiProvider = aiSelection.aiProvider
+          copilotModel = aiSelection.copilotModel
+          openrouterModel = aiSelection.openrouterModel
+          geminiModel = aiSelection.geminiModel
+        }
 
         // Display current provider status (Git info only)
         displayCurrentProviderStatus()
@@ -284,19 +303,12 @@ export const main = async (opts?: {
         process.exit(0)
       }
     } else {
-      // No saved state, choose AI provider fresh
-      if (opts?.startAt) {
-        // For startAt flags, use default provider without prompting
-        aiProvider = 'gemini'
-        geminiModel = DEFAULT_GEMINI_MODEL
-        log.info('Using default AI provider (Gemini) for quick start')
-      } else {
-        const aiSelection = await handleAIProviderSelection()
-        aiProvider = aiSelection.aiProvider
-        copilotModel = aiSelection.copilotModel
-        openrouterModel = aiSelection.openrouterModel
-        geminiModel = aiSelection.geminiModel
-      }
+      // No saved state, always prompt user to choose AI provider and model
+      const aiSelection = await handleAIProviderSelection()
+      aiProvider = aiSelection.aiProvider
+      copilotModel = aiSelection.copilotModel
+      openrouterModel = aiSelection.openrouterModel
+      geminiModel = aiSelection.geminiModel
 
       // Display current provider status (Git info only)
       displayCurrentProviderStatus()
@@ -329,6 +341,11 @@ export const main = async (opts?: {
           step: STEP.INIT,
           workingBranch: actualBranch,
           currentBranch: actualBranch,
+          // Preserve provider selection from new selection or savedState
+          aiProvider,
+          copilotModel,
+          openrouterModel,
+          geminiModel,
         }
         saveState(state)
       } else {
@@ -336,8 +353,22 @@ export const main = async (opts?: {
         state = {
           ...savedState,
           currentBranch: actualBranch,
+          // Preserve provider selection from new selection or savedState
+          aiProvider,
+          copilotModel,
+          openrouterModel,
+          geminiModel,
+        }
+        // Save state if provider info was just selected
+        if (!savedState.aiProvider && aiProvider) {
+          saveState(state)
         }
       }
+    }
+
+    // Save state immediately to persist provider selection for fresh starts and new state
+    if (!shouldResume) {
+      saveState(state)
     }
 
     // Use currentBranch as fallback if workingBranch is empty
