@@ -128,8 +128,9 @@ export const safeCheckout = async (
   options?: { create?: boolean; force?: boolean }
 ): Promise<{ success: boolean; error?: string; commitNeeded?: boolean }> => {
   try {
-    // Check for uncommitted changes first (unless force is specified)
-    if (!options?.force) {
+    // Check for uncommitted changes first (unless force is specified OR creating new branch)
+    // Creating new branch is safe - uncommitted changes will follow to the new branch
+    if (!options?.force && !options?.create) {
       const canProceed = await handleUncommittedChangesBeforeCheckout()
       if (canProceed === 'cancel') {
         return { success: false, error: 'Cancelled by user' }
