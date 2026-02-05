@@ -156,19 +156,59 @@ export async function handleTrelloCase(
   }
 
   // title-ai: use AI to shorten Trello title
+  // First, ensure AI provider is configured
+  if (!state.aiProvider) {
+    log.warn('No AI provider configured yet.')
+    const providerChoice = await select('Choose AI provider:', [
+      { label: 'Gemini', value: 'gemini' },
+      { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
+      { label: 'OpenRouter', value: 'openrouter' },
+      { label: 'Back to naming strategy', value: 'back' },
+    ])
+
+    if (providerChoice === 'back') {
+      return { branchFlowComplete: false, branchMenuShown: false }
+    }
+
+    const chosenProvider = providerChoice as 'gemini' | 'copilot' | 'openrouter'
+
+    // Let user choose model for the selected provider
+    const chosenModel = await chooseModelForProvider(
+      chosenProvider,
+      'Choose model:',
+      'Back to provider selection'
+    )
+
+    if (!chosenModel || chosenModel === 'back') {
+      return { branchFlowComplete: false, branchMenuShown: false }
+    }
+
+    // Save selected provider and model to state
+    state.aiProvider = chosenProvider
+    if (chosenProvider === 'copilot') {
+      state.copilotModel = chosenModel as CopilotModel
+    } else if (chosenProvider === 'openrouter') {
+      state.openrouterModel = chosenModel as OpenRouterModel
+    } else {
+      state.geminiModel = chosenModel as GeminiModel
+    }
+    saveState(state)
+    log.success(`AI provider set to ${getAIProviderShortName(chosenProvider)}`)
+  }
+
   let correction = ''
   let aiSuffix: string | null = null
   let skipRegenerate = false
 
   while (true) {
-    const aiProvider = (state.aiProvider ?? 'gemini') as 'gemini' | 'copilot' | 'openrouter'
+    const aiProvider = state.aiProvider as 'gemini' | 'copilot' | 'openrouter'
     let modelParam: CopilotModel | OpenRouterModel | GeminiModel
     if (aiProvider === 'copilot') {
       modelParam = state.copilotModel as CopilotModel
     } else if (aiProvider === 'openrouter') {
       modelParam = state.openrouterModel as OpenRouterModel
     } else {
-      modelParam = DEFAULT_GEMINI_MODEL as GeminiModel
+      modelParam = (state.geminiModel ?? DEFAULT_GEMINI_MODEL) as GeminiModel
     }
 
     let model: string | undefined
@@ -197,7 +237,8 @@ export async function handleTrelloCase(
         cardData.title,
         correction,
         state.copilotModel,
-        state.openrouterModel
+        state.openrouterModel,
+        state.geminiModel
       )
       spinner.stop()
     }
