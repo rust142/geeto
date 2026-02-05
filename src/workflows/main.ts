@@ -799,6 +799,9 @@ export const main = async (opts?: {
     // STEP 6: Cleanup (simplified)
     await handleCleanup(featureBranch, state)
 
+    // Reset state to initial but preserve AI provider settings
+    preserveProviderState(state)
+
     console.log(`\n✅ Git flow complete!\n`)
     // Close any interactive input resources and exit to ensure the CLI terminates
     try {

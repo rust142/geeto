@@ -81,8 +81,16 @@ export const handleGenerateTaskInstructions = async (): Promise<void> => {
 
   spinner.succeed(`Found ${lists.length} lists`)
 
-  // Let user select a list
+  // Show tip about creating dedicated agent list
   console.log('')
+  log.info(
+    `${colors.cyan}💡 Tip:${colors.reset} For best results with AI agents, create a dedicated Trello list called:`
+  )
+  log.info(`   ${colors.green}"TODO FOR AGENT"${colors.reset}`)
+  log.info('   This helps organize tasks specifically meant for automated execution.')
+  console.log('')
+
+  // Let user select a list
   const listChoices = lists.map((list) => ({
     label: list.name,
     value: list.id,
