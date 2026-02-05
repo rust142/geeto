@@ -129,6 +129,7 @@ export async function handleTrelloCase(
   const namingChoice = await select('Branch naming strategy:', [
     { label: 'Use Trello title (full)', value: 'title-full' },
     { label: 'Use Trello title (AI shortened)', value: 'title-ai' },
+    { label: 'Use Trello title (AI shortened + English)', value: 'title-ai-en' },
     { label: 'Back to card selection', value: 'back' },
   ])
 
@@ -155,7 +156,9 @@ export async function handleTrelloCase(
     return { branchFlowComplete: false, branchMenuShown: false }
   }
 
-  // title-ai: use AI to shorten Trello title
+  // title-ai or title-ai-en: use AI to shorten Trello title (optionally translate to English first)
+  const shouldTranslateToEnglish = namingChoice === 'title-ai-en'
+
   // First, ensure AI provider is configured
   if (!state.aiProvider) {
     log.warn('No AI provider configured yet.')
@@ -221,6 +224,41 @@ export async function handleTrelloCase(
     }
     const modelDisplay = getModelDisplayName(aiProvider, model)
     const spinner = log.spinner()
+
+    let titleToProcess = cardData.title
+
+    // Step 1: Translate to English if requested
+    if (shouldTranslateToEnglish && !skipRegenerate) {
+      spinner.start(
+        `Translating to English using ${getAIProviderShortName(aiProvider)}${
+          modelDisplay ? ` (${modelDisplay})` : ''
+        }...`
+      )
+
+      const translatedTitle = await generateBranchNameWithProvider(
+        aiProvider,
+        `Translate this to English (keep it concise): "${cardData.title}"`,
+        '',
+        state.copilotModel,
+        state.openrouterModel,
+        state.geminiModel
+      )
+
+      if (
+        translatedTitle &&
+        !isTransientAIFailure(translatedTitle) &&
+        !isContextLimitFailure(translatedTitle)
+      ) {
+        titleToProcess = translatedTitle
+        spinner.stop()
+        log.info(`Translated: ${colors.cyan}${titleToProcess}${colors.reset}`)
+      } else {
+        spinner.stop()
+        log.warn('Translation failed, using original title')
+      }
+    }
+
+    // Step 2: Generate short branch name
     spinner.start(
       `Generating short branch name using ${getAIProviderShortName(aiProvider)}${
         modelDisplay ? ` (${modelDisplay})` : ''
@@ -234,7 +272,7 @@ export async function handleTrelloCase(
     } else {
       aiSuffix = await generateBranchNameWithProvider(
         aiProvider,
-        cardData.title,
+        titleToProcess,
         correction,
         state.copilotModel,
         state.openrouterModel,
