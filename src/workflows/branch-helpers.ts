@@ -237,7 +237,8 @@ export async function handleTrelloCase(
         cardData.title,
         correction,
         state.copilotModel,
-        state.openrouterModel
+        state.openrouterModel,
+        state.geminiModel
       )
       spinner.stop()
     }
