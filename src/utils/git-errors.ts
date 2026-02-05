@@ -52,15 +52,19 @@ export const isRebaseInProgress = (): boolean => {
  * Handle uncommitted changes before checkout
  * Offers user options: stash, commit, force checkout, or cancel
  */
-export const handleUncommittedChangesBeforeCheckout = async (): Promise<
-  'proceed' | 'cancel' | 'commit-needed'
-> => {
+export const handleUncommittedChangesBeforeCheckout = async (
+  context?: string
+): Promise<'proceed' | 'cancel' | 'commit-needed'> => {
   if (!hasUncommittedChanges()) {
     return 'proceed'
   }
 
   console.log('')
   log.warn('You have uncommitted changes that would be overwritten by checkout.')
+  if (context) {
+    console.log('')
+    log.info(context)
+  }
   console.log('')
 
   // Show list of uncommitted files
@@ -125,30 +129,48 @@ export const handleUncommittedChangesBeforeCheckout = async (): Promise<
  */
 export const safeCheckout = async (
   branchName: string,
-  options?: { create?: boolean; force?: boolean }
+  options?: { create?: boolean; force?: boolean; context?: string }
 ): Promise<{ success: boolean; error?: string; commitNeeded?: boolean }> => {
   try {
-    // Check for uncommitted changes first (unless force is specified OR creating new branch)
-    // Creating new branch is safe - uncommitted changes will follow to the new branch
-    if (!options?.force && !options?.create) {
-      const canProceed = await handleUncommittedChangesBeforeCheckout()
-      if (canProceed === 'cancel') {
-        return { success: false, error: 'Cancelled by user' }
-      }
-      if (canProceed === 'commit-needed') {
-        return { success: false, commitNeeded: true, error: 'Commit required before checkout' }
-      }
+    // For creating new branch or force checkout, proceed directly
+    if (options?.create || options?.force) {
+      const cmd = options.create
+        ? `git checkout -b "${branchName}"`
+        : `git checkout -f "${branchName}"`
+      exec(cmd)
+      return { success: true }
     }
 
-    // Perform the checkout
-    const cmd = options?.create
-      ? `git checkout -b "${branchName}"`
-      : options?.force
-        ? `git checkout -f "${branchName}"`
-        : `git checkout "${branchName}"`
+    // Try checkout first - git will allow it if changes don't conflict
+    try {
+      exec(`git checkout "${branchName}"`)
+      return { success: true }
+    } catch (checkoutError) {
+      const checkoutErrMsg =
+        checkoutError instanceof Error ? checkoutError.message : String(checkoutError)
 
-    exec(cmd)
-    return { success: true }
+      // If checkout failed due to uncommitted changes that would be overwritten, ask user
+      if (
+        checkoutErrMsg.includes('would be overwritten') ||
+        checkoutErrMsg.includes('Your local changes')
+      ) {
+        // Now show the interactive menu for handling uncommitted changes
+        const canProceed = await handleUncommittedChangesBeforeCheckout(options?.context)
+        if (canProceed === 'cancel') {
+          return { success: false, error: 'Cancelled by user' }
+        }
+        if (canProceed === 'commit-needed') {
+          return { success: false, commitNeeded: true, error: 'Commit required before checkout' }
+        }
+
+        // User chose stash or force - retry checkout
+        exec(`git checkout "${branchName}"`)
+        return { success: true }
+      }
+
+      // Other checkout errors - propagate them
+      throw checkoutError
+    }
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error)
 

@@ -246,16 +246,23 @@ export async function handleMerge(
       ])
 
       // Safe checkout to target branch with uncommitted changes handling
-      let checkoutResult = await safeCheckout(targetBranch)
+      let checkoutResult = await safeCheckout(targetBranch, {
+        context: `To merge, we need to switch to '${targetBranch}'. Commit your changes in '${featureBranch}' first.`,
+      })
 
       // If user chose to commit first, trigger commit workflow then retry checkout
       if (checkoutResult.commitNeeded) {
         console.log('')
-        log.info('Committing changes before merge...')
+        log.info(`Committing changes in '${featureBranch}' before merge...`)
+        console.log('')
+
         await handleCommitWorkflow(state, { suppressStep: true, suppressConfirm: false })
 
-        // Retry checkout after commit
-        checkoutResult = await safeCheckout(targetBranch)
+        console.log('')
+        log.info('Retrying checkout to target branch...')
+
+        // Retry checkout after commit - will auto-handle any remaining conflicts
+        checkoutResult = await safeCheckout(targetBranch, { force: false })
       }
 
       if (!checkoutResult.success) {
