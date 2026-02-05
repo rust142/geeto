@@ -18,6 +18,7 @@ let showSaweria = false
 let showCleanup = false
 let showTrello = false
 let showTrelloLists = false
+let showTrelloGenerate = false
 let settingsAction:
   | 'separator'
   | 'models'
@@ -91,6 +92,9 @@ for (const arg of argv) {
   if (arg === '--trello-list') {
     showTrelloLists = true
   }
+  if (arg === '--trello-generate') {
+    showTrelloGenerate = true
+  }
 }
 
 // Validate unknown flags
@@ -125,6 +129,7 @@ const validFlags = new Set([
   '--setup-trello',
   '--trello',
   '--trello-list',
+  '--trello-generate',
   '--author',
   '--saweria',
 ])
@@ -174,6 +179,7 @@ for (const arg of argv) {
     console.log('Trello:')
     console.log('  --trello             Open Trello menu')
     console.log('  --trello-list        Get Trello lists from board')
+    console.log('  --trello-generate    Generate tasks.instructions.md from Trello list')
     console.log('')
     console.log('Other:')
     console.log('  --author             Show author information and tools')
@@ -233,6 +239,17 @@ for (const arg of argv) {
       process.exit(0)
     } catch (error) {
       console.error('Trello list error:', error)
+      process.exit(1)
+    }
+  }
+
+  if (showTrelloGenerate) {
+    try {
+      const { handleGenerateTaskInstructions } = await import('./workflows/trello-menu.js')
+      await handleGenerateTaskInstructions()
+      process.exit(0)
+    } catch (error) {
+      console.error('Trello generate error:', error)
       process.exit(1)
     }
   }

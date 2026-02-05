@@ -108,7 +108,6 @@ export const select = async (question: string, options: SelectOption[]): Promise
         case '\r':
         case '\n': {
           cleanup()
-          console.log('')
           resolve(options[selectedIndex]?.value ?? '')
           break
         }

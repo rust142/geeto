@@ -61,7 +61,10 @@
     "Mahfudzat",
     "pids",
     "ehthumbs",
-    "imagen"
+    "imagen",
+    "webstorm",
+    "phpstorm",
+    "rubymine"
   ],
   "ignorePaths": [
     "node_modules/**",

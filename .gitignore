@@ -62,3 +62,8 @@ tmp/
 
 # Snyk Security Extension - AI Rules (auto-generated)
 .github/instructions/snyk_rules.instructions.md
+
+# Trello-generated tasks
+.github/instructions/tasks.instructions.md
+.cursor/tasks.instructions.md
+.idea/tasks.instructions.md
