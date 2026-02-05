@@ -38,7 +38,7 @@ export const handleGetTrelloLists = async (): Promise<void> => {
 
   spinner.succeed(`Found ${lists.length} lists`)
 
-  console.log(`\n${colors.cyan}═══ Trello Lists ═══${colors.reset}\n`)
+  log.step(`${colors.cyan}Trello Lists${colors.reset}\n`)
 
   for (const [index, list] of lists.entries()) {
     const num = `${index + 1}`.padStart(2, ' ')
