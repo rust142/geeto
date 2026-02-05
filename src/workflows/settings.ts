@@ -354,10 +354,7 @@ const handleTrelloSetting = async (): Promise<boolean | void> => {
   const hasConfig = hasTrelloConfig()
 
   if (!hasConfig) {
-    const spinner = log.spinner()
-    spinner.start('Setting up Trello integration...')
     await runInteractiveSetup('trello')
-    spinner.stop()
     return false
   }
 
@@ -407,10 +404,7 @@ const handleOpenRouterSetting = async (): Promise<boolean | void> => {
   const hasConfig = hasOpenRouterConfig()
 
   if (!hasConfig) {
-    const spinner = log.spinner()
-    spinner.start('Setting up OpenRouter integration...')
     await runInteractiveSetup('openrouter')
-    spinner.stop()
     return false
   }
 
