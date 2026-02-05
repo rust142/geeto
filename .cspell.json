@@ -61,7 +61,9 @@
     "Mahfudzat",
     "pids",
     "ehthumbs",
-    "imagen"
+    "imagen",
+    "LOCALAPPDATA",
+    "notlike"
   ],
   "ignorePaths": [
     "node_modules/**",

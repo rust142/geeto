@@ -2,167 +2,28 @@
  * GitHub Copilot CLI setup helper (moved from `setup.ts`)
  */
 
-import fs from 'node:fs'
 import os from 'node:os'
-import path from 'node:path'
 
+import { findBestCopilotBinary, MIN_COPILOT_VERSION, parseParts } from '../api/copilot-sdk.js'
 import { confirm } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { ensureGeetoIgnored } from '../utils/config.js'
 import { commandExists, exec } from '../utils/exec.js'
 import { log } from '../utils/logging.js'
 
-// Minimum Copilot CLI version required for SDK compatibility (--acp/--server support)
-const MIN_COPILOT_VERSION = '0.0.400'
-
-// Cache file path for storing copilot binary info
-const CACHE_FILE = path.join(os.homedir(), '.cache', 'geeto', 'copilot-bin.json')
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
-
-interface CopilotBinCache {
-  path: string
-  version: string
-  timestamp: number
-}
-
-/**
- * Parse version string to numeric value for comparison.
- * Returns null if parsing fails.
- */
-const parseVersion = (ver: string): number | null => {
-  const parts = ver.split('.').map((n) => Number.parseInt(n, 10))
-  if (parts.some((p) => Number.isNaN(p))) {
-    return null
-  }
-  while (parts.length < 3) {
-    parts.push(0)
-  }
-  const [major = 0, minor = 0, patch = 0] = parts
-  return major * 1_000_000 + minor * 1_000 + patch
-}
-
-/**
- * Read cached copilot binary info from file.
- */
-const readCache = (): CopilotBinCache | null => {
-  try {
-    if (!fs.existsSync(CACHE_FILE)) return null
-    const data = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')) as CopilotBinCache
-    // Check if cache is still valid (within TTL and binary still exists)
-    if (Date.now() - data.timestamp < CACHE_TTL_MS && fs.existsSync(data.path)) {
-      return data
-    }
-  } catch {
-    // ignore
-  }
-  return null
-}
-
-/**
- * Write copilot binary info to cache file.
- */
-const writeCache = (info: { path: string; version: string }): void => {
-  try {
-    const cacheDir = path.dirname(CACHE_FILE)
-    if (!fs.existsSync(cacheDir)) {
-      fs.mkdirSync(cacheDir, { recursive: true })
-    }
-    fs.writeFileSync(CACHE_FILE, JSON.stringify({ ...info, timestamp: Date.now() }))
-  } catch {
-    // ignore cache write failures
-  }
-}
-
-/**
- * Get version from a specific copilot binary path.
- */
-const getVersionFromPath = (binPath: string): string | null => {
-  try {
-    const verOut = exec(`"${binPath}" --version`, true)
-    const m = verOut.match(/(\d+\.\d+\.\d+)/)
-    return m?.[1] ?? null
-  } catch {
-    return null
-  }
-}
-
-/**
- * Find the best (newest) copilot binary from known locations.
- * Uses file-based caching to avoid slow exec calls on every startup.
- */
-const findBestCopilotBinary = (): { path: string; version: string } | null => {
-  const minNum = parseVersion(MIN_COPILOT_VERSION) ?? 0
-
-  // Super fast path: check cache first
-  const cached = readCache()
-  if (cached && (parseVersion(cached.version) ?? 0) >= minNum) {
-    return { path: cached.path, version: cached.version }
-  }
-
-  // Check PATH first (most common case)
-  try {
-    const pathBin = exec('which copilot', true).trim()
-    if (pathBin && fs.existsSync(pathBin)) {
-      const ver = getVersionFromPath(pathBin)
-      if (ver) {
-        const num = parseVersion(ver) ?? 0
-        if (num >= minNum) {
-          const result = { path: pathBin, version: ver }
-          writeCache(result)
-          return result
-        }
-      }
-    }
-  } catch {
-    // ignore, will check other locations
-  }
-
-  // PATH version is outdated or not found - scan known locations
-  const home = os.homedir()
-  const knownPaths = [
-    '/usr/local/bin/copilot',
-    '/usr/bin/copilot',
-    path.join(home, '.config/Code/User/globalStorage/github.copilot-chat/copilotCli/copilot'),
-    path.join(home, '.npm-global/bin/copilot'),
-    path.join(home, '.local/bin/copilot'),
-  ]
-
-  for (const binPath of knownPaths) {
-    if (fs.existsSync(binPath)) {
-      const ver = getVersionFromPath(binPath)
-      if (ver) {
-        const num = parseVersion(ver) ?? 0
-        if (num >= minNum) {
-          const result = { path: binPath, version: ver }
-          writeCache(result)
-          return result
-        }
-      }
-    }
-  }
-
-  return null
-}
-
 /**
  * Check Copilot CLI version and warn if outdated.
- * Automatically finds the newest copilot binary to bypass PATH cache issues.
- * Returns true if version is compatible, false otherwise.
+ * Uses shared utility from copilot-sdk.ts.
  */
 export const checkCopilotVersion = (): boolean => {
   const best = findBestCopilotBinary()
 
   if (!best) {
-    // No copilot binary found anywhere
     return false
   }
 
-  const currentNum = parseVersion(best.version)
-  const minNum = parseVersion(MIN_COPILOT_VERSION)
-
-  if (currentNum === null || minNum === null) {
-    return false
-  }
+  const currentNum = parseParts(best.version)
+  const minNum = parseParts(MIN_COPILOT_VERSION)
 
   if (currentNum < minNum) {
     log.error(
@@ -175,7 +36,7 @@ export const checkCopilotVersion = (): boolean => {
   }
 
   // Update PATH so CopilotClient can find the newest binary
-  const binDir = path.dirname(best.path)
+  const binDir = best.path.slice(0, best.path.lastIndexOf('/'))
   if (!process.env.PATH?.startsWith(binDir)) {
     process.env.PATH = `${binDir}:${process.env.PATH}`
   }
@@ -224,12 +85,78 @@ const setupGitHubCLI = (): boolean => {
   }
 
   if (installCommand) {
+    const spinner = log.spinner()
+    spinner.start('Installing GitHub CLI...')
     try {
-      exec(installCommand)
+      exec(installCommand, true)
+      spinner.stop()
+      log.success('GitHub CLI installed successfully')
+
+      // Windows-specific: Add gh to PATH if not found after install
+      if (platform === 'win32' && !commandExists('gh')) {
+        log.info('Adding GitHub CLI to PATH...')
+        let ghPath = ''
+        try {
+          // Common installation paths for gh on Windows
+          const ghPaths = [
+            'C:\\Program Files\\GitHub CLI\\',
+            'C:\\Program Files (x86)\\GitHub CLI\\',
+            `${process.env.LOCALAPPDATA}\\Programs\\GitHub CLI\\`,
+          ]
+
+          for (const p of ghPaths) {
+            try {
+              // Check if gh.exe exists in this path
+              const checkCmd = `powershell -Command "Test-Path '${p}gh.exe'"`
+              const exists = exec(checkCmd, true).trim()
+              if (exists === 'True') {
+                ghPath = p
+                break
+              }
+            } catch {
+              continue
+            }
+          }
+
+          if (ghPath) {
+            // Add to User PATH permanently and refresh current session
+            const addPathCmd = `powershell -Command "$currentPath = [Environment]::GetEnvironmentVariable('PATH', 'User'); if ($currentPath -notlike '*${ghPath}*') { [Environment]::SetEnvironmentVariable('PATH', $currentPath + ';${ghPath}', 'User'); $env:PATH = [Environment]::GetEnvironmentVariable('PATH', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('PATH', 'User') }"`
+            exec(addPathCmd, true)
+
+            // Also update current process PATH
+            if (!process.env.PATH?.includes(ghPath)) {
+              process.env.PATH = `${process.env.PATH};${ghPath}`
+            }
+
+            log.success('GitHub CLI added to PATH')
+          } else {
+            log.warn(
+              'Could not find GitHub CLI installation path. You may need to add it to PATH manually.'
+            )
+          }
+        } catch (error) {
+          log.warn(`Failed to add gh to PATH: ${error}`)
+          if (ghPath) {
+            log.info(`Please add this path to your PATH environment variable manually:`)
+            log.info(`  ${ghPath}`)
+            log.info('Then restart your terminal to apply changes.')
+          } else {
+            log.info('Please find the GitHub CLI installation path and add it to PATH manually.')
+            log.info('Common locations: C:\\Program Files\\GitHub CLI\\')
+          }
+        }
+      }
+
       return true
     } catch (error) {
+      spinner.stop()
       log.error(`Failed to install GitHub CLI: ${error}`)
       log.info('Please install GitHub CLI manually from: https://cli.github.com')
+      if (platform === 'win32') {
+        log.info('After installation, you may need to add it to PATH manually.')
+        log.info('Common installation path: C:\\Program Files\\GitHub CLI\\')
+        log.info('Or check: C:\\Program Files (x86)\\GitHub CLI\\')
+      }
       return false
     }
   }

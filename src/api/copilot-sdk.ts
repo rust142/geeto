@@ -13,7 +13,7 @@ import { log } from '../utils/logging.js'
 // Copilot SDK wrapper (lazy-load, optional)
 
 // Minimum Copilot CLI version required for SDK compatibility
-const MIN_COPILOT_VERSION = '0.0.400'
+export const MIN_COPILOT_VERSION = '0.0.400'
 
 // Cache file path for storing copilot binary info
 const CACHE_FILE = path.join(os.homedir(), '.cache', 'geeto', 'copilot-bin.json')
@@ -28,7 +28,7 @@ interface CopilotBinCache {
 /**
  * Parse version string to numeric value for comparison.
  */
-const parseParts = (v: string): number => {
+export const parseParts = (v: string): number => {
   const parts = v.split('.').map((n) => Number.parseInt(n, 10))
   const [major = 0, minor = 0, patch = 0] = parts
   return major * 1_000_000 + minor * 1_000 + patch
@@ -83,7 +83,7 @@ const getVersionFromPath = (binPath: string): string | null => {
  * Find the best (newest) copilot binary from known locations.
  * Uses file-based caching to avoid slow exec calls on every startup.
  */
-const findBestCopilotBinary = (): { path: string; version: string } | null => {
+export const findBestCopilotBinary = (): { path: string; version: string } | null => {
   const minNum = parseParts(MIN_COPILOT_VERSION)
 
   // Super fast path: check cache first
@@ -145,7 +145,7 @@ let cachedCopilotPath: string | null = null
  * Automatically finds the newest copilot binary to bypass PATH cache issues.
  * Returns true if compatible, false otherwise.
  */
-const checkCopilotCliVersion = (): boolean => {
+export const checkCopilotCliVersion = (): boolean => {
   const best = findBestCopilotBinary()
   if (!best) {
     return false
