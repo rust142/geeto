@@ -162,11 +162,70 @@ Step 6: If confirmed, delete the completed task and go to Step 1
 - Execute multiple tasks in one go
 - Continue to next task without confirmation
 - Assume you should complete everything at once
+- Make assumptions about database schema, models, or queries without checking
 
 **✅ DO:**
 - Work on exactly one task
 - Stop and wait after each task
 - Ask for permission to continue
+
+**📋 FOR FULLSTACK/BACKEND PROJECTS:**
+
+Before implementing any task involving database, API, or data logic:
+
+1. **Check migrations** - Look at recent migration files to understand schema changes
+2. **Review models** - Examine model definitions and relationships
+3. **Read existing queries** - Check similar queries or repository patterns in the codebase
+4. **Understand the data flow** - Trace how data moves through the application
+
+**When creating NEW ENDPOINTS/CONTROLLERS/SERVICES:**
+1. **Find the most similar existing endpoint** - Look for endpoints with similar functionality
+2. **Copy the exact structure** - Use the same file organization, naming, and patterns
+3. **Match the code patterns exactly** - Request validation, error handling, response format
+4. **Keep consistency** - Controller methods, service layer, repository patterns should be identical
+5. **Reuse existing utilities** - Auth middleware, validators, error handlers, etc
+
+Example: If creating a "Create User" endpoint, find "Create Product" or similar and replicate its exact structure.
+
+**Never assume:**
+- Table structures or column names
+- Model relationships or foreign keys
+- Query patterns or ORM usage
+- API endpoint structures
+- Request/response formats
+- Validation rules
+
+**Always verify** by reading the actual code first, then implement based on what exists **exactly**.
+
+**📋 FOR FRONTEND PROJECTS:**
+
+Before implementing any UI/frontend task:
+
+1. **Review existing components** - Check similar components for patterns and conventions
+2. **Check styling approach** - Identify CSS framework (Tailwind, CSS Modules, styled-components, etc)
+3. **Understand state management** - See how state is managed (Redux, Zustand, Context, props)
+4. **Review API integration** - Look at how data fetching and error handling is done
+5. **Check type definitions** - Read existing interfaces/types for props and data structures
+6. **Follow naming conventions** - Match existing component and file naming patterns
+
+**When creating NEW PAGES/ROUTES:**
+1. **Find the most similar existing page** - Look for pages with similar functionality
+2. **Copy the exact structure** - Use the same file organization, imports, and layout
+3. **Match the code patterns exactly** - Don't deviate from the established patterns
+4. **Keep consistency** - Naming, export style, component composition should be identical
+5. **Reuse existing components** - Don't create new ones if similar components exist
+
+Example: If creating a "User Settings" page, find "Account Settings" or similar page and replicate its structure exactly.
+
+**Never assume:**
+- Component structure or prop patterns
+- CSS class naming or styling approach
+- State management implementation
+- API client or fetch patterns
+- File/folder naming conventions
+- Page/route structure
+
+**Always match** the existing codebase style and patterns **exactly**.
 
 ---
 
