@@ -257,17 +257,22 @@ export const handleInteractiveCleanup = (): void => {
           spinner.succeed(`Deleted local: ${branch.name}`)
           localSuccessCount++
         } catch {
-          // Stop spinner before interactive prompt
-          spinner.stop()
-          const forceDelete = confirm(
-            `Branch '${branch.name}' is not fully merged. Force delete local? (Y/n):`
-          )
+          // Stop spinner and clear line before interactive prompt
+          spinner.fail(`Branch '${branch.name}' is not fully merged`)
+          console.log('')
+          const forceDelete = confirm(`Force delete local?`)
+          console.log('')
           if (forceDelete) {
             const spinner2 = log.spinner()
             spinner2.start(`Force deleting local: ${branch.name}`)
-            exec(`git branch -D "${branch.name}"`, true)
-            spinner2.succeed(`Force deleted local: ${branch.name}`)
-            localSuccessCount++
+            try {
+              exec(`git branch -D "${branch.name}"`, true)
+              spinner2.succeed(`Force deleted local: ${branch.name}`)
+              localSuccessCount++
+            } catch {
+              spinner2.fail(`Failed to force delete local: ${branch.name}`)
+              localFailCount++
+            }
           } else {
             localFailCount++
             log.warn(`Skipped local: ${branch.name}`)
@@ -313,6 +318,9 @@ export const handleInteractiveCleanup = (): void => {
     console.log(
       `  Remote: ${colors.green}${remoteSuccessCount}/${remoteTotal} deleted${colors.reset}${remoteFailCount > 0 ? `, ${colors.red}${remoteFailCount} failed${colors.reset}` : ''}`
     )
+  }
+  if (remoteFailCount > 0) {
+    log.info('  Try prune with: git remote prune origin')
   }
   console.log('')
 
