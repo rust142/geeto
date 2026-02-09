@@ -37,6 +37,7 @@ export interface TrelloConfig {
 export interface TrelloCard {
   id: string
   name: string
+  desc?: string
   idShort: number
   shortLink: string
   url: string
