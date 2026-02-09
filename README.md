@@ -35,6 +35,22 @@ curl -fsSL https://raw.githubusercontent.com/rust142/geeto/main/tools/install.sh
 
 **Requirements:** Node.js ≥ 18, Bun ≥ 1.0, Git ≥ 2.0
 
+## Uninstallation
+
+### NPM/Bun
+
+```bash
+npm uninstall -g @geeto/core
+# or
+bun remove -g @geeto/core
+```
+
+### From Source
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rust142/geeto/main/tools/uninstall.sh | sh
+```
+
 ## Quick Start
 
 ### 1. Configure AI Provider
