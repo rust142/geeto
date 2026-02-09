@@ -238,8 +238,11 @@ Example: If creating a "User Settings" page, find "Account Settings" or similar 
   for (const [index, card] of cards.entries()) {
     markdown += `### Task ${index + 1} of ${cards.length}\n\n`
     markdown += `- [ ] **${card.name}** (#${card.idShort})\n`
-    markdown += `  - Trello URL: ${card.url}\n\n`
-    markdown += `---\n\n`
+    markdown += `  - Trello URL: ${card.url}\n`
+    if (card.desc?.trim()) {
+      markdown += `\n**Description:**\n${card.desc}\n`
+    }
+    markdown += `\n---\n\n`
   }
 
   markdown += `

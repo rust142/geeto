@@ -47,7 +47,7 @@ export const fetchTrelloCards = async (listId?: string): Promise<TrelloCard[]> =
 
   try {
     const response = await fetch(
-      `https://api.trello.com/1/boards/${config.boardId}/cards?fields=id,name,idShort,shortLink,url,idList&key=${config.apiKey}&token=${config.token}`,
+      `https://api.trello.com/1/boards/${config.boardId}/cards?fields=id,name,desc,idShort,shortLink,url,idList&key=${config.apiKey}&token=${config.token}`,
       { method: 'GET' }
     )
 
