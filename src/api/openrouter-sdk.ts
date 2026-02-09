@@ -77,6 +77,7 @@ export const generateBranchName = async (
       .replaceAll(/^-|-$/g, '')
     return cleaned || null
   } catch (error) {
+    console.log('') // Force newline to separate from any active spinner
     log.error('OpenRouter Error: ' + String(error))
     return null
   }
@@ -117,6 +118,7 @@ fetching. Updates .gitignore for geeto binaries.`
     const normalized = cleaned.replaceAll(/\n\s*\n+/g, '\n\n').trim()
     return normalized && normalized.length >= 8 ? normalized : null
   } catch (error) {
+    console.log('') // Force newline to separate from any active spinner
     log.error('OpenRouter Error: ' + String(error))
     return null
   }
