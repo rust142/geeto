@@ -109,6 +109,7 @@ export const generateBranchName = async (
 
     return branchName && branchName.length >= 3 ? branchName : null
   } catch (error) {
+    console.log('') // Force newline to separate from any active spinner
     log.warn('OpenRouter Error: ' + String(error))
     return null
   }
@@ -133,6 +134,7 @@ export const generateCommitMessage = async (
     const sdkRes = await sdkGenerateCommitMessage(diff, correction, model)
     return sdkRes
   } catch (error) {
+    console.log('') // Force newline to separate from any active spinner
     log.warn('OpenRouter Error: ' + String(error))
     return null
   }
