@@ -81,6 +81,7 @@ export const generateBranchName = async (
 
     return sdkRes
   } catch (error) {
+    console.log('') // Force newline to separate from any active spinner
     log.warn('Copilot Error: ' + String(error))
     return null
   }
@@ -103,6 +104,7 @@ export const generateCommitMessage = async (
     const sdkRes = await sdkGenerateCommitMessage(diff, correction, model)
     return sdkRes
   } catch (error) {
+    console.log('') // Force newline to separate from any active spinner
     log.warn('Copilot Error: ' + String(error))
     return null
   }
