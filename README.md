@@ -53,31 +53,21 @@ curl -fsSL https://raw.githubusercontent.com/rust142/geeto/main/tools/uninstall.
 
 ## Quick Start
 
-### 1. Configure AI Provider
-
-Choose one:
-
-**Gemini** - Create `.geeto/gemini.toml`:
-
-```toml
-gemini_api_key = "YOUR_API_KEY"
-```
-
-**OpenRouter** - Create `.geeto/openrouter.toml`:
-
-```toml
-openrouter_api_key = "YOUR_API_KEY"
-```
-
-**GitHub Copilot** - Auto-configured on first run (requires GitHub CLI)
-
-### 2. Run
+### 1. Run
 
 ```bash
 geeto
 ```
 
-## Usage
+On first run, Geeto will automatically guide you through AI provider setup:
+
+- **Gemini** - Enter your API key (get one at [Google AI Studio](https://makersuite.google.com/app/apikey))
+- **OpenRouter** - Enter your API key (get one at [OpenRouter](https://openrouter.ai/keys))
+- **GitHub Copilot** - Auto-configured (requires [GitHub CLI](https://cli.github.com/))
+
+All configurations are saved locally in `.geeto/` directory.
+
+### 2. Follow the Workflow
 
 Geeto guides you through 6 steps:
 
@@ -148,12 +138,15 @@ We welcome contributions! Please:
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
+## Support
+
+If you find Geeto helpful, consider supporting the project:
+
+- ☕ [Buy me a coffee on Saweria](https://saweria.co/rust142)
+- ⭐ Star this repository
+- 🐛 Report bugs and suggest features
+- 📢 Share with others
+
 ## License
 
-MIT © [Agung Maulana Malik](https://github.com/rust142)
-
-## Links
-
-- [Issues](https://github.com/rust142/geeto/issues)
-- [Pull Requests](https://github.com/rust142/geeto/pulls)
-- [NPM Package](https://www.npmjs.com/package/@geeto/core)
+This project is licensed under the MIT License.
