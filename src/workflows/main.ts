@@ -241,25 +241,6 @@ export const main = async (opts?: {
           console.log(
             `${colors.cyan}│${colors.reset} Resuming from: ${colors.cyan}${getStepName(savedState.step)}${colors.reset}`
           )
-          // Show staged files preview
-          const currentStaged = getStagedFiles()
-
-          if (currentStaged.length > 0) {
-            // Compute overflow count for preview
-            const moreCount = Math.max(0, currentStaged.length - 2)
-            const more = moreCount > 0 ? ` (+${moreCount} more)` : ''
-
-            // Display staged count (live or checkpoint)
-            const shownCount = currentStaged.length
-            const stagedLine = `${colors.cyan}│${colors.reset} Staged: ${colors.cyan}${shownCount} files${colors.reset}`
-            console.log(stagedLine)
-            console.log(
-              `${colors.cyan}│${colors.reset} Files: ${colors.cyan}${currentStaged
-                .splice(0, 2)
-                .map((f) => path.basename(f))
-                .join(', ')}${more}${colors.reset}`
-            )
-          }
           console.log(
             `${colors.cyan}└─────────────────────────────────────────────────────────┘${colors.reset}`
           )
@@ -606,8 +587,8 @@ export const main = async (opts?: {
     if (state.step < STEP.BRANCH_CREATED) {
       const suppressConfirm = !!opts?.startAt && opts.startAt !== 'stage'
 
-      // When running with CLI flags, show a short staged-files preview before creating the branch
-      if (opts?.startAt) {
+      // When running with CLI flags (except --stage), show a short staged-files preview before creating the branch
+      if (opts?.startAt && opts.startAt !== 'stage') {
         const stagedPreview = getStagedFiles()
         if (stagedPreview.length > 0) {
           const moreCount = Math.max(0, stagedPreview.length - 2)
@@ -654,8 +635,8 @@ export const main = async (opts?: {
       // current staged files from git so external changes are respected.
       const liveStaged = getStagedFiles()
 
-      // When invoked via CLI flags, show a short staged-files preview before committing
-      if (opts?.startAt && liveStaged.length > 0) {
+      // When invoked via CLI flags (except --stage), show a short staged-files preview before committing
+      if (opts?.startAt && opts.startAt !== 'stage' && liveStaged.length > 0) {
         const moreCount = Math.max(0, liveStaged.length - 2)
         const more = moreCount > 0 ? ` (+${moreCount} more)` : ''
         const shownCount = liveStaged.length

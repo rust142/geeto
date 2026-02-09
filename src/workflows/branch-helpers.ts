@@ -244,17 +244,22 @@ export async function handleTrelloCase(
         state.geminiModel
       )
 
+      // Stop spinner first to ensure error messages appear on new line
+      spinner.stop()
+
       if (
         translatedTitle &&
         !isTransientAIFailure(translatedTitle) &&
         !isContextLimitFailure(translatedTitle)
       ) {
         titleToProcess = translatedTitle
-        spinner.stop()
         log.info(`Translated: ${colors.cyan}${titleToProcess}${colors.reset}`)
       } else {
-        spinner.stop()
-        log.warn('Translation failed, using original title')
+        if (!translatedTitle || translatedTitle.includes('Execution failed')) {
+          log.warn('Translation unavailable, using original title')
+        } else {
+          log.warn('Translation failed, using original title')
+        }
       }
     }
 
