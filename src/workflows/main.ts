@@ -108,10 +108,13 @@ export const main = async (opts?: {
     let suppressStagingDoneMessage = false
 
     if (savedState) {
-      // Format saved checkpoint timestamp using system locale when available.
-      const formattedTimestamp = formatTimestampLocale(savedState.timestamp)
-      log.warn(`Found saved checkpoint from: ${formattedTimestamp}`)
-      log.info(`Last step: ${getStepName(savedState.step)}`)
+      // Only show saved checkpoint details when not running via shortcut flags
+      if (!suppressLogs) {
+        // Format saved checkpoint timestamp using system locale when available.
+        const formattedTimestamp = formatTimestampLocale(savedState.timestamp)
+        log.warn(`Found saved checkpoint from: ${formattedTimestamp}`)
+        log.info(`Last step: ${getStepName(savedState.step)}`)
+      }
 
       // Use the real git branch at startup so manual `git checkout` is reflected
       const actualCurrentBranch = getCurrentBranch()
@@ -128,11 +131,24 @@ export const main = async (opts?: {
       } else {
         // Avoid accidental immediate acceptance from previous Enter key press
         await new Promise((resolve) => setTimeout(resolve, 80))
-        resumeChoice = await select('What would you like to do?', [
-          { label: 'Resume from checkpoint', value: 'resume' },
-          { label: 'Start fresh (discard checkpoint)', value: 'fresh' },
-          { label: 'Cancel', value: 'cancel' },
-        ])
+
+        // If the saved checkpoint is already at or past cleanup, it's effectively finished;
+        // don't prompt the user — just start fresh immediately (no resume possible).
+        const isFinished = savedState.step >= STEP.CLEANUP
+        if (isFinished) {
+          // Quietly proceed as 'fresh' to avoid showing a redundant prompt for a completed checkpoint
+          log.info('Checkpoint already complete — starting fresh...')
+          resumeChoice = 'fresh'
+        } else {
+          // Ask user whether to resume, start fresh, or cancel
+          const choices = [
+            { label: 'Resume from checkpoint', value: 'resume' },
+            { label: 'Start fresh (discard checkpoint)', value: 'fresh' },
+            { label: 'Cancel', value: 'cancel' },
+          ]
+
+          resumeChoice = await select('What would you like to do?', choices)
+        }
       }
 
       // If startAt provided, ensure the saved checkpoint step is compatible
@@ -592,6 +608,26 @@ export const main = async (opts?: {
     // STEP 2: Create branch
     if (state.step < STEP.BRANCH_CREATED) {
       const suppressConfirm = !!opts?.startAt && opts.startAt !== 'stage'
+
+      // When running with CLI flags, show a short staged-files preview before creating the branch
+      if (opts?.startAt) {
+        const stagedPreview = getStagedFiles()
+        if (stagedPreview.length > 0) {
+          const moreCount = Math.max(0, stagedPreview.length - 2)
+          const more = moreCount > 0 ? ` (+${moreCount} more)` : ''
+          const shownCount = stagedPreview.length
+          log.info(
+            `${colors.cyan}${colors.reset}Staged: ${colors.cyan}${shownCount} files${colors.reset}`
+          )
+          log.info(
+            `${colors.cyan}${colors.reset}Files: ${colors.cyan}${stagedPreview
+              .slice(0, 2)
+              .map((f) => path.basename(f))
+              .join(', ')}${more}${colors.reset}`
+          )
+        }
+      }
+
       const { branchName, created } = await handleBranchCreationWorkflow(state, {
         suppressStep: !!opts?.startAt,
         suppressConfirm,
@@ -620,6 +656,22 @@ export const main = async (opts?: {
       // optional and only helps the user; commits must always verify the
       // current staged files from git so external changes are respected.
       const liveStaged = getStagedFiles()
+
+      // When invoked via CLI flags, show a short staged-files preview before committing
+      if (opts?.startAt && liveStaged.length > 0) {
+        const moreCount = Math.max(0, liveStaged.length - 2)
+        const more = moreCount > 0 ? ` (+${moreCount} more)` : ''
+        const shownCount = liveStaged.length
+        log.info(
+          `${colors.cyan}${colors.reset}Staged: ${colors.cyan}${shownCount} files${colors.reset}`
+        )
+        log.info(
+          `${colors.cyan}${colors.reset}Files: ${colors.cyan}${liveStaged
+            .slice(0, 2)
+            .map((f) => path.basename(f))
+            .join(', ')}${more}${colors.reset}`
+        )
+      }
 
       if (liveStaged.length === 0) {
         console.log('')
