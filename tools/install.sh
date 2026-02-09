@@ -1,69 +1,127 @@
-#!/usr/bin/env sh
-set -euo pipefail
+#!/usr/bin/env bash
 
-info() { printf '\033[1;34m%s\033[0m\n' "$1"; }
-warn() { printf '\033[1;33m%s\033[0m\n' "$1"; }
-err() { printf '\033[1;31m%s\033[0m\n' "$1"; exit 1; }
+set -e
 
-info "Starting tools/install.sh"
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
 
-# Install dependencies with Bun if available, otherwise npm
-if command -v bun >/dev/null 2>&1; then
-  info "Using Bun to install dependencies"
-  bun install
-elif command -v npm >/dev/null 2>&1; then
-  info "Using npm to install dependencies"
-  npm ci
-else
-  err "Neither 'bun' nor 'npm' found. Please install Node (or Bun) and retry."
+# Detect OS
+OS="unknown"
+ARCH="$(uname -m)"
+
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    OS="linux"
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+    OS="mac"
+elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
+    OS="windows"
 fi
 
-# Run project prepare script (install husky hooks etc.)
-info "Running project 'prepare' script to install git hooks"
-if command -v bun >/dev/null 2>&1; then
-  bun run prepare || (npm run prepare || true)
-else
-  npm run prepare || true
+echo -e "${BLUE}╔════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║     Geeto Installation Script         ║${NC}"
+echo -e "${BLUE}╚════════════════════════════════════════╝${NC}"
+echo ""
+echo -e "${YELLOW}Detected OS: ${OS} (${ARCH})${NC}"
+echo ""
+
+# Check if bun is installed
+if ! command -v bun &> /dev/null; then
+    echo -e "${RED}✗ Bun is not installed${NC}"
+    echo -e "${YELLOW}  Please install Bun from: https://bun.sh${NC}"
+    exit 1
 fi
 
-# Function: ensure label using GitHub CLI (optional)
-ensure_label() {
-  LABEL='review'
-  COLOR='6f42c1'
-  DESC='Trigger AI Issue Assessment action'
+echo -e "${GREEN}✓ Bun found${NC}"
 
-  info "Ensuring label '$LABEL' exists (if gh CLI available)"
+# Check if git is installed
+if ! command -v git &> /dev/null; then
+    echo -e "${RED}✗ Git is not installed${NC}"
+    echo -e "${YELLOW}  Please install Git from: https://git-scm.com${NC}"
+    exit 1
+fi
 
-  if ! command -v gh >/dev/null 2>&1; then
-    warn "gh CLI not found; skipping label creation. Install GitHub CLI to enable this step."
-    return 0
-  fi
+echo -e "${GREEN}✓ Git found${NC}"
+echo ""
 
-  # Try to derive repo in owner/repo format
-  REPO=${GITHUB_REPOSITORY:-}
-  if [ -z "$REPO" ]; then
-    REMOTE_URL=$(git config --get remote.origin.url || true)
-    if [ -n "$REMOTE_URL" ]; then
-      REPO=$(printf '%s\n' "$REMOTE_URL" | sed -E 's#.*[:/](.+)/(.+)(\.git)?#\1/\2#')
+# Install dependencies if needed
+if [ ! -d "node_modules" ]; then
+    echo -e "${BLUE}→ Installing dependencies...${NC}"
+    bun install
+    echo -e "${GREEN}✓ Dependencies installed${NC}"
+    echo ""
+fi
+
+# Build TypeScript
+echo -e "${BLUE}→ Building TypeScript...${NC}"
+bun run build
+echo -e "${GREEN}✓ TypeScript compiled${NC}"
+echo ""
+
+# Build binary based on OS
+echo -e "${BLUE}→ Building binary for ${OS}...${NC}"
+
+BINARY_NAME="geeto"
+if [ "$OS" == "linux" ]; then
+    if [ "$ARCH" == "aarch64" ] || [ "$ARCH" == "arm64" ]; then
+        bun run geeto:build:linux:arm64
+        BINARY_NAME="geeto-linux-arm64"
+    else
+        bun run geeto:build:linux
+        BINARY_NAME="geeto-linux"
     fi
-  fi
-
-  if [ -n "$REPO" ]; then
-    # Create label (if it exists, the API returns 422; ignore failures)
-    gh api "repos/$REPO/labels" -f name="$LABEL" -f color="$COLOR" -f description="$DESC" >/dev/null 2>&1 || true
-    info "Label ensured for $REPO"
-  else
-    warn "Could not determine repo automatically; attempting to create label in current gh context"
-    gh api "repos/$(gh repo view --json nameWithOwner -q '.nameWithOwner')/labels" -f name="$LABEL" -f color="$COLOR" -f description="$DESC" >/dev/null 2>&1 || true
-    info "Label ensured in gh current repo context"
-  fi
-}
-
-# Default behavior: ensure label unless --no-label passed
-if [ "${1:-}" = "--no-label" ]; then
-  info "Skipping label creation (--no-label)"
-else
-  ensure_label
+elif [ "$OS" == "mac" ]; then
+    if [ "$ARCH" == "arm64" ]; then
+        bun run geeto:build:mac:arm64
+        BINARY_NAME="geeto-mac-arm64"
+    else
+        bun run geeto:build:mac
+        BINARY_NAME="geeto-mac"
+    fi
+elif [ "$OS" == "windows" ]; then
+    bun run geeto:build:windows
+    BINARY_NAME="geeto-windows.exe"
 fi
 
-info "Install script completed. Run 'sh tools/install.sh' or 'npm run tools:install'"
+echo -e "${GREEN}✓ Binary built: ${BINARY_NAME}${NC}"
+echo ""
+
+# Install binary
+if [ "$OS" == "windows" ]; then
+    # Windows installation
+    INSTALL_DIR="$USERPROFILE/.geeto/bin"
+    mkdir -p "$INSTALL_DIR"
+    cp "$BINARY_NAME" "$INSTALL_DIR/geeto.exe"
+
+    echo -e "${YELLOW}Windows installation complete!${NC}"
+    echo -e "${YELLOW}Add to PATH manually:${NC}"
+    echo -e "${BLUE}  setx PATH \"%PATH%;%USERPROFILE%\\.geeto\\bin\"${NC}"
+    echo ""
+    echo -e "${GREEN}Run 'geeto' after restarting your terminal${NC}"
+else
+    # Unix-like installation (Linux/Mac)
+    INSTALL_DIR="/usr/local/bin"
+
+    if [ -w "$INSTALL_DIR" ]; then
+        cp "$BINARY_NAME" "$INSTALL_DIR/geeto"
+        chmod +x "$INSTALL_DIR/geeto"
+        echo -e "${GREEN}✓ Installed to ${INSTALL_DIR}/geeto${NC}"
+    else
+        echo -e "${YELLOW}Need sudo permission to install to ${INSTALL_DIR}${NC}"
+        sudo cp "$BINARY_NAME" "$INSTALL_DIR/geeto"
+        sudo chmod +x "$INSTALL_DIR/geeto"
+        echo -e "${GREEN}✓ Installed to ${INSTALL_DIR}/geeto${NC}"
+    fi
+
+    echo ""
+    echo -e "${GREEN}Installation complete! Run:${NC}"
+    echo -e "${BLUE}  geeto${NC}"
+fi
+
+echo ""
+echo -e "${GREEN}════════════════════════════════════════${NC}"
+echo -e "${GREEN}  Installation successful! 🎉${NC}"
+echo -e "${GREEN}════════════════════════════════════════${NC}"
