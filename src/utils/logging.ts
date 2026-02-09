@@ -35,6 +35,8 @@ class Spinner {
     process.stdout.write('\u001B[?25h') // Show cursor
     if (finalMessage) {
       console.log(finalMessage)
+    } else {
+      process.stdout.write('\n') // Move to next line when no final message
     }
   }
 
