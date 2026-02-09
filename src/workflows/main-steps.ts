@@ -18,9 +18,6 @@ export async function handlePush(
     if (!opts?.suppressStep) {
       log.step('Step 4: Push to Remote')
     }
-    if (!opts?.suppressLogs) {
-      log.info(`Current branch: ${getCurrentBranch()}`)
-    }
 
     let shouldPush: boolean
     if (opts?.suppressLogs) {
@@ -31,14 +28,6 @@ export async function handlePush(
     }
 
     if (shouldPush) {
-      // Get remote URL silently and show a tidy status line
-      let remoteUrl = ''
-      try {
-        remoteUrl = exec('git remote get-url origin', true)
-      } catch {
-        // ignore
-      }
-
       if (opts?.suppressLogs) {
         const progressBar = new ProgressBar(100, 'Pushing to remote')
 
@@ -81,8 +70,6 @@ export async function handlePush(
 
           if (hasCommitsToPush) {
             log.success(`Pushed ${getCurrentBranch()} to remote`)
-          } else {
-            log.info(`Branch ${getCurrentBranch()} is already up to date with remote`)
           }
         } catch (error) {
           progressBar.complete()
@@ -91,10 +78,7 @@ export async function handlePush(
           throw error
         }
       } else {
-        // Show remote info compactly
-        if (remoteUrl) {
-          log.info(`Pushing to: ${remoteUrl}`)
-        }
+        // Push without progress bar
 
         const progressBar = new ProgressBar(100, 'Pushing to remote')
 
@@ -136,8 +120,6 @@ export async function handlePush(
 
           if (hasCommitsToPush) {
             log.success(`Pushed ${getCurrentBranch()} to remote`)
-          } else {
-            log.info(`Branch ${getCurrentBranch()} is already up to date with remote`)
           }
         } catch (error) {
           progressBar.complete()
@@ -166,9 +148,6 @@ export async function handleMerge(
   if (state.step < STEP.MERGED) {
     if (!opts?.suppressStep) {
       log.step('Step 5: Merge to Target Branch')
-    }
-    if (!opts?.suppressLogs) {
-      log.info(`Current branch: ${getCurrentBranch()}`)
     }
 
     const featureBranch = getCurrentBranch()
@@ -393,7 +372,6 @@ export async function handleMerge(
 export async function handleCleanup(featureBranch: string, state: GeetoState): Promise<void> {
   if (state.step < STEP.CLEANUP) {
     log.step('Step 6: Cleanup')
-    log.info(`Current branch: ${getCurrentBranch()}`)
 
     if (featureBranch && featureBranch !== state.targetBranch) {
       // Protect canonical branches from accidental deletion

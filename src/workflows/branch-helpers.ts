@@ -477,9 +477,7 @@ export async function handleTrelloCase(
       }
       case 'correct': {
         correction = askQuestion(
-          'Provide corrections for the AI (e.g., shorten, prefer verb tense): ',
-          undefined,
-          true
+          'Provide corrections for the AI (e.g., shorten, prefer verb tense): '
         )
         console.log('')
         break

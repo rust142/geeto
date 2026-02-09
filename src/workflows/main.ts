@@ -7,7 +7,6 @@ import type { OpenRouterModel } from '../api/openrouter.js'
 import type { GeetoState } from '../types/index.js'
 
 import { handleAIProviderSelection } from './ai-provider.js'
-import { showAuthorTools } from './author.js'
 import { handleBranchCreationWorkflow } from './branch.js'
 import { handleCommitWorkflow } from './commit.js'
 import { handleCleanup, handleMerge, handlePush } from './main-steps.js'
@@ -22,7 +21,11 @@ import {
   hasTrelloConfig,
   setSkipTrelloPrompt,
 } from '../utils/config.js'
-import { displayCurrentProviderStatus, getStepName } from '../utils/display.js'
+import {
+  displayCompletionSummary,
+  displayCurrentProviderStatus,
+  getStepName,
+} from '../utils/display.js'
 import { exec } from '../utils/exec.js'
 import { getChangedFiles, getCurrentBranch, getStagedFiles } from '../utils/git.js'
 import { log } from '../utils/logging.js'
@@ -62,7 +65,6 @@ export const main = async (opts?: {
       : await select('Welcome to Geeto! What would you like to do?', [
           { label: 'Start new workflow', value: 'start' },
           { label: 'Trello tasks', value: 'trello' },
-          { label: 'About author', value: 'author' },
           { label: 'Settings', value: 'settings' },
           { label: 'Exit', value: 'exit' },
         ])
@@ -76,11 +78,6 @@ export const main = async (opts?: {
       await showSettingsMenu()
       // After settings, go back to main menu
       await main()
-      return
-    }
-
-    if (!opts?.startAt && initialChoice === 'author') {
-      await showAuthorTools()
       return
     }
 
@@ -492,7 +489,7 @@ export const main = async (opts?: {
           // Setup selected platform if needed
           if (selectedPlatform === 'trello' && !hasTrelloConfig()) {
             const trelloSpinner = log.spinner()
-            trelloSpinner.start('Setting up Trello integration...')
+            trelloSpinner.start('Setting up Trello...')
             const { setupTrelloConfigInteractive } = await import('../core/trello-setup.js')
             const trelloSetupSuccess = setupTrelloConfigInteractive()
             trelloSpinner.stop()
@@ -792,7 +789,14 @@ export const main = async (opts?: {
     // Reset state to initial but preserve AI provider settings
     preserveProviderState(state)
 
-    console.log(`\n✅ Git flow complete!\n`)
+    // Display enhanced completion summary
+    const stagedFiles = getStagedFiles()
+    displayCompletionSummary({
+      stagedFiles: stagedFiles.length,
+      workingBranch: featureBranch || state.workingBranch,
+      targetBranch: state.targetBranch,
+    })
+
     // Close any interactive input resources and exit to ensure the CLI terminates
     try {
       closeInput()

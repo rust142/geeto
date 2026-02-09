@@ -30,7 +30,7 @@ export const handleGetTrelloLists = async (): Promise<void> => {
 
   console.log('')
   const spinner = log.spinner()
-  spinner.start('Fetching lists from Trello...')
+  spinner.start('Fetching lists...')
 
   const lists = await fetchTrelloLists()
 
