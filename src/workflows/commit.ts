@@ -219,8 +219,6 @@ export const handleCommitWorkflow = async (
   // Log provider detected; if manual, skip AI prompts and go straight to conventional commit flow
   if (aiProvider === 'manual') {
     selectedTool = 'manual'
-  } else {
-    log.info(`AI provider detected: ${aiProvider}`)
   }
 
   let modelName = ''
@@ -231,10 +229,6 @@ export const handleCommitWorkflow = async (
   } else if (aiProvider === 'gemini') {
     // prefer persisted state selection, otherwise fall back to default
     modelName = state.geminiModel ?? DEFAULT_GEMINI_MODEL
-  }
-
-  if (modelName) {
-    log.info(`Using model: ${modelName}`)
   }
 
   // If not manual, ask whether to use AI provider for commit; otherwise skip to manual flow
