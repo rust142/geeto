@@ -343,7 +343,7 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
     console.log('')
 
     const spinner = log.spinner()
-    spinner.start(`Installing GitHub Copilot CLI via ${choice}... This may take a few minutes.`)
+    spinner.start(`Installing Copilot via ${choice}...`)
 
     try {
       // Use async exec to allow spinner to animate during installation

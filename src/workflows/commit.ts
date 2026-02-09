@@ -813,9 +813,7 @@ export const handleCommitWorkflow = async (
         }
         case 'correct': {
           correction = askQuestion(
-            'Provide corrections for the AI (e.g., shorten header, clarify scope): ',
-            undefined,
-            true
+            'Provide corrections for the AI (e.g., shorten header, clarify scope): '
           )
           // Immediately force a regenerate using the provided correction
           forceDirect = true

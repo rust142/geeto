@@ -13,8 +13,6 @@ let resume = false
 let stageAll = false
 let showVersion = false
 let showHelp = false
-let showAuthor = false
-let showSaweria = false
 let showCleanup = false
 let showTrello = false
 let showTrelloLists = false
@@ -58,12 +56,6 @@ for (const arg of argv) {
   }
   if (arg === '-h' || arg === '--help') {
     showHelp = true
-  }
-  if (arg === '--author') {
-    showAuthor = true
-  }
-  if (arg === '--saweria') {
-    showSaweria = true
   }
   if (arg === '--separator') {
     settingsAction = 'separator'
@@ -130,8 +122,6 @@ const validFlags = new Set([
   '--trello',
   '--trello-list',
   '--trello-generate',
-  '--author',
-  '--saweria',
 ])
 
 for (const arg of argv) {
@@ -180,33 +170,6 @@ for (const arg of argv) {
     console.log('  --trello             Open Trello menu')
     console.log('  --trello-list        Get Trello lists from board')
     console.log('  --trello-generate    Generate tasks.instructions.md from Trello list')
-    console.log('')
-    console.log('Other:')
-    console.log('  --author             Show author information and tools')
-    console.log('  --saweria            Print Saweria (support) link')
-    console.log('')
-    // Footer notes
-    console.log(
-      'Tip: use the --author flag to show author tools, or --saweria to print the support link'
-    )
-    process.exit(0)
-  }
-
-  if (showAuthor) {
-    try {
-      const { showAuthorTools } = await import('./workflows/author.js')
-      await showAuthorTools()
-      // After returning from author tools, show main menu
-      await main({ startAt, fresh, resume })
-      return
-    } catch (error) {
-      console.error('Author tools error:', error)
-      process.exit(1)
-    }
-  }
-
-  if (showSaweria) {
-    console.log('Support the author: https://saweria.co/rust142')
     process.exit(0)
   }
 

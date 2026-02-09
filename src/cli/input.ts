@@ -13,17 +13,10 @@ const rl = readline.createInterface({
   output: process.stdout,
 })
 
-// Command history for enhanced UX
-let commandHistory: string[] = []
-
 /**
- * Enhanced question asking with history support
+ * Ask a question and return user input
  */
-export const askQuestion = (
-  question: string,
-  defaultValue?: string,
-  useHistory: boolean = false
-): string => {
+export const askQuestion = (question: string, defaultValue?: string): string => {
   if (process.stdin.isTTY && process.stdin.isRaw) {
     process.stdin.setRawMode(false)
   }
@@ -44,29 +37,7 @@ export const askQuestion = (
         })
 
   const input = result.stdout?.trim() ?? ''
-  const finalInput = input ?? defaultValue ?? ''
-
-  // Add to history if it's a meaningful input and history is enabled
-  if (useHistory && finalInput && !commandHistory.includes(finalInput)) {
-    commandHistory.unshift(finalInput)
-    if (commandHistory.length > 50) {
-      commandHistory = commandHistory.slice(0, 50)
-    } // Limit history
-  }
-
-  return finalInput
-}
-
-/**
- * Get command history
- */
-export const getCommandHistory = (): string[] => commandHistory
-
-/**
- * Clear command history
- */
-export const clearCommandHistory = (): void => {
-  commandHistory = []
+  return input ?? defaultValue ?? ''
 }
 
 /**

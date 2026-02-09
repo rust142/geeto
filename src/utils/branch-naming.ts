@@ -343,9 +343,7 @@ export const handleBranchNaming = async (
         }
         case 'correct': {
           correction = askQuestion(
-            'Provide corrections for the AI (e.g., prefer kebab-case, shorten subject): ',
-            undefined,
-            true
+            'Provide corrections for the AI (e.g., prefer kebab-case, shorten subject): '
           )
           continue
         }
