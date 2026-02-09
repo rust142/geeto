@@ -65,12 +65,19 @@ export const main = async (opts?: {
       : await select('Welcome to Geeto! What would you like to do?', [
           { label: 'Start new workflow', value: 'start' },
           { label: 'Trello tasks', value: 'trello' },
+          { label: 'Security & Quality Gate', value: 'security' },
           { label: 'Settings', value: 'settings' },
           { label: 'Exit', value: 'exit' },
         ])
 
     if (!opts?.startAt && initialChoice === 'exit') {
       log.info('Goodbye!')
+      return
+    }
+
+    if (!opts?.startAt && initialChoice === 'security') {
+      const { showSecurityGateMenu } = await import('./security-gate.js')
+      await showSecurityGateMenu()
       return
     }
 
