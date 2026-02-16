@@ -1,7 +1,7 @@
 {
-  "name": "@geeto/core",
+  "name": "geeto",
   "version": "0.1.0-beta.0",
-  "description": "Git flow automation CLI tool with AI-powered (Gemini, GitHub Copilot, OpenRouter)",
+  "description": "AI-powered Git workflow automation CLI with smart commit messages, branch naming, and Trello integration",
   "author": {
     "email": "amdev142@gmail.com",
     "name": "Agung Maulana Malik",

@@ -22,9 +22,9 @@ Streamline your Git workflow with intelligent branch naming, commit messages, an
 ### NPM/Bun
 
 ```bash
-npm install -g @geeto/core
+npm install -g geeto
 # or
-bun install -g @geeto/core
+bun install -g geeto
 ```
 
 ### From Source
@@ -40,9 +40,9 @@ curl -fsSL https://raw.githubusercontent.com/rust142/geeto/main/tools/install.sh
 ### NPM/Bun
 
 ```bash
-npm uninstall -g @geeto/core
+npm uninstall -g geeto
 # or
-bun remove -g @geeto/core
+bun remove -g geeto
 ```
 
 ### From Source
