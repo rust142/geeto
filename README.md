@@ -11,8 +11,6 @@
 
 Streamline your Git workflow with intelligent branch naming, commit messages, and Trello integration—powered by AI (Gemini, GitHub Copilot, OpenRouter).
 
-[![Geeto Demo](https://github.com/rust142/geeto/raw/main/images/demo.png)](https://asciinema.org/a/788604)
-
 ## Features
 
 - **Multiple AI Providers** - Gemini, GitHub Copilot, OpenRouter
@@ -63,6 +61,10 @@ curl -fsSL https://raw.githubusercontent.com/rust142/geeto/main/tools/uninstall.
 ```bash
 geeto
 ```
+
+[![Geeto Demo](https://github.com/rust142/geeto/raw/main/images/demo.png)](https://asciinema.org/a/788604)
+
+[see demo](https://asciinema.org/a/788604)
 
 On first run, Geeto will automatically guide you through AI provider setup:
 
