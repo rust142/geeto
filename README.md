@@ -2,7 +2,10 @@
 
 > AI-Powered Git Workflow Automation
 
-[![npm version](https://badge.fury.io/js/%40geeto%2Fcore.svg)](https://badge.fury.io/js/%40geeto%2Fcore)
+[![Support Palestine](https://raw.githubusercontent.com/Safouene1/support-palestine-banner/master/banner-support.svg)](https://kitabisa.com/campaign/celenganwargapalestina)
+
+[![StandWithPalestine badge](https://raw.githubusercontent.com/Safouene1/support-palestine-banner/master/StandWithPalestine.svg)](https://s.id/standwithpalestine)
+[![npm version](https://badge.fury.io/js/geeto.svg)](https://badge.fury.io/js/geeto)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
