@@ -69,7 +69,8 @@
     "rubymine",
     "USERPROFILE",
     "setx",
-    "LOGFILE"
+    "LOGFILE",
+    "asciicast"
   ],
   "ignorePaths": [
     "node_modules/**",

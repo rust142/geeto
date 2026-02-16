@@ -81,6 +81,10 @@ Geeto guides you through 6 steps:
 5. **Merge** - Merge to target branch
 6. **Cleanup** - Delete merged branches
 
+### Demo
+
+[![asciicast](https://asciinema.org/a/QONoImQZZObreHIG.svg)](https://asciinema.org/a/QONoImQZZObreHIG)
+
 ### CLI Flags
 
 ```bash
