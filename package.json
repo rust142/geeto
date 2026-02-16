@@ -96,27 +96,6 @@
     "typescript": "^5.9.3",
     "yaml-lint": "^1.7.0"
   },
-  "lint-staged": {
-    "*.{ts,tsx}": [
-      "bun ./scripts/typecheck-wrapper.js",
-      "bun cspell:check",
-      "eslint --fix",
-      "prettier --write"
-    ],
-    "*.{js,json,md}": [
-      "bun cspell:check",
-      "prettier --write"
-    ],
-    "*.md": [
-      "bun cspell:check",
-      "markdownlint --fix",
-      "prettier --write"
-    ],
-    "*.{yml,yaml}": [
-      "bun cspell:check",
-      "yamllint -f parsable"
-    ]
-  },
   "peerDependencies": {
     "typescript": "^5"
   },
