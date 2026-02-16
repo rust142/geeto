@@ -83,7 +83,7 @@ Geeto guides you through 6 steps:
 
 ### Demo
 
-[![asciicast](https://asciinema.org/a/QONoImQZZObreHIG.svg)](https://asciinema.org/a/QONoImQZZObreHIG)
+[![Geeto Demo](https://github.com/rust142/geeto/raw/main/images/geeto.png)](https://asciinema.org/a/788604)
 
 ### CLI Flags
 
