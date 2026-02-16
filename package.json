@@ -1,6 +1,6 @@
 {
   "name": "geeto",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "description": "AI-powered Git workflow automation CLI with smart commit messages, branch naming, and Trello integration",
   "author": {
     "email": "amdev142@gmail.com",
@@ -14,6 +14,7 @@
   },
   "files": [
     "lib",
+    "package.json",
     "README.md",
     "LICENSE"
   ],
@@ -53,7 +54,8 @@
     "release:beta": "release-it --preRelease=beta --ci",
     "release:alpha": "release-it --preRelease=alpha",
     "prepare": "husky install",
-    "postinstall": "bun run prepare",
+    "prepublishOnly": "pinst --disable",
+    "postpublish": "pinst --enable",
     "lint-staged": "lint-staged",
     "tools:install": "sh tools/install.sh",
     "danger:ci": "danger ci",
@@ -91,6 +93,7 @@
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
     "markdownlint-cli": "^0.47.0",
+    "pinst": "^3.0.0",
     "prettier": "^3.8.1",
     "release-it": "^19.2.4",
     "typescript": "^5.9.3",
@@ -106,7 +109,6 @@
   "dependencies": {
     "@github/copilot-sdk": "^0.1.20",
     "@google/genai": "^1.39.0",
-    "@openrouter/sdk": "^0.5.1",
-    "geeto": "."
+    "@openrouter/sdk": "^0.5.1"
   }
 }
