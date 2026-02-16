@@ -1,0 +1,29 @@
+{
+  "git": {
+    "commitMessage": "chore: release v${version}",
+    "tagName": "v${version}",
+    "tagAnnotation": "Release v${version}"
+  },
+  "github": {
+    "release": true,
+    "releaseName": "v${version}"
+  },
+  "npm": {
+    "publish": true,
+    "skipChecks": false
+  },
+  "plugins": {
+    "@release-it/conventional-changelog": {
+      "preset": "angular",
+      "infile": "CHANGELOG.md"
+    }
+  },
+  "hooks": {
+    "before:init": [
+      "bun run lint",
+      "bun run typecheck",
+      "bun run build"
+    ],
+    "after:release": "echo 'Successfully released ${name} v${version} to ${repo.repository} 🎉'"
+  }
+}

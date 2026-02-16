@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    // Environment setup & latest features
+    "lib": ["ES2022", "DOM"],
+    "target": "ES2021",
+    "module": "NodeNext",
+    "allowJs": true,
+    "allowSyntheticDefaultImports": true,
+
+    // Output configuration
+    "outDir": "./lib",
+    "rootDir": "./src",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "removeComments": false,
+
+    // Module resolution
+    "moduleResolution": "NodeNext",
+    "noEmit": false,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "downlevelIteration": true,
+
+    // Best practices
+    "strict": true,
+    "skipLibCheck": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "lib", "**/*.test.ts"]
+}

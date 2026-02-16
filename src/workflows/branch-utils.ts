@@ -1,0 +1,74 @@
+import { askQuestion } from '../cli/input.js'
+import { colors } from '../utils/colors.js'
+import { safeCheckout } from '../utils/git-errors.js'
+import {
+  branchExists,
+  getBranchPrefix,
+  isContextLimitFailure,
+  validateBranchName,
+} from '../utils/git.js'
+import { log } from '../utils/logging.js'
+
+/**
+ * Prompt the user for a manual branch name until valid.
+ */
+export function promptManualBranch(curBranch: string): string {
+  const customPrefix = getBranchPrefix(curBranch)
+  let valid = false
+  let name = ''
+  while (!valid) {
+    name = askQuestion('Enter branch name:', `${customPrefix}new-feature`)
+    const validation = validateBranchName(name)
+    if (validation.valid) {
+      valid = true
+    } else {
+      log.error(`Invalid branch name: ${validation.reason}`)
+    }
+  }
+  return name
+}
+
+/**
+ * Create a branch if valid and not existing. Returns true when created.
+ */
+export const createBranch = async (name: string, currentBranch: string): Promise<boolean> => {
+  if (!name || name === currentBranch) {
+    return false
+  }
+
+  const validation = validateBranchName(name)
+  if (!validation.valid) {
+    log.error(`Invalid branch name: ${validation.reason}`)
+    return false
+  }
+
+  if (branchExists(name)) {
+    log.error(`Branch '${name}' already exists locally`)
+    return false
+  }
+
+  // Reject branch names that look like AI context/token-limit error messages
+  const low = String(name).toLowerCase()
+  if (
+    isContextLimitFailure(low) ||
+    low.includes('token') ||
+    low.includes('context') ||
+    low.includes('requested') ||
+    low.includes('maximum') ||
+    low.includes('middle-out')
+  ) {
+    log.error(
+      'Proposed branch name looks like an AI error message; please regenerate or choose a different model/provider'
+    )
+    return false
+  }
+
+  log.info(`Creating branch: ${name}`)
+  const result = await safeCheckout(name, { create: true })
+  if (!result.success) {
+    log.error(`Failed to create branch: ${result.error}`)
+    return false
+  }
+  log.success(`Branch created: ${colors.cyan}${colors.bright}${name}${colors.reset}`)
+  return true
+}

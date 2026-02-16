@@ -1,0 +1,3 @@
+echo "Running pre-commit lint-staged..."
+# Run lint-staged to format/fix staged files
+npx --no-install lint-staged
