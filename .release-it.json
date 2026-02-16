@@ -9,7 +9,7 @@
     "releaseName": "v${version}"
   },
   "npm": {
-    "publish": true,
+    "publish": false,
     "skipChecks": false
   },
   "plugins": {
@@ -19,11 +19,7 @@
     }
   },
   "hooks": {
-    "before:init": [
-      "bun run lint",
-      "bun run typecheck",
-      "bun run build"
-    ],
+    "before:init": ["bun run lint", "bun run typecheck", "bun run build"],
     "after:release": "echo 'Successfully released ${name} v${version} to ${repo.repository} 🎉'"
   }
 }
