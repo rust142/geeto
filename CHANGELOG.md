@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/rust142/geeto/compare/v0.1.0...v0.1.1) (2026-02-16)
+
+
+### Bug Fixes
+
+* **logging:** remove hard-coded version from banner ([2665c3c](https://github.com/rust142/geeto/commit/2665c3c09b26e82a9075ee5c5f893dc5003e58bd))
+
 # [0.1.0](https://github.com/rust142/geeto/compare/v0.1.0-beta.3...v0.1.0) (2026-02-16)
 
 
