@@ -1,5 +1,5 @@
 {
-  "name": "@geeto/core",
+  "name": "geeto",
   "version": "0.1.0-beta.0",
   "description": "Git flow automation CLI tool with AI-powered (Gemini, GitHub Copilot, OpenRouter)",
   "author": {
