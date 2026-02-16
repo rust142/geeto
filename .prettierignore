@@ -69,3 +69,6 @@ pnpm-lock.yaml
 # Config files that shouldn't be formatted
 .eslintrc.js
 .prettierrc.js
+
+# Ignore changelog (release notes / generated)
+CHANGELOG.md

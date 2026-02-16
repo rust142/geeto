@@ -9,7 +9,6 @@
     "bun cspell:check",
     "prettier --write"
   ],
-  "!CHANGELOG.md": "echo ignoring changelog",
   "*.md": [
     "bun cspell:check",
     "markdownlint --fix",
