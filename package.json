@@ -14,7 +14,6 @@
   },
   "files": [
     "lib",
-    "bin",
     "package.json",
     "README.md",
     "LICENSE"
