@@ -99,3 +99,7 @@ export interface GeminiConfig {
 export interface OpenRouterConfig {
   apiKey: string
 }
+
+export interface GitHubConfig {
+  token: string
+}

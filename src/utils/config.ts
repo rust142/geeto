@@ -7,6 +7,7 @@ import os from 'node:os'
 import type {
   BranchStrategyConfig,
   GeminiConfig,
+  GitHubConfig,
   OpenRouterConfig,
   TrelloConfig,
 } from '../types/index.js'
@@ -322,6 +323,38 @@ export const getProtectedBranches = (): string[] => {
   const config = getBranchStrategyConfig()
   const custom = config?.protectedBranches ?? []
   return [...new Set([...DEFAULT_PROTECTED_BRANCHES, ...custom])]
+}
+
+/**
+ * Get path to GitHub config (project-local)
+ */
+export const getGithubConfigPath = (): string => {
+  return '.geeto/github.toml'
+}
+
+/**
+ * Read GitHub config from project-local config file
+ */
+export const getGithubConfig = (): GitHubConfig => {
+  try {
+    const path = getGithubConfigPath()
+    if (fs.existsSync(path)) {
+      const content = fs.readFileSync(path, 'utf8')
+      const tokenMatch = content.match(/token\s*=\s*["']([^"']+)["']/)
+      return { token: tokenMatch?.[1] ?? '' }
+    }
+  } catch {
+    // Ignore errors
+  }
+  return { token: '' }
+}
+
+/**
+ * Check if GitHub is configured (has token)
+ */
+export const hasGithubConfig = (): boolean => {
+  const config = getGithubConfig()
+  return !!(config.token && config.token.trim().length > 0)
 }
 
 /**
