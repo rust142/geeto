@@ -10,7 +10,7 @@
   "license": "MIT",
   "type": "module",
   "bin": {
-    "geeto": "./lib/index.js"
+    "geeto": "lib/index.js"
   },
   "files": [
     "lib",
