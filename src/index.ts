@@ -27,6 +27,7 @@ let showVersion = false
 let showHelp = false
 let showCleanup = false
 let showSwitch = false
+let showCompare = false
 let showTrello = false
 let showTrelloLists = false
 let showTrelloGenerate = false
@@ -94,6 +95,9 @@ for (const arg of argv) {
   if (arg === '--switch' || arg === '-sw') {
     showSwitch = true
   }
+  if (arg === '--compare' || arg === '-cmp') {
+    showCompare = true
+  }
   if (arg === '--trello') {
     showTrello = true
   }
@@ -123,6 +127,8 @@ const validFlags = new Set([
   '-cl',
   '--switch',
   '-sw',
+  '--compare',
+  '-cmp',
   '-f',
   '--fresh',
   '-r',
@@ -172,6 +178,7 @@ for (const arg of argv) {
       '  -cl, --cleanup       Interactive branch cleanup (delete local & remote branches)'
     )
     console.log('  -sw, --switch        Interactive branch switcher with fuzzy search')
+    console.log('  -cmp, --compare      Compare current branch with another branch')
     console.log('  -f, --fresh          Start fresh workflow (ignore checkpoint)')
     console.log('  -r, --resume         Resume from checkpoint (default if exists)')
     console.log('  -v, --version        Show version')
@@ -210,6 +217,17 @@ for (const arg of argv) {
       process.exit(0)
     } catch (error) {
       console.error('Switch error:', error)
+      process.exit(1)
+    }
+  }
+
+  if (showCompare) {
+    try {
+      const { handleBranchCompare } = await import('./workflows/compare.js')
+      await handleBranchCompare()
+      process.exit(0)
+    } catch (error) {
+      console.error('Compare error:', error)
       process.exit(1)
     }
   }
