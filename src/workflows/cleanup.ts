@@ -3,7 +3,8 @@
  * Allows users to select and delete local and remote branches
  */
 
-import { askQuestion, confirm } from '../cli/input.js'
+import { confirm } from '../cli/input.js'
+import { multiSelect } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
 import { exec, execSilent } from '../utils/exec.js'
 import { getCurrentBranch } from '../utils/git.js'
@@ -101,10 +102,44 @@ const getUnifiedBranchList = (): BranchInfo[] => {
 }
 
 /**
+ * Get remote repo base URL for branch links
+ * Converts git remote URL to HTTPS browser URL
+ */
+const getRemoteBranchBaseUrl = (): string | null => {
+  try {
+    const remoteUrl = execSilent('git remote get-url origin').trim()
+    if (!remoteUrl) return null
+
+    // Convert SSH to HTTPS: git@github.com:user/repo.git → https://github.com/user/repo
+    // Also handle: https://github.com/user/repo.git
+    let url = remoteUrl
+      .replace(/\.git$/, '')
+      .replace(/^git@([^:]+):/, 'https://$1/')
+      .replace(/^ssh:\/\/git@([^/]+)\//, 'https://$1/')
+
+    // Ensure it starts with https://
+    if (!url.startsWith('https://')) {
+      url = `https://${url}`
+    }
+
+    return url
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Create a clickable terminal hyperlink using OSC 8
+ */
+const terminalLink = (text: string, url: string): string => {
+  return `\u001B]8;;${url}\u0007${text}\u001B]8;;\u0007`
+}
+
+/**
  * Interactive branch cleanup
  * Allows users to select and delete local and remote branches
  */
-export const handleInteractiveCleanup = (): void => {
+export const handleInteractiveCleanup = async (): Promise<void> => {
   log.banner()
   log.step(`${colors.cyan}Branch Cleanup${colors.reset}\n`)
 
@@ -141,81 +176,35 @@ export const handleInteractiveCleanup = (): void => {
   console.log(`  Remote: ${colors.yellow}${remoteCount}${colors.reset} branches`)
   console.log('')
 
-  // Show branches with numbering
-  console.log(`${colors.cyan}Select branches to delete:${colors.reset}`)
-  for (const [i, branch] of branches.entries()) {
-    const num = `${i + 1}`
+  // Let user select branches with multi-select
+  const repoBaseUrl = getRemoteBranchBaseUrl()
+
+  const branchChoices = branches.map((branch) => {
     const label = branch.label ? ` ${branch.label}` : ''
-    console.log(`  ${colors.gray}[${num}]${colors.reset} ${branch.name}${label}`)
-  }
-  console.log('')
-
-  // Get user selection
-  console.log(`${colors.yellow}Instructions:${colors.reset}`)
-  console.log('  • Type "all" to delete all branches')
-  console.log('  • Type "none" or "cancel" to cancel')
-  console.log('  • Type numbers separated by space (e.g., "1 3 5 7")')
-  console.log('  • Type ranges with dash (e.g., "1-5 8 10-12")')
-  console.log('')
-
-  const input = askQuestion('Select branches: ').trim().toLowerCase()
-
-  if (!input || input === 'none' || input === 'cancel') {
-    log.info('Cleanup cancelled.')
-    return
-  }
-
-  let selectedIndices: number[] = []
-
-  if (input === 'all') {
-    selectedIndices = branches.map((_, i) => i)
-  } else {
-    // Parse input
-    const parts = input.split(/\s+/)
-    for (const part of parts) {
-      if (part.includes('-')) {
-        // Range like "1-5"
-        const rangeParts = part.split('-').map((s) => Number.parseInt(s.trim(), 10))
-        const start = rangeParts[0]
-        const end = rangeParts[1]
-        if (
-          start !== undefined &&
-          end !== undefined &&
-          !Number.isNaN(start) &&
-          !Number.isNaN(end) &&
-          start > 0 &&
-          end <= branches.length
-        ) {
-          for (let i = start - 1; i < end; i++) {
-            if (!selectedIndices.includes(i)) {
-              selectedIndices.push(i)
-            }
-          }
-        }
-      } else {
-        // Single number
-        const num = Number.parseInt(part, 10)
-        if (!Number.isNaN(num) && num > 0 && num <= branches.length) {
-          const idx = num - 1
-          if (!selectedIndices.includes(idx)) {
-            selectedIndices.push(idx)
-          }
-        }
-      }
+    // Make branch name a clickable link to remote repo
+    const branchDisplay = repoBaseUrl
+      ? terminalLink(branch.name, `${repoBaseUrl}/tree/${branch.name}`)
+      : branch.name
+    return {
+      label: `${branchDisplay}${label}`,
+      value: branch.name,
     }
-  }
+  })
 
-  if (selectedIndices.length === 0) {
-    log.warn('No valid branches selected.')
+  console.log('')
+  log.info(
+    `${colors.cyan}💡 Tip:${colors.reset} Use ${colors.green}Space${colors.reset} to toggle, ${colors.green}'a'${colors.reset} select all, ${colors.green}Enter${colors.reset} to confirm`
+  )
+  console.log('')
+
+  const selectedNames = await multiSelect('Select branches to delete:', branchChoices)
+
+  if (selectedNames.length === 0) {
+    log.info('No branches selected. Cleanup cancelled.')
     return
   }
 
-  // Sort indices for ordered display
-  selectedIndices.sort((a, b) => a - b)
-
-  const selectedBranches = selectedIndices
-    .map((i) => branches[i])
-    .filter((b): b is BranchInfo => b !== undefined)
+  const selectedBranches = branches.filter((b) => selectedNames.includes(b.name))
 
   // Show summary
   console.log(`\n${colors.yellow}Selected ${selectedBranches.length} branches:${colors.reset}`)
@@ -223,8 +212,11 @@ export const handleInteractiveCleanup = (): void => {
     const locations = []
     if (branch.hasLocal) locations.push('local')
     if (branch.hasRemote) locations.push('remote')
+    const branchDisplay = repoBaseUrl
+      ? terminalLink(branch.name, `${repoBaseUrl}/tree/${branch.name}`)
+      : branch.name
     console.log(
-      `  • ${branch.name} ${colors.gray}(will delete: ${locations.join(' & ')})${colors.reset}`
+      `  • ${branchDisplay} ${colors.gray}(will delete: ${locations.join(' & ')})${colors.reset}`
     )
   }
   console.log('')

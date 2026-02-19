@@ -240,7 +240,9 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
     const maxVisibleItems = 15
     let scrollOffset = 0
     let searchMode = false
+    let rangeMode = false
     let searchQuery = ''
+    let rangeQuery = ''
     let filteredOptions = options
     const checked = new Set<string>()
 
@@ -265,28 +267,32 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
       const box = checked.has(opt.value)
         ? `${colors.green}◉${colors.reset}`
         : `${colors.gray}○${colors.reset}`
+      // Show 1-based number for quick range selection
+      const num = `${colors.gray}${String(idx + 1).padStart(2, ' ')}${colors.reset}`
       const label =
         idx === selectedIndex
           ? `${colors.cyan}${colors.bright}${opt.label}${colors.reset}`
           : `${colors.gray}${opt.label}${colors.reset}`
-      return `${cursor} ${box} ${label}`
+      return `${cursor} ${box} ${num} ${label}`
     }
 
     const renderMenu = () => {
       const { start, end } = getVisibleRange()
       const visibleCount = end - start
 
-      // Clear rendered lines (visible items + hint + search input + blank line + count line)
-      const linesToClear = visibleCount + (searchMode ? 4 : 3)
+      // If range mode, cursor is on the range input line (no newline was written)
+      // First clear current line, then go up for the rest
+      if (rangeMode) {
+        process.stdout.write('\u001B[2K\r') // Clear current range input line
+      }
+
+      // Clear rendered lines: count line + blank + items + separator + hint + optional search
+      const extraLines = searchMode ? 1 : 0
+      // +4 = count + blank + separator + hint
+      const linesToClear = visibleCount + 4 + extraLines
       for (let i = 0; i < linesToClear; i++) {
         process.stdout.write('\u001B[1A\u001B[2K')
       }
-
-      // Hint line
-      const hintText = searchMode
-        ? `  (Esc cancel search, Space toggle, Enter confirm)`
-        : `  (↑↓/jk arrows, Space toggle, 'a' all, 'n' none, / search, Enter confirm, 'q' quit)`
-      console.log(`${colors.gray}${hintText}${colors.reset}`)
 
       if (searchMode) {
         console.log(`${colors.cyan}/ search:${colors.reset} ${searchQuery}`)
@@ -304,13 +310,25 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
         if (!opt) continue
         console.log(renderItem(opt, idx))
       }
+
+      console.log('') // Separator before hint
+
+      // Hint line at bottom
+      const hintText = rangeMode
+        ? `  (Type numbers: "1 3 5" or "1-10", Enter apply, Esc cancel)`
+        : searchMode
+          ? `  (Esc cancel search, Space toggle, Enter confirm)`
+          : `  (↑↓/jk Space toggle, 'a' all, 'n' none, '#' range, / search, Enter confirm, 'q' quit)`
+      console.log(`${colors.gray}${hintText}${colors.reset}`)
+
+      // Range input at the very bottom (no newline so cursor stays at end)
+      if (rangeMode) {
+        process.stdout.write(`${colors.cyan}# range:${colors.reset} ${rangeQuery}`)
+      }
     }
 
     // Initial render
     console.log(`${colors.cyan}?${colors.reset} ${question}`)
-    console.log(
-      `${colors.gray}  (↑↓/jk arrows, Space toggle, 'a' all, 'n' none, / search, Enter confirm, 'q' quit)${colors.reset}`
-    )
     console.log(
       `${colors.gray}  Selected: ${colors.cyan}${checked.size}${colors.gray}/${options.length}${colors.reset}`
     )
@@ -322,6 +340,12 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
       if (!opt) continue
       console.log(renderItem(opt, idx))
     }
+
+    // Hint at bottom
+    console.log('')
+    console.log(
+      `${colors.gray}  (↑↓/jk Space toggle, 'a' all, 'n' none, '#' range, / search, Enter confirm, 'q' quit)${colors.reset}`
+    )
 
     if (process.stdin.isTTY) {
       process.stdin.setRawMode(true)
@@ -339,8 +363,82 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
       process.stdin.pause()
     }
 
+    /**
+     * Parse range input like "1 3 5" or "1-10" or "1-5 8 10-12"
+     * Returns 0-based indices
+     */
+    const parseRangeInput = (input: string): number[] => {
+      const indices: number[] = []
+      const parts = input.trim().split(/[\s,]+/)
+      for (const part of parts) {
+        if (part.includes('-')) {
+          const rangeParts = part.split('-').map((s) => Number.parseInt(s.trim(), 10))
+          const rangeStart = rangeParts[0]
+          const rangeEnd = rangeParts[1]
+          if (
+            rangeStart !== undefined &&
+            rangeEnd !== undefined &&
+            !Number.isNaN(rangeStart) &&
+            !Number.isNaN(rangeEnd) &&
+            rangeStart > 0 &&
+            rangeEnd <= options.length
+          ) {
+            for (let i = rangeStart - 1; i < rangeEnd; i++) {
+              if (!indices.includes(i)) indices.push(i)
+            }
+          }
+        } else {
+          const num = Number.parseInt(part, 10)
+          if (!Number.isNaN(num) && num > 0 && num <= options.length) {
+            const idx = num - 1
+            if (!indices.includes(idx)) indices.push(idx)
+          }
+        }
+      }
+      return indices
+    }
+
     const onKeypress = (key: Buffer) => {
       const keyStr = key.toString()
+
+      // Handle range mode
+      if (rangeMode) {
+        if (keyStr === '\u001B') {
+          // Escape - cancel range mode
+          rangeMode = false
+          rangeQuery = ''
+          renderMenu()
+          return
+        }
+
+        if (keyStr === '\r' || keyStr === '\n') {
+          // Apply range selection
+          const indices = parseRangeInput(rangeQuery)
+          for (const idx of indices) {
+            const opt = options[idx]
+            if (opt) checked.add(opt.value)
+          }
+          rangeMode = false
+          rangeQuery = ''
+          renderMenu()
+          return
+        }
+
+        if (keyStr === '\u007F' || keyStr === '\b') {
+          rangeQuery = rangeQuery.slice(0, -1)
+          renderMenu()
+          return
+        }
+
+        // Allow digits, spaces, dashes, commas
+        if (keyStr.length === 1 && /[\d\s\-,]/.test(keyStr)) {
+          rangeQuery += keyStr
+          renderMenu()
+          return
+        }
+
+        return
+      }
 
       // Handle search mode
       if (searchMode) {
@@ -412,6 +510,11 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
 
       // Normal navigation mode
       switch (keyStr) {
+        case '#': {
+          rangeMode = true
+          renderMenu()
+          break
+        }
         case '/': {
           searchMode = true
           renderMenu()
@@ -476,9 +579,6 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
           console.clear()
           console.log(`${colors.cyan}?${colors.reset} ${question}`)
           console.log(
-            `${colors.gray}  (↑↓/jk arrows, Space toggle, 'a' all, 'n' none, / search, Enter confirm, 'q' quit)${colors.reset}`
-          )
-          console.log(
             `${colors.gray}  Selected: ${colors.cyan}${checked.size}${colors.gray}/${options.length}${colors.reset}`
           )
           console.log('')
@@ -489,6 +589,10 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
             if (!opt) continue
             console.log(renderItem(opt, idx))
           }
+          console.log('')
+          console.log(
+            `${colors.gray}  (↑↓/jk Space toggle, 'a' all, 'n' none, '#' range, / search, Enter confirm, 'q' quit)${colors.reset}`
+          )
           break
         }
       }
