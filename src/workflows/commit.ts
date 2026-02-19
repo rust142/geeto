@@ -8,7 +8,7 @@ import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 import type { GeetoState } from '../types/index.js'
 
-import { askQuestion, confirm, editInEditor } from '../cli/input.js'
+import { askQuestion, confirm, editInline } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
 import { extractCommitTitle, getCommitTypes, normalizeAIOutput } from '../utils/commit-helpers.js'
@@ -185,14 +185,14 @@ export const handleCommitWorkflow = async (
       ])
 
       if (action === 'edit') {
-        const edited = editInEditor(`${titleStr}\n\n${bodyStr ?? ''}`, 'geeto-commit.txt')
+        const edited = await editInline(`${titleStr}\n\n${bodyStr ?? ''}`)
         if (!edited?.trim()) {
           return false
         }
 
         const normalized = normalizeAIOutput(edited.trim())
         const newTitle =
-          extractCommitTitle(normalized) ?? edited.split('\n').find((l) => l.trim()) ?? ''
+          extractCommitTitle(normalized) ?? edited.split('\n').find((l: string) => l.trim()) ?? ''
         const newBody = newTitle ? extractCommitBody(normalized, newTitle) : null
         return attemptCommit(newTitle as string, newBody)
       }
@@ -624,7 +624,6 @@ export const handleCommitWorkflow = async (
       let acceptAi: string
       if (contextLimitDetected && !subjectLine) {
         // No usable suggestion present: force the user to change model/provider or edit
-        const editorName = process.env.EDITOR ?? (process.platform === 'win32' ? 'notepad' : 'vi')
         acceptAi = await select(
           'This model cannot process the input due to token/context limits. Please choose a different model or provider:',
           [
@@ -634,16 +633,15 @@ export const handleCommitWorkflow = async (
             },
             { label: 'Change model', value: 'change-model' },
             { label: 'Change AI provider', value: 'change-provider' },
-            { label: `Edit in editor (${editorName})`, value: 'edit' },
+            { label: 'Edit inline', value: 'edit' },
           ]
         )
       } else {
         // Either no context limits, or we have a usable suggestion (allow accepting)
-        const editorName = process.env.EDITOR ?? (process.platform === 'win32' ? 'notepad' : 'vi')
         acceptAi = await select('Accept this commit message?', [
           { label: 'Yes, use it', value: 'accept' },
           { label: 'Regenerate', value: 'regenerate' },
-          { label: `Edit in editor (${editorName})`, value: 'edit' },
+          { label: 'Edit inline', value: 'edit' },
           { label: 'Correct AI (give feedback)', value: 'correct' },
           { label: 'Change model', value: 'change-model' },
           { label: 'Change AI provider', value: 'change-provider' },
@@ -815,9 +813,9 @@ export const handleCommitWorkflow = async (
           continue
         }
         case 'edit': {
-          // Open user's editor for multi-line editing
+          // Open inline editor for multi-line editing
           const initial = commitMessage
-          const edited = editInEditor(initial, 'geeto-commit.txt')
+          const edited = await editInline(initial)
           if (edited?.trim()) {
             const editedMessage = edited.trim()
 
@@ -871,18 +869,20 @@ export const handleCommitWorkflow = async (
     }
 
     if (mode === 'manual') {
-      // Freeform manual commit: prompt for a non-empty commit message
-      let message = ''
-      while (!message) {
-        message = askQuestion('Commit message: ').trim()
-        if (!message) {
-          log.error('Commit message cannot be empty!')
-        }
+      // Freeform manual commit: open inline editor
+      log.info('Write your commit message below:')
+      const edited = await editInline('')
+      if (!edited?.trim()) {
+        log.error('Commit message cannot be empty!')
+        process.exit(1)
       }
 
+      const message = edited.trim()
       const committed = await attemptCommit(message)
       if (committed) {
-        log.success(`Committed: ${colors.cyan}${colors.bright}${message}${colors.reset}`)
+        log.success(
+          `Committed: ${colors.cyan}${colors.bright}${message.split('\n')[0]}${colors.reset}`
+        )
         return true
       }
 
@@ -930,9 +930,32 @@ export const handleCommitWorkflow = async (
       ? `${commitType}(${scope}): ${description}`
       : `${commitType}: ${description}`
 
-    const committed = await attemptCommit(commitMsg)
+    // Allow the user to review and edit the assembled message inline
+    const reviewChoice = await select('Review commit message:', [
+      { label: `Use: ${commitMsg}`, value: 'use' },
+      { label: 'Edit inline', value: 'edit' },
+      { label: 'Cancel', value: 'cancel' },
+    ])
+
+    if (reviewChoice === 'cancel') {
+      log.warn('Commit cancelled.')
+      process.exit(0)
+    }
+
+    let finalMsg = commitMsg
+    if (reviewChoice === 'edit') {
+      const edited = await editInline(commitMsg)
+      if (!edited?.trim()) {
+        log.warn('Commit cancelled.')
+        process.exit(0)
+      }
+      finalMsg = edited.trim()
+    }
+
+    const committed = await attemptCommit(finalMsg)
     if (committed) {
-      log.success(`Committed: ${colors.cyan}${colors.bright}${commitMsg}${colors.reset}`)
+      const display = finalMsg.split('\n')[0] ?? finalMsg
+      log.success(`Committed: ${colors.cyan}${colors.bright}${display}${colors.reset}`)
     } else {
       log.error('Commit failed or aborted.')
       process.exit(1)

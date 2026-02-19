@@ -76,7 +76,9 @@
     "unpushed",
     "Unpushed",
     "shortlog",
-    "reflog"
+    "reflog",
+    "esac",
+    "OPOST"
   ],
   "ignorePaths": [
     "node_modules/**",
