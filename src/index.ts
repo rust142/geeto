@@ -210,6 +210,15 @@ const validFlags = new Set([
   '-tg',
 ])
 
+// Detect file path argument (non-flag arg → open in inline editor)
+let editFilePath: string | undefined
+for (const arg of argv) {
+  if (!arg.startsWith('-')) {
+    editFilePath = arg
+    break
+  }
+}
+
 for (const arg of argv) {
   if (arg.startsWith('-') && !validFlags.has(arg)) {
     console.error(`Unknown flag: ${arg}`)
@@ -287,7 +296,43 @@ for (const arg of argv) {
     console.log(`    ${C}-v,  --version${R}            Show version`)
     console.log(`    ${C}-h,  --help${R}               Show this help message`)
     console.log('')
+
+    console.log(`  ${B}EDITOR${R}`)
+    console.log(`    ${C}geeto <file>${R}              Open file in inline editor`)
+    console.log('')
     process.exit(0)
+  }
+
+  // Inline file editor: geeto <filepath>
+  if (editFilePath) {
+    try {
+      const fs = await import('node:fs')
+      const resolved = path.resolve(editFilePath)
+
+      let content = ''
+      if (fs.existsSync(resolved)) {
+        content = fs.readFileSync(resolved, 'utf8')
+      }
+
+      console.log(`  \u001B[90mEditing: ${resolved}\u001B[0m`)
+      const { editInline } = await import('./cli/input.js')
+      const result = await editInline(
+        content,
+        path.basename(editFilePath),
+        path.extname(editFilePath)
+      )
+
+      if (result === null) {
+        console.log(`  \u001B[90m✗ Cancelled\u001B[0m`)
+      } else {
+        fs.writeFileSync(resolved, result + '\n', 'utf8')
+        console.log(`  \u001B[32m✓\u001B[0m Saved to ${editFilePath}`)
+      }
+      process.exit(0)
+    } catch (error) {
+      console.error('Editor error:', error)
+      process.exit(1)
+    }
   }
 
   if (showCleanup) {
