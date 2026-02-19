@@ -81,7 +81,9 @@
     "OPOST",
     "asciinema",
     "regen",
-    "lintstagedrc"
+    "lintstagedrc",
+    "dpkg",
+    "untap"
   ],
   "ignorePaths": [
     "node_modules/**",
