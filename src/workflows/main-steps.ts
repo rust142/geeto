@@ -389,7 +389,7 @@ export async function handleCleanup(featureBranch: string, state: GeetoState): P
         const deleteAnswer = confirm(`Delete branch '${featureBranch}'?`)
         if (deleteAnswer) {
           try {
-            exec(`git branch -d ${featureBranch}`)
+            exec(`git branch -d ${featureBranch}`, true)
             log.success(`Local branch '${featureBranch}' deleted`)
 
             // Also delete remote branch if it exists
@@ -432,7 +432,7 @@ export async function handleCleanup(featureBranch: string, state: GeetoState): P
 
               if (forceDeleteChoice === 'force') {
                 try {
-                  exec(`git branch -D ${featureBranch}`)
+                  exec(`git branch -D ${featureBranch}`, true)
                   log.success(`Local branch '${featureBranch}' deleted`)
 
                   // Also delete remote branch if it exists
