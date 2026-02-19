@@ -5,10 +5,12 @@
 import { existsSync, unlinkSync } from 'node:fs'
 import path from 'node:path'
 
-import { confirm } from '../cli/input.js'
+import { askQuestion, confirm } from '../cli/input.js'
 import { select } from '../cli/menu.js'
+import { colors } from '../utils/colors.js'
 import {
   getBranchStrategyConfig,
+  getProtectedBranches,
   hasGeminiConfig,
   hasTrelloConfig,
   saveBranchStrategyConfig,
@@ -82,6 +84,69 @@ const handleSeparatorSetting = async (): Promise<boolean | void> => {
 
   log.success(`Branch separator set to: ${separator === '-' ? 'hyphen (-)' : 'underscore (_)'} `)
   // Explicitly return false to indicate "do not go back" to caller
+  return false
+}
+
+/**
+ * Handle protected branches configuration
+ */
+const handleProtectedBranchesSetting = async (): Promise<boolean | void> => {
+  const currentProtected = getProtectedBranches()
+
+  console.log('')
+  log.info(
+    `Current protected branches: ${colors.cyan}${currentProtected.join(', ')}${colors.reset}`
+  )
+  console.log(`${colors.gray}  (These branches are excluded from cleanup)${colors.reset}`)
+  console.log('')
+
+  const action = await select('What would you like to do?', [
+    { label: 'Add branches', value: 'add' },
+    { label: 'Reset to defaults', value: 'reset' },
+    { label: 'Back to settings menu', value: 'back' },
+  ])
+
+  if (action === 'back') {
+    return true
+  }
+
+  const config = getBranchStrategyConfig()
+
+  if (action === 'reset') {
+    if (config) {
+      config.protectedBranches = undefined
+      saveBranchStrategyConfig(config)
+    }
+    log.success('Protected branches reset to defaults: main, master, development, develop, dev')
+    return false
+  }
+
+  // Add branches
+  const input = askQuestion('Enter branch names to protect (comma separated): ')
+  const newBranches = input
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+
+  if (newBranches.length === 0) {
+    log.warn('No branches entered.')
+    return false
+  }
+
+  // Merge with existing custom branches
+  const existingCustom = config?.protectedBranches ?? []
+  const merged = [...new Set([...existingCustom, ...newBranches])]
+
+  if (config) {
+    config.protectedBranches = merged
+    saveBranchStrategyConfig(config)
+  } else {
+    saveBranchStrategyConfig({ separator: '-', protectedBranches: merged })
+  }
+
+  const allProtected = getProtectedBranches()
+  const updatedList = `${colors.cyan}${allProtected.join(', ')}${colors.reset}`
+  log.success(`Protected branches updated: ${updatedList}`)
   return false
 }
 
@@ -449,6 +514,7 @@ export const showSettingsMenu = async () => {
 
     const settingChoice = await select('Choose a setting to configure:', [
       { label: 'Branch separator (hyphen/underscore)', value: 'separator' },
+      { label: 'Protected branches', value: 'protected' },
       { label: 'Sync model configurations (fetch live sample models)', value: 'models' },
       { label: 'Change AI provider / model', value: 'change-model' },
       { label: 'Gemini AI setup', value: 'gemini' },
@@ -463,6 +529,12 @@ export const showSettingsMenu = async () => {
 
     if (settingChoice === 'separator') {
       const back = await handleSeparatorSetting()
+      if (back) {
+        continue
+      }
+    }
+    if (settingChoice === 'protected') {
+      const back = await handleProtectedBranchesSetting()
       if (back) {
         continue
       }
@@ -510,6 +582,7 @@ export const showSettingsMenu = async () => {
 
 export {
   handleSeparatorSetting,
+  handleProtectedBranchesSetting,
   handleModelResetSetting,
   handleChangeModelSetting,
   handleGeminiSetting,

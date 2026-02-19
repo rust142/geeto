@@ -375,7 +375,7 @@ export async function handleCleanup(featureBranch: string, state: GeetoState): P
 
     if (featureBranch && featureBranch !== state.targetBranch) {
       // Protect canonical branches from accidental deletion
-      const protectedBranches = new Set(['main', 'master', 'development', 'develop', 'dev'])
+      const protectedBranches = new Set(['main', 'master', 'development', 'develop'])
       if (protectedBranches.has(featureBranch.toLowerCase())) {
         log.info(`Skipping deletion of protected branch '${featureBranch}'`)
       } else {

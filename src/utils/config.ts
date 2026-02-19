@@ -250,9 +250,18 @@ export const getBranchStrategyConfig = (): BranchStrategyConfig | null => {
       const separatorMatch = content.match(/separator\s*=\s*["']([^"']+)["']/)
       const namingMatch = content.match(/last_naming_strategy\s*=\s*["']([^"']+)["']/)
       const trelloListMatch = content.match(/last_trello_list\s*=\s*["']([^"']+)["']/)
+      const protectedMatch = content.match(/protected_branches\s*=\s*\[([^\]]*)\]/)
 
       // Only return config if separator has been explicitly set
       if (separatorMatch) {
+        let protectedBranches: string[] | undefined
+        if (protectedMatch?.[1]) {
+          protectedBranches = protectedMatch[1]
+            .split(',')
+            .map((s) => s.trim().replaceAll(/^["']|["']$/g, ''))
+            .filter(Boolean)
+        }
+
         return {
           separator: (separatorMatch?.[1] as '-' | '_') ?? '-',
           lastNamingStrategy: namingMatch?.[1] as
@@ -262,6 +271,7 @@ export const getBranchStrategyConfig = (): BranchStrategyConfig | null => {
             | 'manual'
             | undefined,
           lastTrelloList: trelloListMatch?.[1],
+          protectedBranches,
         }
       }
     }
@@ -285,17 +295,33 @@ export const saveBranchStrategyConfig = (config: BranchStrategyConfig): void => 
       fs.mkdirSync(configDir, { recursive: true })
     }
 
+    const protectedLine = config.protectedBranches?.length
+      ? `protected_branches = [${config.protectedBranches.map((b) => `"${b}"`).join(', ')}]\n`
+      : ''
+
     const configContent = `# Geeto Branch Strategy Configuration
 # Auto-generated on ${new Date().toISOString()}
 
 separator = "${config.separator}"
-${config.lastNamingStrategy ? `last_naming_strategy = "${config.lastNamingStrategy}"\n` : ''}${config.lastTrelloList ? `last_trello_list = "${config.lastTrelloList}"\n` : ''}`
+${config.lastNamingStrategy ? `last_naming_strategy = "${config.lastNamingStrategy}"\n` : ''}${config.lastTrelloList ? `last_trello_list = "${config.lastTrelloList}"\n` : ''}${protectedLine}`
 
     fs.writeFileSync(path, configContent, 'utf8')
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error)
     log.warn(`Failed to save branch strategy config: ${msg}`)
   }
+}
+
+/** Default protected branches that are always excluded from cleanup */
+const DEFAULT_PROTECTED_BRANCHES = ['main', 'master', 'development', 'develop']
+
+/**
+ * Get the full set of protected branches (defaults + user-configured)
+ */
+export const getProtectedBranches = (): string[] => {
+  const config = getBranchStrategyConfig()
+  const custom = config?.protectedBranches ?? []
+  return [...new Set([...DEFAULT_PROTECTED_BRANCHES, ...custom])]
 }
 
 /**

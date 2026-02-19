@@ -66,6 +66,7 @@ export interface BranchStrategyConfig {
   separator: '-' | '_'
   lastNamingStrategy?: 'title-full' | 'title-ai' | 'ai' | 'trello' | 'manual'
   lastTrelloList?: string // Last selected Trello list ID
+  protectedBranches?: string[] // Custom protected branches (beyond defaults)
 }
 
 export type TaskPlatform = 'trello' | 'none'
