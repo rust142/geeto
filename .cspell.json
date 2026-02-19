@@ -74,7 +74,8 @@
     "committerdate",
     "numstat",
     "unpushed",
-    "Unpushed"
+    "Unpushed",
+    "shortlog"
   ],
   "ignorePaths": [
     "node_modules/**",
