@@ -1,12 +1,13 @@
-# Release v0.3.1
+# Release v0.3.2
 
-**Release date:** February 19, 2026
-**Previous version:** v0.3.0
+**Release date:** February 20, 2026
+**Previous version:** v0.3.1
 
 ## What's New?
 
 ### New Features
 
+- add build & publish binaries workflow and packaging
 - add progress bar for git push in release workflow
 - add inline terminal editor for editing files and commits
 - add boxed UI, file status badges, and step progress
@@ -70,6 +71,7 @@
 
 ### Other Improvements
 
+- v0.3.1
 - v0.3.0
 - add --no-verify to release commit and use H2 changelog header
 - remove interactive UI tips and noisy logs
