@@ -114,37 +114,37 @@ for (const arg of argv) {
   if (arg === '--cherry-pick' || arg === '-cp') {
     showCherryPick = true
   }
-  if (arg === '--pr') {
+  if (arg === '--pr' || arg === '-pr') {
     showPR = true
   }
-  if (arg === '--issue') {
+  if (arg === '--issue' || arg === '-i') {
     showIssue = true
   }
   if (arg === '--log' || arg === '-lg') {
     showHistory = true
   }
-  if (arg === '--stash') {
+  if (arg === '--stash' || arg === '-sh') {
     showStash = true
   }
-  if (arg === '--amend') {
+  if (arg === '--amend' || arg === '-am') {
     showAmend = true
   }
-  if (arg === '--stats') {
+  if (arg === '--stats' || arg === '-st') {
     showStats = true
   }
-  if (arg === '--undo') {
+  if (arg === '--undo' || arg === '-u') {
     showUndo = true
   }
-  if (arg === '--tag') {
+  if (arg === '--tag' || arg === '-t') {
     showRelease = true
   }
-  if (arg === '--trello') {
+  if (arg === '--trello' || arg === '-tr') {
     showTrello = true
   }
-  if (arg === '--trello-list') {
+  if (arg === '--trello-list' || arg === '-tl') {
     showTrelloLists = true
   }
-  if (arg === '--trello-generate') {
+  if (arg === '--trello-generate' || arg === '-tg') {
     showTrelloGenerate = true
   }
 }
@@ -172,14 +172,21 @@ const validFlags = new Set([
   '--cherry-pick',
   '-cp',
   '--pr',
+  '-pr',
   '--issue',
+  '-i',
   '--log',
   '-lg',
   '--stash',
+  '-sh',
   '--amend',
+  '-am',
   '--stats',
+  '-st',
   '--undo',
+  '-u',
   '--tag',
+  '-t',
   '-f',
   '--fresh',
   '-r',
@@ -196,8 +203,11 @@ const validFlags = new Set([
   '--setup-trello',
   '--setup-github',
   '--trello',
+  '-tr',
   '--trello-list',
+  '-tl',
   '--trello-generate',
+  '-tg',
 ])
 
 for (const arg of argv) {
@@ -215,49 +225,68 @@ for (const arg of argv) {
   }
 
   if (showHelp) {
-    console.log('Geeto CLI — Git flow automation')
+    const C = '\u001B[36m' // cyan
+    const B = '\u001B[1m' // bright/bold
+    const G = '\u001B[90m' // gray
+    const R = '\u001B[0m' // reset
+
     console.log('')
-    console.log('Usage: geeto [options]')
+    console.log(`  ${B}Geeto CLI${R} ${G}v${version}${R}`)
+    console.log(`  ${G}Git flow automation with AI-powered workflows${R}`)
     console.log('')
-    console.log('Options:')
-    console.log('  -c, --commit         Start at commit step')
-    console.log('  -m, --merge          Start at merge step')
-    console.log('  -b, --branch         Start at branch step')
-    console.log('  -s, --stage          Start at stage step')
-    console.log('  -sa, -as             Start at stage step and automatically stage all changes')
-    console.log('  -p, --push           Start at push step')
-    console.log(
-      '  -cl, --cleanup       Interactive branch cleanup (delete local & remote branches)'
-    )
-    console.log('  -sw, --switch        Interactive branch switcher with fuzzy search')
-    console.log('  -cmp, --compare      Compare current branch with another branch')
-    console.log('  -cp, --cherry-pick   Interactive cherry-pick commits from another branch')
-    console.log('  --pr                 Create a GitHub Pull Request')
-    console.log('  --issue              Create a GitHub Issue')
-    console.log('  -lg, --log           View commit history with elegant timeline')
-    console.log('  --stash              Interactive stash manager')
-    console.log('  --amend              Amend the last commit (message, files, or both)')
-    console.log('  --stats              Repository statistics dashboard')
-    console.log('  --undo               Undo the last git action safely')
-    console.log('  --tag                Release/tag manager with semver bumping')
-    console.log('  -f, --fresh          Start fresh workflow (ignore checkpoint)')
-    console.log('  -r, --resume         Resume from checkpoint (default if exists)')
-    console.log('  -v, --version        Show version')
-    console.log('  -h, --help           Show this help message')
+    console.log(`  ${B}USAGE${R}`)
+    console.log(`    ${C}geeto${R} ${G}[command] [options]${R}`)
     console.log('')
-    console.log('Settings:')
-    console.log('  --separator          Configure branch separator (hyphen/underscore)')
-    console.log('  --sync-models        Sync model configurations (fetch live models)')
-    console.log('  --change-model       Change AI provider / model')
-    console.log('  --setup-gemini       Setup Gemini AI integration')
-    console.log('  --setup-openrouter   Setup OpenRouter AI integration')
-    console.log('  --setup-trello       Setup Trello integration')
-    console.log('  --setup-github       Setup GitHub integration (token for PR/issues)')
+
+    console.log(`  ${B}WORKFLOW${R}`)
+    console.log(`    ${C}-s,  --stage${R}              Stage files interactively`)
+    console.log(`    ${C}-sa, -as${R}                  Stage all changes automatically`)
+    console.log(`    ${C}-c,  --commit${R}             Create a commit with AI message`)
+    console.log(`    ${C}-b,  --branch${R}             Create a branch with AI name`)
+    console.log(`    ${C}-p,  --push${R}               Push current branch to remote`)
+    console.log(`    ${C}-m,  --merge${R}              Merge branches interactively`)
     console.log('')
-    console.log('Trello:')
-    console.log('  --trello             Open Trello menu')
-    console.log('  --trello-list        Get Trello lists from board')
-    console.log('  --trello-generate    Generate tasks.instructions.md from Trello list')
+
+    console.log(`  ${B}GIT TOOLS${R}`)
+    console.log(`    ${C}-cl, --cleanup${R}            Clean up local & remote branches`)
+    console.log(`    ${C}-sw, --switch${R}             Switch branches with fuzzy search`)
+    console.log(`    ${C}-cmp, --compare${R}           Compare current branch with another`)
+    console.log(`    ${C}-cp, --cherry-pick${R}        Cherry-pick from another branch`)
+    console.log(`    ${C}-lg, --log${R}                View commit history with timeline`)
+    console.log(`    ${C}-sh, --stash${R}              Manage stashes interactively`)
+    console.log(`    ${C}-am, --amend${R}              Amend the last commit`)
+    console.log(`    ${C}-u,  --undo${R}               Undo the last git action safely`)
+    console.log(`    ${C}-st, --stats${R}              Repository statistics dashboard`)
+    console.log('')
+
+    console.log(`  ${B}GITHUB${R}`)
+    console.log(`    ${C}-pr, --pr${R}                 Create a Pull Request`)
+    console.log(`    ${C}-i,  --issue${R}              Create an Issue`)
+    console.log(`    ${C}-t,  --tag${R}                Release & tag manager with semver`)
+    console.log('')
+
+    console.log(`  ${B}TRELLO${R}`)
+    console.log(`    ${C}-tr, --trello${R}             Open Trello menu`)
+    console.log(`    ${C}-tl, --trello-list${R}        List boards and lists`)
+    console.log(`    ${C}-tg, --trello-generate${R}    Generate tasks from Trello`)
+    console.log('')
+
+    console.log(`  ${B}SETTINGS${R}`)
+    console.log(`    ${C}     --setup-gemini${R}       Configure Gemini AI`)
+    console.log(`    ${C}     --setup-openrouter${R}   Configure OpenRouter AI`)
+    console.log(`    ${C}     --setup-github${R}       Configure GitHub token`)
+    console.log(`    ${C}     --setup-trello${R}       Configure Trello integration`)
+    console.log(`    ${C}     --change-model${R}       Switch AI provider / model`)
+    console.log(`    ${C}     --sync-models${R}        Fetch latest model list`)
+    console.log(`    ${C}     --separator${R}          Set branch name separator`)
+    console.log('')
+
+    console.log(`  ${B}OPTIONS${R}`)
+    console.log(`    ${C}-f,  --fresh${R}              Start fresh (ignore checkpoint)`)
+    console.log(`    ${C}-r,  --resume${R}             Resume from last checkpoint`)
+    console.log(`    ${C}-v,  --version${R}            Show version`)
+    console.log(`    ${C}-h,  --help${R}               Show this help message`)
+    console.log('')
     process.exit(0)
   }
 
