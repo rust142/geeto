@@ -32,6 +32,7 @@ let showCherryPick = false
 let showPR = false
 let showIssue = false
 let showHistory = false
+let showStash = false
 let showTrello = false
 let showTrelloLists = false
 let showTrelloGenerate = false
@@ -118,6 +119,9 @@ for (const arg of argv) {
   if (arg === '--log' || arg === '-lg') {
     showHistory = true
   }
+  if (arg === '--stash') {
+    showStash = true
+  }
   if (arg === '--trello') {
     showTrello = true
   }
@@ -155,6 +159,7 @@ const validFlags = new Set([
   '--issue',
   '--log',
   '-lg',
+  '--stash',
   '-f',
   '--fresh',
   '-r',
@@ -210,6 +215,7 @@ for (const arg of argv) {
     console.log('  --pr                 Create a GitHub Pull Request')
     console.log('  --issue              Create a GitHub Issue')
     console.log('  -lg, --log           View commit history with elegant timeline')
+    console.log('  --stash              Interactive stash manager')
     console.log('  -f, --fresh          Start fresh workflow (ignore checkpoint)')
     console.log('  -r, --resume         Resume from checkpoint (default if exists)')
     console.log('  -v, --version        Show version')
@@ -304,6 +310,17 @@ for (const arg of argv) {
       process.exit(0)
     } catch (error) {
       console.error('History error:', error)
+      process.exit(1)
+    }
+  }
+
+  if (showStash) {
+    try {
+      const { handleStash } = await import('./workflows/stash.js')
+      await handleStash()
+      process.exit(0)
+    } catch (error) {
+      console.error('Stash error:', error)
       process.exit(1)
     }
   }
