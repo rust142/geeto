@@ -6,7 +6,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import { fetchTrelloCards, fetchTrelloLists } from '../api/trello.js'
-import { select } from '../cli/menu.js'
+import { multiSelect, select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
 import { getTrelloConfig, hasTrelloConfig } from '../utils/config.js'
 import { commandExists, exec } from '../utils/exec.js'
@@ -81,15 +81,6 @@ export const handleGenerateTaskInstructions = async (): Promise<void> => {
 
   spinner.succeed(`Found ${lists.length} lists`)
 
-  // Show tip about creating dedicated agent list
-  console.log('')
-  log.info(
-    `${colors.cyan}💡 Tip:${colors.reset} For best results with AI agents, create a dedicated Trello list called:`
-  )
-  log.info(`   ${colors.green}"TODO FOR AGENT"${colors.reset}`)
-  log.info('   This helps organize tasks specifically meant for automated execution.')
-  console.log('')
-
   // Let user select a list
   const listChoices = lists.map((list) => ({
     label: list.name,
@@ -114,15 +105,42 @@ export const handleGenerateTaskInstructions = async (): Promise<void> => {
   console.log('')
   const spinner2 = log.spinner()
   spinner2.start(`Fetching cards from "${selectedList.name}"...`)
-  const cards = await fetchTrelloCards(selectedListId)
+  const allCards = await fetchTrelloCards(selectedListId)
 
-  if (cards.length === 0) {
+  if (allCards.length === 0) {
     spinner2.fail('No cards found in this list')
     log.warn('The selected list is empty or all cards are marked as [DONE]/[ARCHIVED].')
     return
   }
 
-  spinner2.succeed(`Found ${cards.length} cards`)
+  spinner2.succeed(`Found ${allCards.length} cards`)
+
+  // Let user select which cards to include
+  console.log('')
+  log.info(
+    `${colors.cyan}💡 Tip:${colors.reset} Use ${colors.green}Space${colors.reset} to toggle, ${colors.green}'a'${colors.reset} select all, ${colors.green}Enter${colors.reset} to confirm`
+  )
+  console.log('')
+
+  const cardChoices = allCards.map((card) => ({
+    label: `#${card.idShort} - ${card.name}`,
+    value: card.id,
+  }))
+
+  const selectedCardIds = await multiSelect(
+    'Select cards to include in tasks instruction:',
+    cardChoices
+  )
+
+  if (selectedCardIds.length === 0) {
+    log.warn('No cards selected. Cancelled.')
+    return
+  }
+
+  // Filter only selected cards (preserve original order)
+  const cards = allCards.filter((card) => selectedCardIds.includes(card.id))
+
+  log.success(`Selected ${colors.cyan}${cards.length}${colors.reset} of ${allCards.length} cards`)
 
   // Generate markdown content
   const now = new Date()
@@ -145,29 +163,50 @@ Generated from Trello board on ${dateStr}
 1. **EXECUTE ONLY ONE TASK AT A TIME** - Never work on multiple tasks simultaneously
 2. **STOP after completing each task** - Do NOT automatically proceed to the next task
 3. **Wait for explicit user confirmation** before moving to the next task
-4. **Delete the completed task** from this file after finishing it
-5. **Ask the user** "Task completed. Should I proceed to the next task?" before continuing
+4. **Ask the user for validation** after implementation with clear options
+5. **Test & Verify** - Always provide testing steps and ask user to confirm
 
 **WORKFLOW:**
 \`\`\`
 Step 1: Read only the FIRST uncompleted task (with - [ ])
 Step 2: Execute ONLY that one task
-Step 3: Mark it done by changing - [ ] to - [x]
-Step 4: STOP and ask user for confirmation
-Step 5: Wait for user response before proceeding
-Step 6: If confirmed, delete the completed task and go to Step 1
+Step 3: Test the implementation (if applicable)
+Step 4: STOP and present completion summary with options
+Step 5: Ask user with clear choices:
+   [ ] Implementation looks good, proceed to next task
+   [ ] Has bugs/issues that need fixing
+   [ ] Needs more testing
+   [ ] Needs more detailed explanation
+Step 6: Wait for user response and act accordingly
+Step 7: If confirmed OK, mark done and proceed to Step 1
+\`\`\`
+
+**AFTER COMPLETING IMPLEMENTATION:**
+Always ask user with structured options using ask_questions tool:
+\`\`\`
+"Implementation completed! How does it look?"
+Options:
+- ✅ Looks good, no bugs found
+- 🐛 Has bugs, needs fixing
+- 🧪 Needs more testing
+- 📝 Needs more detailed explanation
+- ↩️  Needs rollback/revert changes
 \`\`\`
 
 **❌ DO NOT:**
 - Execute multiple tasks in one go
 - Continue to next task without confirmation
-- Assume you should complete everything at once
+- Assume implementation is perfect without user validation
 - Make assumptions about database schema, models, or queries without checking
+- Skip testing or verification steps
 
 **✅ DO:**
 - Work on exactly one task
 - Stop and wait after each task
-- Ask for permission to continue
+- Present clear summary of changes
+- Ask for permission to continue with structured options
+- Provide testing steps for user to verify
+- Check both new data and old data compatibility
 
 **📋 FOR FULLSTACK/BACKEND PROJECTS:**
 
@@ -237,11 +276,25 @@ Example: If creating a "User Settings" page, find "Account Settings" or similar 
 
   for (const [index, card] of cards.entries()) {
     markdown += `### Task ${index + 1} of ${cards.length}\n\n`
-    markdown += `- [ ] **${card.name}** (#${card.idShort})\n`
+    markdown += `- **${card.name}** (#${card.idShort})\n`
     markdown += `  - Trello URL: ${card.url}\n`
     if (card.desc?.trim()) {
       markdown += `\n**Description:**\n${card.desc}\n`
     }
+
+    // Include Trello checklists (if any)
+    if (card.checklists && card.checklists.length > 0) {
+      for (const checklist of card.checklists) {
+        if (checklist.checkItems && checklist.checkItems.length > 0) {
+          markdown += `\n**${checklist.name}:**\n`
+          for (const item of checklist.checkItems) {
+            const checked = item.state === 'complete' ? 'x' : ' '
+            markdown += `- [${checked}] ${item.name}\n`
+          }
+        }
+      }
+    }
+
     markdown += `\n---\n\n`
   }
 

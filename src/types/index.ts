@@ -34,6 +34,18 @@ export interface TrelloConfig {
   boardId: string
 }
 
+export interface TrelloChecklistItem {
+  id: string
+  name: string
+  state?: 'complete' | 'incomplete'
+}
+
+export interface TrelloChecklist {
+  id: string
+  name: string
+  checkItems: TrelloChecklistItem[]
+}
+
 export interface TrelloCard {
   id: string
   name: string
@@ -42,6 +54,7 @@ export interface TrelloCard {
   shortLink: string
   url: string
   idList: string
+  checklists?: TrelloChecklist[]
 }
 
 export interface TrelloList {
