@@ -35,6 +35,7 @@ let showHistory = false
 let showStash = false
 let showAmend = false
 let showStats = false
+let showUndo = false
 let showTrello = false
 let showTrelloLists = false
 let showTrelloGenerate = false
@@ -130,6 +131,9 @@ for (const arg of argv) {
   if (arg === '--stats') {
     showStats = true
   }
+  if (arg === '--undo') {
+    showUndo = true
+  }
   if (arg === '--trello') {
     showTrello = true
   }
@@ -170,6 +174,7 @@ const validFlags = new Set([
   '--stash',
   '--amend',
   '--stats',
+  '--undo',
   '-f',
   '--fresh',
   '-r',
@@ -228,6 +233,7 @@ for (const arg of argv) {
     console.log('  --stash              Interactive stash manager')
     console.log('  --amend              Amend the last commit (message, files, or both)')
     console.log('  --stats              Repository statistics dashboard')
+    console.log('  --undo               Undo the last git action safely')
     console.log('  -f, --fresh          Start fresh workflow (ignore checkpoint)')
     console.log('  -r, --resume         Resume from checkpoint (default if exists)')
     console.log('  -v, --version        Show version')
@@ -355,6 +361,17 @@ for (const arg of argv) {
       process.exit(0)
     } catch (error) {
       console.error('Stats error:', error)
+      process.exit(1)
+    }
+  }
+
+  if (showUndo) {
+    try {
+      const { handleUndo } = await import('./workflows/undo.js')
+      await handleUndo()
+      process.exit(0)
+    } catch (error) {
+      console.error('Undo error:', error)
       process.exit(1)
     }
   }
