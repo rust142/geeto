@@ -70,7 +70,8 @@
     "USERPROFILE",
     "setx",
     "LOGFILE",
-    "asciicast"
+    "asciicast",
+    "committerdate"
   ],
   "ignorePaths": [
     "node_modules/**",
