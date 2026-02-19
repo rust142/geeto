@@ -132,27 +132,28 @@ jobs:
 
       - name: Update formula
         run: |
-          cat > Formula/geeto.rb << 'FORMULA'
+          mkdir -p Formula
+          cat > Formula/geeto.rb <<EOF
           # typed: false
           # frozen_string_literal: true
 
           class Geeto < Formula
             desc "AI-powered Git workflow automation CLI"
             homepage "https://github.com/rust142/geeto"
-            version "VERSION_PLACEHOLDER"
+            version "${VERSION}"
             license "MIT"
 
             on_macos do
               if Hardware::CPU.intel?
-                url "https://github.com/rust142/geeto/releases/download/vVERSION_PLACEHOLDER/geeto-mac"
-                sha256 "MAC_X64_SHA_PLACEHOLDER"
+                url "https://github.com/rust142/geeto/releases/download/v${VERSION}/geeto-mac"
+                sha256 "${MAC_X64_SHA}"
 
                 def install
                   bin.install "geeto-mac" => "geeto"
                 end
               elsif Hardware::CPU.arm?
-                url "https://github.com/rust142/geeto/releases/download/vVERSION_PLACEHOLDER/geeto-mac-arm64"
-                sha256 "MAC_ARM_SHA_PLACEHOLDER"
+                url "https://github.com/rust142/geeto/releases/download/v${VERSION}/geeto-mac-arm64"
+                sha256 "${MAC_ARM_SHA}"
 
                 def install
                   bin.install "geeto-mac-arm64" => "geeto"
@@ -162,15 +163,15 @@ jobs:
 
             on_linux do
               if Hardware::CPU.intel?
-                url "https://github.com/rust142/geeto/releases/download/vVERSION_PLACEHOLDER/geeto-linux"
-                sha256 "LINUX_X64_SHA_PLACEHOLDER"
+                url "https://github.com/rust142/geeto/releases/download/v${VERSION}/geeto-linux"
+                sha256 "${LINUX_X64_SHA}"
 
                 def install
                   bin.install "geeto-linux" => "geeto"
                 end
               elsif Hardware::CPU.arm?
-                url "https://github.com/rust142/geeto/releases/download/vVERSION_PLACEHOLDER/geeto-linux-arm64"
-                sha256 "LINUX_ARM_SHA_PLACEHOLDER"
+                url "https://github.com/rust142/geeto/releases/download/v${VERSION}/geeto-linux-arm64"
+                sha256 "${LINUX_ARM_SHA}"
 
                 def install
                   bin.install "geeto-linux-arm64" => "geeto"
@@ -179,19 +180,12 @@ jobs:
             end
 
             test do
-              assert_match "Geeto v#{version}", shell_output("#{bin}/geeto --version")
+              assert_match "Geeto v\#{version}", shell_output("\#{bin}/geeto --version")
             end
           end
-          FORMULA
+          EOF
 
-          # Replace placeholders
-          sed -i "s/VERSION_PLACEHOLDER/${VERSION}/g" Formula/geeto.rb
-          sed -i "s/MAC_X64_SHA_PLACEHOLDER/${MAC_X64_SHA}/g" Formula/geeto.rb
-          sed -i "s/MAC_ARM_SHA_PLACEHOLDER/${MAC_ARM_SHA}/g" Formula/geeto.rb
-          sed -i "s/LINUX_X64_SHA_PLACEHOLDER/${LINUX_X64_SHA}/g" Formula/geeto.rb
-          sed -i "s/LINUX_ARM_SHA_PLACEHOLDER/${LINUX_ARM_SHA}/g" Formula/geeto.rb
-
-          # Remove leading whitespace from heredoc
+          # Remove leading whitespace from heredoc indentation
           sed -i 's/^          //' Formula/geeto.rb
 
       - name: Commit and push formula update
