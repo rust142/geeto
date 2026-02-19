@@ -78,7 +78,10 @@
     "shortlog",
     "reflog",
     "esac",
-    "OPOST"
+    "OPOST",
+    "asciinema",
+    "regen",
+    "lintstagedrc"
   ],
   "ignorePaths": [
     "node_modules/**",
