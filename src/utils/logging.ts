@@ -68,10 +68,16 @@ export const log = {
   ai: (msg: string) => {
     console.log(`${colors.cyan}[AI]${colors.reset} ${msg}`)
   },
+  /** Print a dim horizontal rule for visual separation. */
+  divider: () => {
+    console.log(`${colors.gray}${'─'.repeat(58)}${colors.reset}`)
+  },
   spinner: () => new Spinner(),
   banner: () => {
+    console.log('')
     console.log(
-      `${colors.cyan}${colors.bright}Geeto${colors.reset} ${colors.gray}— AI-Powered Git Workflow Automation${colors.reset}`
+      `  ${colors.cyan}${colors.bright}⚡ Geeto${colors.reset}  ${colors.gray}AI-Powered Git Workflow${colors.reset}`
     )
+    console.log('')
   },
 } as const

@@ -1,6 +1,5 @@
 /** Main workflow for the Geeto CLI. */
 
-import path from 'node:path'
 import type { CopilotModel } from '../api/copilot.js'
 import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
@@ -22,12 +21,20 @@ import {
   setSkipTrelloPrompt,
 } from '../utils/config.js'
 import {
+  displayChangedFiles,
   displayCompletionSummary,
   displayCurrentProviderStatus,
+  displayStagedFiles,
   getStepName,
+  getStepProgress,
 } from '../utils/display.js'
 import { exec } from '../utils/exec.js'
-import { getChangedFiles, getCurrentBranch, getStagedFiles } from '../utils/git.js'
+import {
+  getChangedFiles,
+  getChangedFilesWithStatus,
+  getCurrentBranch,
+  getStagedFiles,
+} from '../utils/git.js'
 import { log } from '../utils/logging.js'
 import { loadState, preserveProviderState, saveState } from '../utils/state.js'
 import { formatTimestampLocale } from '../utils/time.js'
@@ -56,7 +63,7 @@ export const main = async (opts?: {
     const suppressLogs = !!opts?.startAt
 
     if (opts?.startAt) {
-      log.info(`Shortcut: starting at step -> ${opts.startAt}`)
+      log.info(`Starting at → ${colors.cyan}${opts.startAt}${colors.reset}`)
     }
 
     // Settings menu
@@ -504,11 +511,13 @@ export const main = async (opts?: {
     // STEP 1: Stage changes
     if (state.step < STEP.STAGED) {
       const changedFiles = getChangedFiles()
+      const changedWithStatus = getChangedFilesWithStatus()
 
-      log.info(`Current branch: ${state.currentBranch}`)
-      log.info(`Changed files: ${changedFiles.length}`)
+      console.log('')
+      log.info(`Branch: ${colors.cyan}${state.currentBranch}${colors.reset}`)
 
       if (changedFiles.length === 0) {
+        log.info(`Changed files: ${colors.gray}none${colors.reset}`)
         // No file changes detected — if CLI requested auto-stage, just continue;
         // otherwise prompt the user to continue or cancel.
         if (!opts?.stageAll) {
@@ -525,13 +534,12 @@ export const main = async (opts?: {
           }
         }
       } else {
-        console.log('\nChanged files:')
-        for (const file of changedFiles) {
-          console.log(`  ${file}`)
-        }
+        log.info(`Changed files: ${colors.bright}${changedFiles.length}${colors.reset}`)
+        console.log('')
+        displayChangedFiles(changedWithStatus)
 
         if (!suppressLogs) {
-          log.step('Step 1: Stage Changes')
+          log.step(`Step 1: Stage Changes  ${getStepProgress(1)}`)
         }
 
         let stageChoice: 'all' | 'skip' | 'without' | 'cancel'
@@ -579,10 +587,9 @@ export const main = async (opts?: {
         if (stagedFiles.length > 0) {
           state.step = STEP.STAGED
           saveState(state)
-          console.log('\nStaged files:')
-          for (const file of stagedFiles) {
-            console.log(`  + ${file}`)
-          }
+          console.log('')
+          log.success(`Staged ${colors.bright}${stagedFiles.length}${colors.reset} files`)
+          displayStagedFiles(stagedFiles)
         }
       }
     } else {
@@ -600,22 +607,11 @@ export const main = async (opts?: {
     if (state.step < STEP.BRANCH_CREATED) {
       const suppressConfirm = !!opts?.startAt && opts.startAt !== 'stage'
 
-      // When running with CLI flags (except --stage), show a short staged-files preview before creating the branch
+      // When running with CLI flags (except --stage), show a compact staged preview
       if (opts?.startAt && opts.startAt !== 'stage') {
         const stagedPreview = getStagedFiles()
         if (stagedPreview.length > 0) {
-          const moreCount = Math.max(0, stagedPreview.length - 2)
-          const more = moreCount > 0 ? ` (+${moreCount} more)` : ''
-          const shownCount = stagedPreview.length
-          log.info(
-            `${colors.cyan}${colors.reset}Staged: ${colors.cyan}${shownCount} files${colors.reset}`
-          )
-          log.info(
-            `${colors.cyan}${colors.reset}Files: ${colors.cyan}${stagedPreview
-              .slice(0, 2)
-              .map((f) => path.basename(f))
-              .join(', ')}${more}${colors.reset}`
-          )
+          log.info(`Staged: ${colors.cyan}${stagedPreview.length} files${colors.reset}`)
         }
       }
 
@@ -648,20 +644,9 @@ export const main = async (opts?: {
       // current staged files from git so external changes are respected.
       const liveStaged = getStagedFiles()
 
-      // When invoked via CLI flags (except --stage), show a short staged-files preview before committing
+      // When invoked via CLI flags (except --stage), show a compact staged preview
       if (opts?.startAt && opts.startAt !== 'stage' && liveStaged.length > 0) {
-        const moreCount = Math.max(0, liveStaged.length - 2)
-        const more = moreCount > 0 ? ` (+${moreCount} more)` : ''
-        const shownCount = liveStaged.length
-        log.info(
-          `${colors.cyan}${colors.reset}Staged: ${colors.cyan}${shownCount} files${colors.reset}`
-        )
-        log.info(
-          `${colors.cyan}${colors.reset}Files: ${colors.cyan}${liveStaged
-            .slice(0, 2)
-            .map((f) => path.basename(f))
-            .join(', ')}${more}${colors.reset}`
-        )
+        log.info(`Staged: ${colors.cyan}${liveStaged.length} files${colors.reset}`)
       }
 
       if (liveStaged.length === 0) {
