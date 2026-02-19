@@ -26,6 +26,7 @@ let stageAll = false
 let showVersion = false
 let showHelp = false
 let showCleanup = false
+let showSwitch = false
 let showTrello = false
 let showTrelloLists = false
 let showTrelloGenerate = false
@@ -90,6 +91,9 @@ for (const arg of argv) {
   if (arg === '--cleanup' || arg === '-cl') {
     showCleanup = true
   }
+  if (arg === '--switch' || arg === '-sw') {
+    showSwitch = true
+  }
   if (arg === '--trello') {
     showTrello = true
   }
@@ -117,6 +121,8 @@ const validFlags = new Set([
   '--push',
   '--cleanup',
   '-cl',
+  '--switch',
+  '-sw',
   '-f',
   '--fresh',
   '-r',
@@ -165,6 +171,7 @@ for (const arg of argv) {
     console.log(
       '  -cl, --cleanup       Interactive branch cleanup (delete local & remote branches)'
     )
+    console.log('  -sw, --switch        Interactive branch switcher with fuzzy search')
     console.log('  -f, --fresh          Start fresh workflow (ignore checkpoint)')
     console.log('  -r, --resume         Resume from checkpoint (default if exists)')
     console.log('  -v, --version        Show version')
@@ -192,6 +199,17 @@ for (const arg of argv) {
       process.exit(0)
     } catch (error) {
       console.error('Cleanup error:', error)
+      process.exit(1)
+    }
+  }
+
+  if (showSwitch) {
+    try {
+      const { handleBranchSwitch } = await import('./workflows/switch.js')
+      await handleBranchSwitch()
+      process.exit(0)
+    } catch (error) {
+      console.error('Switch error:', error)
       process.exit(1)
     }
   }
