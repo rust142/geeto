@@ -109,11 +109,10 @@ bun run check:full
 
 ## Pull Request Guidelines
 
-1. **Target `develop` branch** - Both `main` and `develop` are protected
-2. **One feature per PR** - Keep PRs focused
-3. **Update documentation** if needed
-4. **Pass all checks** - CI must be green
-5. **Respond to feedback** promptly
+1. **One feature per PR** - Keep PRs focused
+2. **Update documentation** if needed
+3. **Pass all checks** - CI must be green
+4. **Respond to feedback** promptly
 
 ### PR Template
 

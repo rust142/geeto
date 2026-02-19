@@ -3,6 +3,18 @@
  * Geeto - Git flow automation CLI tool with AI-powered branch naming
  * Main entry point - delegates to modular workflows
  */
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const filename = fileURLToPath(import.meta.url)
+const dir = path.dirname(filename)
+
+const packageJson = JSON.parse(readFileSync(path.join(dir, '../package.json'), 'utf8')) as {
+  version: string
+}
+const version = packageJson.version
+
 const { main } = await import('./workflows/main.js')
 
 // Parse simple CLI flags for quick step shortcuts
@@ -134,7 +146,7 @@ for (const arg of argv) {
 
 ;(async () => {
   if (showVersion) {
-    console.log('Geeto v1.1.0-beta.0')
+    console.log(`Geeto v${version}`)
     process.exit(0)
   }
 

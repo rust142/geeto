@@ -1,0 +1,21 @@
+{
+  "*.{ts,tsx}": [
+    "bun ./scripts/typecheck-wrapper.js",
+    "bun cspell:check",
+    "eslint --fix",
+    "prettier --write"
+  ],
+  "*.{js,json}": [
+    "bun cspell:check",
+    "prettier --write"
+  ],
+  "*.md": [
+    "bun cspell:check",
+    "markdownlint --fix",
+    "prettier --write"
+  ],
+  "*.{yml,yaml}": [
+    "bun cspell:check",
+    "yamllint -f parsable"
+  ]
+}

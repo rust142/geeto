@@ -2,7 +2,10 @@
 
 > AI-Powered Git Workflow Automation
 
-[![npm version](https://badge.fury.io/js/%40geeto%2Fcore.svg)](https://badge.fury.io/js/%40geeto%2Fcore)
+[![Support Palestine](https://raw.githubusercontent.com/Safouene1/support-palestine-banner/master/banner-support.svg)](https://kitabisa.com/campaign/celenganwargapalestina)
+
+[![StandWithPalestine badge](https://raw.githubusercontent.com/Safouene1/support-palestine-banner/master/StandWithPalestine.svg)](https://s.id/standwithpalestine)
+[![npm version](https://badge.fury.io/js/geeto.svg)](https://badge.fury.io/js/geeto)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
@@ -22,15 +25,15 @@ Streamline your Git workflow with intelligent branch naming, commit messages, an
 ### NPM/Bun
 
 ```bash
-npm install -g @geeto/core
+npm install -g geeto
 # or
-bun install -g @geeto/core
+bun install -g geeto
 ```
 
 ### From Source
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rust142/geeto/main/tools/install.sh | sh -s -- --no-label
+curl -fsSL https://raw.githubusercontent.com/rust142/geeto/main/tools/install.sh | bash -s -- --no-label
 ```
 
 **Requirements:** Node.js ≥ 18, Bun ≥ 1.0, Git ≥ 2.0
@@ -40,15 +43,15 @@ curl -fsSL https://raw.githubusercontent.com/rust142/geeto/main/tools/install.sh
 ### NPM/Bun
 
 ```bash
-npm uninstall -g @geeto/core
+npm uninstall -g geeto
 # or
-bun remove -g @geeto/core
+bun remove -g geeto
 ```
 
 ### From Source
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rust142/geeto/main/tools/uninstall.sh | sh
+curl -fsSL https://raw.githubusercontent.com/rust142/geeto/main/tools/uninstall.sh | bash
 ```
 
 ## Quick Start
@@ -58,6 +61,10 @@ curl -fsSL https://raw.githubusercontent.com/rust142/geeto/main/tools/uninstall.
 ```bash
 geeto
 ```
+
+[![Geeto Demo](https://github.com/rust142/geeto/raw/main/images/demo.png)](https://asciinema.org/a/788604)
+
+[see demo](https://asciinema.org/a/788604)
 
 On first run, Geeto will automatically guide you through AI provider setup:
 
