@@ -6,10 +6,10 @@
 
 import { readFileSync, writeFileSync } from 'node:fs'
 
-import { askQuestion, confirm } from '../cli/input.js'
+import { askQuestion, confirm, ProgressBar } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
-import { exec, execSilent } from '../utils/exec.js'
+import { exec, execAsync, execSilent } from '../utils/exec.js'
 import { log } from '../utils/logging.js'
 
 // ─── Types ───
@@ -504,16 +504,28 @@ export const handleRelease = async (): Promise<void> => {
   ])
 
   if (pushChoice === 'both' || pushChoice === 'commit') {
-    const pushSpinner = log.spinner()
-    pushSpinner.start('Pushing...')
+    const progressBar = new ProgressBar(100, 'Pushing to remote')
+    let progress = 0
+    const interval = setInterval(() => {
+      progress = Math.min(95, progress + Math.max(1, Math.floor(Math.random() * 6)))
+      progressBar.update(progress)
+    }, 250)
+
     try {
-      exec('git push', true)
+      await execAsync(`git push`, true)
       if (pushChoice === 'both') {
-        exec(`git push origin v${newVersion}`, true)
+        await execAsync(`git push origin v${newVersion}`, true)
       }
-      pushSpinner.succeed(pushChoice === 'both' ? 'Pushed commit + tag' : 'Pushed commit')
+      clearInterval(interval)
+      progressBar.update(100)
+      progressBar.complete()
+      console.log('')
+      log.success(pushChoice === 'both' ? 'Pushed commit + tag' : 'Pushed commit')
     } catch {
-      pushSpinner.fail('Failed to push')
+      clearInterval(interval)
+      progressBar.complete()
+      console.log('')
+      log.error('Failed to push')
     }
   }
 
