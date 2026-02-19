@@ -15,6 +15,10 @@ interface BranchInfo {
   hasLocal: boolean
   hasRemote: boolean
   label: string
+  /** Relative age string e.g. "3 months ago" */
+  age: string
+  /** Timestamp for sorting (epoch seconds, 0 if unknown) */
+  ageTimestamp: number
 }
 
 /**
@@ -67,9 +71,38 @@ const getUnifiedBranchList = (): BranchInfo[] => {
   const allBranchNames = new Set([...localBranches, ...remoteBranches])
   const branchList: BranchInfo[] = []
 
+  // Fetch commit dates in bulk for efficiency
+  const branchDates = new Map<string, { age: string; timestamp: number }>()
+  try {
+    // Local branch dates
+    const localDates = execSilent(
+      'git for-each-ref --format="%(refname:short)|%(committerdate:relative)|%(committerdate:unix)" refs/heads/'
+    )
+    for (const line of localDates.split('\n').filter(Boolean)) {
+      const [name, age, ts] = line.split('|')
+      if (name && age) {
+        branchDates.set(name, { age, timestamp: Number(ts) || 0 })
+      }
+    }
+    // Remote branch dates (for remote-only branches)
+    const remoteDates = execSilent(
+      'git for-each-ref --format="%(refname:short)|%(committerdate:relative)|%(committerdate:unix)" refs/remotes/origin/'
+    )
+    for (const line of remoteDates.split('\n').filter(Boolean)) {
+      const [fullName, age, ts] = line.split('|')
+      const name = fullName?.replace('origin/', '')
+      if (name && age && !branchDates.has(name)) {
+        branchDates.set(name, { age, timestamp: Number(ts) || 0 })
+      }
+    }
+  } catch {
+    // Continue without dates
+  }
+
   for (const name of allBranchNames) {
     const hasLocal = localBranches.has(name)
     const hasRemote = remoteBranches.has(name)
+    const dateInfo = branchDates.get(name)
 
     let label = ''
     if (hasLocal && hasRemote) {
@@ -80,21 +113,31 @@ const getUnifiedBranchList = (): BranchInfo[] => {
       label = `${colors.cyan}(remote only)${colors.reset}`
     }
 
+    // Append age to label
+    if (dateInfo?.age) {
+      const agePart = `${colors.gray}${dateInfo.age}${colors.reset}`
+      label = label ? `${label} ${agePart}` : agePart
+    }
+
     branchList.push({
       name,
       hasLocal,
       hasRemote,
       label,
+      age: dateInfo?.age ?? '',
+      ageTimestamp: dateInfo?.timestamp ?? 0,
     })
   }
 
-  // Sort by location: remote-only first, then both, then local-only; within each group sort alphabetically
+  // Sort by location group, then by staleness (oldest first)
   const rank = (br: BranchInfo) =>
     br.hasRemote && !br.hasLocal ? 0 : br.hasRemote && br.hasLocal ? 1 : 2
   branchList.sort((a, b) => {
     const ra = rank(a)
     const rb = rank(b)
     if (ra !== rb) return ra - rb
+    // Within same group, oldest first (lowest timestamp = oldest)
+    if (a.ageTimestamp !== b.ageTimestamp) return a.ageTimestamp - b.ageTimestamp
     return a.name.localeCompare(b.name)
   })
 
