@@ -31,6 +31,7 @@ let showCompare = false
 let showCherryPick = false
 let showPR = false
 let showIssue = false
+let showHistory = false
 let showTrello = false
 let showTrelloLists = false
 let showTrelloGenerate = false
@@ -114,6 +115,9 @@ for (const arg of argv) {
   if (arg === '--issue') {
     showIssue = true
   }
+  if (arg === '--log' || arg === '-lg') {
+    showHistory = true
+  }
   if (arg === '--trello') {
     showTrello = true
   }
@@ -149,6 +153,8 @@ const validFlags = new Set([
   '-cp',
   '--pr',
   '--issue',
+  '--log',
+  '-lg',
   '-f',
   '--fresh',
   '-r',
@@ -203,6 +209,7 @@ for (const arg of argv) {
     console.log('  -cp, --cherry-pick   Interactive cherry-pick commits from another branch')
     console.log('  --pr                 Create a GitHub Pull Request')
     console.log('  --issue              Create a GitHub Issue')
+    console.log('  -lg, --log           View commit history with elegant timeline')
     console.log('  -f, --fresh          Start fresh workflow (ignore checkpoint)')
     console.log('  -r, --resume         Resume from checkpoint (default if exists)')
     console.log('  -v, --version        Show version')
@@ -286,6 +293,17 @@ for (const arg of argv) {
       process.exit(0)
     } catch (error) {
       console.error('Issue error:', error)
+      process.exit(1)
+    }
+  }
+
+  if (showHistory) {
+    try {
+      const { handleHistory } = await import('./workflows/history.js')
+      await handleHistory()
+      process.exit(0)
+    } catch (error) {
+      console.error('History error:', error)
       process.exit(1)
     }
   }
