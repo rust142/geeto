@@ -1,9 +1,13 @@
 import type { GeetoState } from '../types/index.js'
 
+import { handleCommitWorkflow } from './commit.js'
 import { confirm, ProgressBar } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { STEP } from '../core/constants.js'
+import { colors } from '../utils/colors.js'
+import { getStepProgress } from '../utils/display.js'
 import { exec, execAsync } from '../utils/exec.js'
+import { safeCheckout, safeMerge } from '../utils/git-errors.js'
 import { getCurrentBranch, pushWithRetry } from '../utils/git.js'
 import { log } from '../utils/logging.js'
 import { saveState } from '../utils/state.js'
@@ -14,10 +18,7 @@ export async function handlePush(
 ): Promise<void> {
   if (state.step < STEP.PUSHED || opts?.force) {
     if (!opts?.suppressStep) {
-      log.step('Step 4: Push to Remote')
-    }
-    if (!opts?.suppressLogs) {
-      log.info(`Current branch: ${getCurrentBranch()}`)
+      log.step(`Step 4: Push to Remote  ${getStepProgress(4)}`)
     }
 
     let shouldPush: boolean
@@ -29,14 +30,6 @@ export async function handlePush(
     }
 
     if (shouldPush) {
-      // Get remote URL silently and show a tidy status line
-      let remoteUrl = ''
-      try {
-        remoteUrl = exec('git remote get-url origin', true)
-      } catch {
-        // ignore
-      }
-
       if (opts?.suppressLogs) {
         const progressBar = new ProgressBar(100, 'Pushing to remote')
 
@@ -79,8 +72,6 @@ export async function handlePush(
 
           if (hasCommitsToPush) {
             log.success(`Pushed ${getCurrentBranch()} to remote`)
-          } else {
-            log.info(`Branch ${getCurrentBranch()} is already up to date with remote`)
           }
         } catch (error) {
           progressBar.complete()
@@ -89,10 +80,7 @@ export async function handlePush(
           throw error
         }
       } else {
-        // Show remote info compactly
-        if (remoteUrl) {
-          log.info(`Pushing to: ${remoteUrl}`)
-        }
+        // Push without progress bar
 
         const progressBar = new ProgressBar(100, 'Pushing to remote')
 
@@ -134,8 +122,6 @@ export async function handlePush(
 
           if (hasCommitsToPush) {
             log.success(`Pushed ${getCurrentBranch()} to remote`)
-          } else {
-            log.info(`Branch ${getCurrentBranch()} is already up to date with remote`)
           }
         } catch (error) {
           progressBar.complete()
@@ -163,10 +149,7 @@ export async function handleMerge(
   // Return the feature branch name used for later cleanup
   if (state.step < STEP.MERGED) {
     if (!opts?.suppressStep) {
-      log.step('Step 5: Merge to Target Branch')
-    }
-    if (!opts?.suppressLogs) {
-      log.info(`Current branch: ${getCurrentBranch()}`)
+      log.step(`Step 5: Merge to Target  ${getStepProgress(5)}`)
     }
 
     const featureBranch = getCurrentBranch()
@@ -204,6 +187,7 @@ export async function handleMerge(
     }
     options.push({ label: 'Cancel', value: 'cancel' })
 
+    console.log('')
     const chosen = await select('Choose target branch for merge:', options)
 
     if (chosen === 'cancel') {
@@ -225,7 +209,11 @@ export async function handleMerge(
         return featureBranch
       }
 
-      exec(`git checkout -b development ${base}`)
+      const createResult = await safeCheckout('development', { create: true })
+      if (!createResult.success) {
+        log.error(`Failed to create branch 'development': ${createResult.error}`)
+        return featureBranch
+      }
       log.success(`Branch 'development' created from ${base}`)
       targetBranch = 'development'
     }
@@ -238,11 +226,46 @@ export async function handleMerge(
         { label: 'Squash and merge --no-ff', value: 'squash' },
       ])
 
-      exec(`git checkout ${targetBranch}`)
+      // Safe checkout to target branch with uncommitted changes handling
+      let checkoutResult = await safeCheckout(targetBranch, {
+        context: `To merge, we need to switch to '${targetBranch}'. Commit your changes in '${featureBranch}' first.`,
+      })
+
+      // If user chose to commit first, trigger commit workflow then retry checkout
+      if (checkoutResult.commitNeeded) {
+        console.log('')
+        log.info(`Committing changes in '${featureBranch}' before merge...`)
+        console.log('')
+
+        await handleCommitWorkflow(state, { suppressStep: true, suppressConfirm: false })
+
+        console.log('')
+        log.info('Retrying checkout to target branch...')
+
+        // Retry checkout after commit - will auto-handle any remaining conflicts
+        checkoutResult = await safeCheckout(targetBranch, { force: false })
+      }
+
+      if (!checkoutResult.success) {
+        log.error(`Failed to checkout ${targetBranch}: ${checkoutResult.error}`)
+        return featureBranch
+      }
 
       if (mergeType === 'merge-no-ff') {
-        exec(`git merge --no-ff ${featureBranch}`)
-        log.success(`Merged ${featureBranch} into ${targetBranch} with --no-ff`)
+        const mergeResult = await safeMerge(featureBranch, { noFf: true })
+        if (!mergeResult.success) {
+          if (mergeResult.conflict) {
+            log.error('Merge aborted due to conflicts. Please resolve manually if needed.')
+          } else {
+            log.error(`Merge failed: ${mergeResult.error}`)
+          }
+          // Switch back to feature branch
+          await safeCheckout(featureBranch)
+          return featureBranch
+        }
+        log.success(
+          `${colors.cyan}${featureBranch}${colors.reset} → merged into ${colors.cyan}${targetBranch}${colors.reset}`
+        )
       } else {
         // Squash commits on feature branch first
         const commitCount = Number.parseInt(
@@ -252,8 +275,20 @@ export async function handleMerge(
           exec(`git reset --soft HEAD~${commitCount - 1}`)
           exec('git commit --amend --no-edit --no-verify')
         }
-        exec(`git merge --no-ff ${featureBranch}`)
-        log.success(`Squashed ${featureBranch} and merged into ${targetBranch} with --no-ff`)
+        const mergeResult = await safeMerge(featureBranch, { noFf: true })
+        if (!mergeResult.success) {
+          if (mergeResult.conflict) {
+            log.error('Merge aborted due to conflicts. Please resolve manually if needed.')
+          } else {
+            log.error(`Merge failed: ${mergeResult.error}`)
+          }
+          // Switch back to feature branch
+          await safeCheckout(featureBranch)
+          return featureBranch
+        }
+        log.success(
+          `${colors.cyan}${featureBranch}${colors.reset} → squashed & merged into ${colors.cyan}${targetBranch}${colors.reset}`
+        )
       }
 
       console.log('')
@@ -270,9 +305,9 @@ export async function handleMerge(
           /* ignore */
         }
         if (remoteUrl) {
-          log.info(`Pushing ${targetBranch} to: ${remoteUrl}`)
+          // remote URL available for push
         } else {
-          log.info(`Pushing ${targetBranch} to remote`)
+          // push to default remote
         }
 
         console.log('')
@@ -340,35 +375,91 @@ export async function handleMerge(
   return state.targetBranch || getCurrentBranch()
 }
 
-export function handleCleanup(featureBranch: string, state: GeetoState): void {
+export async function handleCleanup(featureBranch: string, state: GeetoState): Promise<void> {
   if (state.step < STEP.CLEANUP) {
-    log.step('Step 6: Cleanup')
-    log.info(`Current branch: ${getCurrentBranch()}`)
+    log.step(`Step 6: Cleanup  ${getStepProgress(6)}`)
 
     if (featureBranch && featureBranch !== state.targetBranch) {
       // Protect canonical branches from accidental deletion
-      const protectedBranches = new Set(['main', 'master', 'development', 'develop', 'dev'])
+      const protectedBranches = new Set(['main', 'master', 'development', 'develop'])
       if (protectedBranches.has(featureBranch.toLowerCase())) {
         log.info(`Skipping deletion of protected branch '${featureBranch}'`)
       } else {
+        console.log('')
         const deleteAnswer = confirm(`Delete branch '${featureBranch}'?`)
         if (deleteAnswer) {
-          exec(`git branch -d ${featureBranch}`)
-
-          // Also delete remote branch if it exists
           try {
-            pushWithRetry(`git push origin --delete ${featureBranch}`, true)
-            log.success(`Remote branch '${featureBranch}' deleted`)
-          } catch {
-            // Remote branch might not exist, ignore error
+            exec(`git branch -d ${featureBranch}`, true)
+            log.success(`Local branch '${featureBranch}' deleted`)
+
+            // Also delete remote branch if it exists
+            try {
+              pushWithRetry(`git push origin --delete ${featureBranch}`, true)
+              log.success(`Remote branch '${featureBranch}' deleted`)
+            } catch {
+              // Remote branch might not exist, ignore error
+            }
+          } catch (error) {
+            // Branch deletion failed - likely not fully merged
+            const errMsg = error instanceof Error ? error.message : String(error)
+
+            if (errMsg.includes('not fully merged') || errMsg.includes('is not yet merged')) {
+              console.log('')
+
+              // Check if it's merged to HEAD but not to remote (safe to delete)
+              const isMergedToHead =
+                errMsg.includes('merged to HEAD') ||
+                errMsg.includes('even though it is merged to HEAD')
+
+              if (isMergedToHead) {
+                log.info(
+                  `Branch '${featureBranch}' is merged locally but remote is not updated yet.`
+                )
+                log.info('This is safe to delete since changes are already in your target branch.')
+              } else {
+                log.warn(`Branch '${featureBranch}' is not fully merged.`)
+              }
+
+              const forceDeleteChoice = await select('What would you like to do?', [
+                {
+                  label: isMergedToHead
+                    ? 'Delete (safe - already merged)'
+                    : 'Force delete anyway (git branch -D)',
+                  value: 'force',
+                },
+                { label: 'Keep the branch', value: 'keep' },
+              ])
+
+              if (forceDeleteChoice === 'force') {
+                try {
+                  exec(`git branch -D ${featureBranch}`, true)
+                  log.success(`Local branch '${featureBranch}' deleted`)
+
+                  // Also delete remote branch if it exists
+                  try {
+                    pushWithRetry(`git push origin --delete ${featureBranch}`, true)
+                    log.success(`Remote branch '${featureBranch}' deleted`)
+                  } catch {
+                    // Remote branch might not exist, ignore error
+                  }
+                } catch (forceError) {
+                  log.error(`Failed to delete branch: ${forceError}`)
+                }
+              } else {
+                log.info(`Kept branch '${featureBranch}'`)
+              }
+            } else {
+              // Unknown error
+              log.error(`Failed to delete branch: ${errMsg}`)
+            }
           }
         } else {
           // User chose not to delete the feature branch — switch back to it so they can continue working
-          try {
-            exec(`git checkout "${featureBranch}"`)
+          const checkoutResult = await safeCheckout(featureBranch)
+          if (checkoutResult.success) {
             log.info(`Kept branch '${featureBranch}' and switched to it`)
-          } catch {
-            log.warn(`Could not switch back to branch '${featureBranch}'.`)
+          } else {
+            log.warn(`Could not switch back to branch '${featureBranch}': ${checkoutResult.error}`)
           }
         }
       }

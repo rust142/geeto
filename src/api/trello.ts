@@ -23,6 +23,7 @@ export const fetchTrelloLists = async (): Promise<TrelloList[]> => {
     )
 
     if (!response.ok) {
+      console.log('') // Force newline to separate from any active spinner
       log.warn(`Trello API error: ${response.status} ${response.statusText}`)
       return []
     }
@@ -31,6 +32,7 @@ export const fetchTrelloLists = async (): Promise<TrelloList[]> => {
     return lists
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error)
+    console.log('') // Force newline to separate from any active spinner
     log.warn(`Failed to fetch Trello lists: ${msg}`)
     return []
   }
@@ -47,11 +49,12 @@ export const fetchTrelloCards = async (listId?: string): Promise<TrelloCard[]> =
 
   try {
     const response = await fetch(
-      `https://api.trello.com/1/boards/${config.boardId}/cards?fields=id,name,idShort,shortLink,url,idList&key=${config.apiKey}&token=${config.token}`,
+      `https://api.trello.com/1/boards/${config.boardId}/cards?fields=id,name,desc,idShort,shortLink,url,idList&checklists=all&key=${config.apiKey}&token=${config.token}`,
       { method: 'GET' }
     )
 
     if (!response.ok) {
+      console.log('') // Force newline to separate from any active spinner
       log.warn(`Trello API error: ${response.status} ${response.statusText}`)
       return []
     }
@@ -68,6 +71,7 @@ export const fetchTrelloCards = async (listId?: string): Promise<TrelloCard[]> =
     )
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error)
+    console.log('') // Force newline to separate from any active spinner
     log.warn(`Failed to fetch Trello cards: ${msg}`)
     return []
   }

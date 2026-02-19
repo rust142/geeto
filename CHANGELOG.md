@@ -1,94 +1,102 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [2.0.0](https://github.com/rust142/geeto/compare/v1.1.0...v2.0.0) (2026-02-01)
-
-### Bug Fixes
-
-- **actions:** normalize ai_assessments parsing and use env vars ([bfe138e](https://github.com/rust142/geeto/commit/bfe138ee7f6580ddfd69d5751a01d58a3a053580))
-- **commit:** write commit message to temp file and use git -F ([7469b91](https://github.com/rust142/geeto/commit/7469b918c3a279d83f2485bb79b505277c0949fc))
-- **dangerfile:** resolve Danger API from injected globals or require ([34915a3](https://github.com/rust142/geeto/commit/34915a323c4904ebc2ea70e7b8edd44bec980a97))
-- **errors:** normalize catch typing and add AI retry option ([613f250](https://github.com/rust142/geeto/commit/613f250466c288d363abc08b3ccbe92fc1e4e75c))
-- **workflow:** make issue detection resilient to missing context/octokit ([f661cee](https://github.com/rust142/geeto/commit/f661cee7d12183e268755dfd1361bf25501501fb))
-- **workflows:** use supress_labels key in auto-add-ai-label-on-open.yml ([7cbefbe](https://github.com/rust142/geeto/commit/7cbefbefdc22cfece13863fc20cd9d8608d18936))
+## [0.3.0](https://github.com/rust142/geeto/compare/v0.2.0...v0.3.0) (2026-02-19)
 
 ### Features
 
-- **actions:** auto-detect category labels on new issues ([ba60f7a](https://github.com/rust142/geeto/commit/ba60f7a512a53c535b4f6469fd860c6d399e4cbd))
-- **lint:** add cspell spellcheck and interactive ignore tooling ([27413a2](https://github.com/rust142/geeto/commit/27413a2d4df74974a1b188c5129a10eb562a2d49))
-- **workflows:** add 'copilot' label on comment and security heuristic ([33ce89b](https://github.com/rust142/geeto/commit/33ce89bde63d02199fc908d499d9362b59085407))
-- **workflows:** add AI reply-on-second-comment workflow and refine heuristics ([db40935](https://github.com/rust142/geeto/commit/db40935c705688943c148c009ed20ef590204246))
-- **workflows:** consolidate AI assessments and normalize labels ([059129f](https://github.com/rust142/geeto/commit/059129f8542fc975e34ab030ee7c7372876f24b2))
-- **workflows:** limit AI reply to issue author and exclude collaborators ([c041682](https://github.com/rust142/geeto/commit/c041682cffecde2c05f5a2893c3465576d60c4dd))
-- **workflows:** post consolidated AI assessment comment on issue open ([b544455](https://github.com/rust142/geeto/commit/b544455dd92ee95c6ce3910c7b29d9c2e0e64260))
-
-## [1.1.0](https://github.com/rust142/geeto/compare/v1.1.0-beta.0...v1.1.0) (2026-01-29)
+* feat(cli): add inline terminal editor for editing files and commits ([9192e84](https://github.com/rust142/geeto/commit/9192e84))
+* feat(display): add boxed UI, file status badges, and step progress ([58413a0](https://github.com/rust142/geeto/commit/58413a0))
+* feat(cli): add short flag aliases and improve help output ([73dcb62](https://github.com/rust142/geeto/commit/73dcb62))
+* feat(release): add release/tag manager workflow and --tag CLI flag ([1bbee32](https://github.com/rust142/geeto/commit/1bbee32))
+* feat(undo): add interactive undo last action workflow ([8394003](https://github.com/rust142/geeto/commit/8394003))
+* feat(cli): add --stats command and repository statistics dashboard ([c57c641](https://github.com/rust142/geeto/commit/c57c641))
+* feat(amend): add interactive commit amend workflow ([0eb6b15](https://github.com/rust142/geeto/commit/0eb6b15))
+* feat(stash): add interactive stash manager ([d831b0c](https://github.com/rust142/geeto/commit/d831b0c))
+* feat(history): add interactive commit history viewer ([482baa4](https://github.com/rust142/geeto/commit/482baa4))
+* feat(github): add interactive PR and Issue workflows ([38edaf5](https://github.com/rust142/geeto/commit/38edaf5))
+* feat(cli): add interactive cherry-pick workflow ([ee94690](https://github.com/rust142/geeto/commit/ee94690))
+* feat(workflows): add interactive branch compare command ([84d2bc5](https://github.com/rust142/geeto/commit/84d2bc5))
+* feat(cli): add interactive branch switcher and improve menu rendering ([31991e0](https://github.com/rust142/geeto/commit/31991e0))
+* feat(config): add custom protected branches ([b8f62a6](https://github.com/rust142/geeto/commit/b8f62a6))
+* feat(workflows): include branch age and sort branches by staleness ([162c19c](https://github.com/rust142/geeto/commit/162c19c))
+* feat(cli): improve multiSelect rendering and add commit selection in security gate ([464b30a](https://github.com/rust142/geeto/commit/464b30a))
+* feat(cli): add range selection and clickable branch links ([03af60c](https://github.com/rust142/geeto/commit/03af60c))
+* feat(trello): add checklist support and multi-select card selection ([1c3ba79](https://github.com/rust142/geeto/commit/1c3ba79))
+* feat(cli): print package.json version instead of hardcoded value ([c3dd440](https://github.com/rust142/geeto/commit/c3dd440))
+* feat: initial commit ([ba98b72](https://github.com/rust142/geeto/commit/ba98b72))
+* feat(workflows): add Security & Quality Gate workflow ([296aca9](https://github.com/rust142/geeto/commit/296aca9))
+* feat(cli): add searchable select menu and structured UI helpers ([687ff52](https://github.com/rust142/geeto/commit/687ff52))
+* feat(install): add uninstall script and enhance installer ([d06e1c9](https://github.com/rust142/geeto/commit/d06e1c9))
+* feat(workflows): improve checkpoint flow and staged-files preview ([3b5006b](https://github.com/rust142/geeto/commit/3b5006b))
+* feat(trello): include card descriptions in API, types, and menu ([4f70889](https://github.com/rust142/geeto/commit/4f70889))
+* feat(ai): improve Copilot install flow and AI error handling ([1de855f](https://github.com/rust142/geeto/commit/1de855f))
+* feat(workflows): add AI-agent safety instructions and numbered tasks to Trello export ([c6a2b13](https://github.com/rust142/geeto/commit/c6a2b13))
+* feat(workflows): add AI English translation and context-aware safeCheckout ([c23f91f](https://github.com/rust142/geeto/commit/c23f91f))
+* feat(workflows): pass geminiModel to correction helper ([ed11277](https://github.com/rust142/geeto/commit/ed11277))
+* feat(branch-helpers): prompt and persist AI provider and model for title-ai ([e5dd294](https://github.com/rust142/geeto/commit/e5dd294))
+* feat(trello): generate tasks.instructions.md from Trello lists ([8362a84](https://github.com/rust142/geeto/commit/8362a84))
+* feat(trello): add Trello menu, CLI flags and list command ([07044e7](https://github.com/rust142/geeto/commit/07044e7))
+* feat(branch): offer to stage changes when no staged files ([1ac151c](https://github.com/rust142/geeto/commit/1ac151c))
+* feat(cleanup): add interactive branch cleanup workflow ([9bfeb63](https://github.com/rust142/geeto/commit/9bfeb63))
+* feat(git): add safe git error handling and integrate into workflows ([beed78c](https://github.com/rust142/geeto/commit/beed78c))
+* feat(cli): add --stage-all option to auto-stage changes ([b8ea7c3](https://github.com/rust142/geeto/commit/b8ea7c3))
+* feat(cli): improve UX and AI provider robustness ([985ab4a](https://github.com/rust142/geeto/commit/985ab4a))
+* feat(workflows): display push progress and remote URL before push ([9c818dd](https://github.com/rust142/geeto/commit/9c818dd))
+* feat(exec): add execAsync and integrate into push flow ([da54630](https://github.com/rust142/geeto/commit/da54630))
 
 ### Bug Fixes
 
-- **branch:** improve working branch resolution ([7ad767d](https://github.com/rust142/geeto/commit/7ad767d4f0a405fb6937664874eda6b619488dc3))
-- **main:** use current branch for push operation ([d153aaa](https://github.com/rust142/geeto/commit/d153aaa630559464e51d97ec8793850ccbc9fb9b))
-- **workflow:** reset state if branch changes ([cea3573](https://github.com/rust142/geeto/commit/cea35735286c561bf8796230c309d58f713c7e71))
-- **workflows:** add blank line before push to separate output ([ba4c18d](https://github.com/rust142/geeto/commit/ba4c18d0e2221a39b3c799f1a8d6185a1efb4f39))
-- **workflows:** make git push robust and avoid interleaved output ([da0a61a](https://github.com/rust142/geeto/commit/da0a61a49c5eddf8170b6942062608ba2afba7c0))
-- **workflows:** move blank line after progress update before git push ([9a860c2](https://github.com/rust142/geeto/commit/9a860c285af8239650e1612b5da46dd139625a41))
-- **workflows:** remove explicit default from push confirmation prompts ([842243e](https://github.com/rust142/geeto/commit/842243e8bf3856901b65daf8cd5eaad210a3f430))
-- **workflows:** remove explicit false default from confirm calls ([0f896d2](https://github.com/rust142/geeto/commit/0f896d27d413b6feb5c5648dd9a41f3e4745e0e0))
+* fix(git): pass true to exec and silence push/branch logs ([1e82045](https://github.com/rust142/geeto/commit/1e82045))
+* fix(workflows): pass true flag to exec when deleting local branches ([a5562d8](https://github.com/rust142/geeto/commit/a5562d8))
+* fix(workflows): avoid logging 'Unknown' step when resuming workflow ([b4a4a6c](https://github.com/rust142/geeto/commit/b4a4a6c))
+* fix(logging): remove hard-coded version from banner ([2665c3c](https://github.com/rust142/geeto/commit/2665c3c))
+* fix(api): force newline before error/warn logs to separate from spinner ([7a2cf46](https://github.com/rust142/geeto/commit/7a2cf46))
+* fix(workflows): ensure spinner/newline separation and refine staged preview ([efa35ce](https://github.com/rust142/geeto/commit/efa35ce))
+* fix(workflows): improve interactive cleanup force-delete flow and errors ([7bb6d99](https://github.com/rust142/geeto/commit/7bb6d99))
+* fix(workflows): preserve AI provider state after cleanup and add Trello agent tip ([90e0fff](https://github.com/rust142/geeto/commit/90e0fff))
+* fix(git): treat branch creation as safe for checkout and improve cleanup messages ([e7576a1](https://github.com/rust142/geeto/commit/e7576a1))
+* fix(workflows): initialize progress bar at start of push ([7b01a3a](https://github.com/rust142/geeto/commit/7b01a3a))
+* fix(main-steps): remove redundant progress updates and improve development creation ([34ab22d](https://github.com/rust142/geeto/commit/34ab22d))
+* fix(workflows): increase progress bar granularity for git pushes ([20f37f4](https://github.com/rust142/geeto/commit/20f37f4))
+* fix(workflows): add newline after progress updates to avoid output interleaving ([cbc52a5](https://github.com/rust142/geeto/commit/cbc52a5))
+* fix(exec): stop silencing git push and command checks ([08b0e32](https://github.com/rust142/geeto/commit/08b0e32))
+* fix(workflows): add main and master to protected branches ([52448b5](https://github.com/rust142/geeto/commit/52448b5))
+* fix(workflows): exclude current and feature branches from merge targets ([c5d9b54](https://github.com/rust142/geeto/commit/c5d9b54))
+* fix(cspell): improve spellcheck scripts, use bun in lint-staged, clean pre-push ([a113a2c](https://github.com/rust142/geeto/commit/a113a2c))
+
+### Other Changes
+
+* chore(release): add --no-verify to release commit and use H2 changelog header ([1ba0a34](https://github.com/rust142/geeto/commit/1ba0a34))
+* chore(workflows): remove interactive UI tips and noisy logs ([27698d5](https://github.com/rust142/geeto/commit/27698d5))
+* docs(readme): move demo image and add demo link ([d674ace](https://github.com/rust142/geeto/commit/d674ace))
+* docs(readme): add demo badge and demo image, remove duplicate section ([22ad151](https://github.com/rust142/geeto/commit/22ad151))
+* docs(readme): replace asciicast badge with GitHub-hosted demo image ([75a6a9b](https://github.com/rust142/geeto/commit/75a6a9b))
+* docs(readme): add Demo section with asciinema demo ([a5ecc42](https://github.com/rust142/geeto/commit/a5ecc42))
+* chore: release v0.1.0-beta.3 ([9c97d0f](https://github.com/rust142/geeto/commit/9c97d0f))
+* chore(package): remove bin from published files ([a8fb8d2](https://github.com/rust142/geeto/commit/a8fb8d2))
+* chore(package): include bin and package.json, add pinst scripts, regen lock ([36474d1](https://github.com/rust142/geeto/commit/36474d1))
+* chore: release v0.1.0-beta.2 ([ba32d4c](https://github.com/rust142/geeto/commit/ba32d4c))
+* docs(readme): add Support Palestine badges and update npm badge ([978e753](https://github.com/rust142/geeto/commit/978e753))
+* chore: release v0.1.0-beta.1 ([2a8d4f2](https://github.com/rust142/geeto/commit/2a8d4f2))
+* chore(package): update package description ([b69a1fc](https://github.com/rust142/geeto/commit/b69a1fc))
+* chore(package): rename package to geeto and update install instructions ([68a2077](https://github.com/rust142/geeto/commit/68a2077))
+* chore: release v0.1.0-beta.0 ([ee73663](https://github.com/rust142/geeto/commit/ee73663))
+* chore(lint): ignore generated CHANGELOG.md ([ac167de](https://github.com/rust142/geeto/commit/ac167de))
+* chore(lint): move lint-staged config into .lintstagedrc ([a610acf](https://github.com/rust142/geeto/commit/a610acf))
+* chore(release): disable npm publish in release-it config ([08767e3](https://github.com/rust142/geeto/commit/08767e3))
+* refactor(workflows): remove noisy AI provider logs and streamline README quick start ([e438abc](https://github.com/rust142/geeto/commit/e438abc))
+* docs(repo): overhaul CONTRIBUTING and README; add install.sh ([11ff50d](https://github.com/rust142/geeto/commit/11ff50d))
+* docs(workflows/trello-menu): add implementation checklists for backend and frontend ([a4100f5](https://github.com/rust142/geeto/commit/a4100f5))
+* refactor(core): extract Copilot utilities and add shared helpers ([c4ef184](https://github.com/rust142/geeto/commit/c4ef184))
+* refactor(trello-menu): use log.step for Trello lists header ([43a4f73](https://github.com/rust142/geeto/commit/43a4f73))
+* refactor: code structure for improved readability and maintainability ([4a08758](https://github.com/rust142/geeto/commit/4a08758))
+* style(prettier): normalize plugins array and add trailing comma ([78416ee](https://github.com/rust142/geeto/commit/78416ee))
+* refactor(workflows): remove redundant progressBar.update(0) calls ([bd9799a](https://github.com/rust142/geeto/commit/bd9799a))
+* style(workflows): normalize console spacing around prompts and push progress ([d819ec0](https://github.com/rust142/geeto/commit/d819ec0))
+* ci: switch quality-checks to Bun-only (avoid Node 18 runtime) ([4e9e076](https://github.com/rust142/geeto/commit/4e9e076))
+
+# [0.1.1](https://github.com/rust142/geeto/compare/v0.1.0...v0.1.1) (2026-02-16)
 
 ### Features
 
-- **branch:** delete remote branch after local deletion ([11718ff](https://github.com/rust142/geeto/commit/11718ff655a39dd725eb2c7c4559bf5d51db99ed))
-- **merge:** add merge strategy selection ([c2d567e](https://github.com/rust142/geeto/commit/c2d567e7ae150f58bcb5c5424e20bbe039d7734c))
-- **setup:** add interactive setup for Copilot, ([1328f26](https://github.com/rust142/geeto/commit/1328f26f57191962a2fbb25c4c0c5991ec39dcf0))
-- **workflow:** enhance merge and branch management ([71a14cc](https://github.com/rust142/geeto/commit/71a14ccdc895c2393097b426c03d85fbf5b2fe57))
-- **workflows:** add pre-merge push check and force option ([8af0e4c](https://github.com/rust142/geeto/commit/8af0e4c3abd2a29b002be4c2401fbb6b6e5173f9))
-- **workflows:** add push progress bar and refine commit/push/cleanup ([4aa6759](https://github.com/rust142/geeto/commit/4aa6759e0e6fcf00b9f1928700fd2bc4d394089a))
-- **workflows:** show git push progress and remote URL ([8b17d53](https://github.com/rust142/geeto/commit/8b17d53614622cee00d353accc28b0b17aa7c825))
-
-### Bug Fixes
-
-- add --ci flag to release scripts for non-interactive mode ([f5ccb72](https://github.com/rust142/geeto/commit/f5ccb72140e8f9dde46ec50fa59c1ffb866b73fc))
-- disable npm publish for GitHub-only releases ([3914830](https://github.com/rust142/geeto/commit/3914830ccab81ebbb5b53b7804e8429a56813a96))
-- remove invalid releaseNotes config ([027eb9f](https://github.com/rust142/geeto/commit/027eb9f3cb0cfde2bb9cddb78defc5eaf744d3c5))
-
-### Features
-
-- initial commit ([f268e9c](https://github.com/rust142/geeto/commit/f268e9c638bf587816450a600962ff3cb4f6d888))
-
-## [Unreleased]
-
-### Added
-
-- Initial release of Geeto CLI
-- AI-powered branch naming with multiple providers (Gemini, GitHub Copilot, OpenRouter)
-- Trello integration for project management
-- Checkpoint recovery system for interrupted workflows
-- Cross-platform builds (Linux, macOS, Windows)
-- Comprehensive linting and code quality standards
-- Conventional commit enforcement
-- Automated release management
-- GitHub Actions CI/CD pipeline
-- Branch protection and naming conventions
-
-### Technical Improvements
-
-- TypeScript strict mode configuration
-- ESLint zero-warning policy
-- Prettier code formatting
-- Husky pre-commit hooks
-- Commitlint for conventional commits
-- Security scanning and vulnerability checks
-- CodeQL security analysis
-- Dependabot automated dependency updates
-
-### Documentation
-
-- Comprehensive README with installation and usage guides
-- Contributing guidelines with development standards
-- Code of Conduct for community standards
-- Security policy for vulnerability reporting
-- Issue and PR templates for structured feedback
+* initial commit ([ba98b72](https://github.com/rust142/geeto/commit/ba98b72611c815ebad390a2c7b7dc216ef8b2ca1))

@@ -1,16 +1,190 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import type { CopilotClient as _CopilotClient, Session } from '@github/copilot-sdk'
 import { CopilotClient } from '@github/copilot-sdk'
 
+import { exec } from '../utils/exec.js'
 import { log } from '../utils/logging.js'
 
 // Copilot SDK wrapper (lazy-load, optional)
 
+// Minimum Copilot CLI version required for SDK compatibility
+export const MIN_COPILOT_VERSION = '0.0.400'
+
+// Cache file path for storing copilot binary info
+const CACHE_FILE = path.join(os.homedir(), '.cache', 'geeto', 'copilot-bin.json')
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
+
+interface CopilotBinCache {
+  path: string
+  version: string
+  timestamp: number
+}
+
+/**
+ * Parse version string to numeric value for comparison.
+ */
+export const parseParts = (v: string): number => {
+  const parts = v.split('.').map((n) => Number.parseInt(n, 10))
+  const [major = 0, minor = 0, patch = 0] = parts
+  return major * 1_000_000 + minor * 1_000 + patch
+}
+
+/**
+ * Read cached copilot binary info from file.
+ */
+const readCache = (): CopilotBinCache | null => {
+  try {
+    if (!fs.existsSync(CACHE_FILE)) return null
+    const data = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')) as CopilotBinCache
+    // Check if cache is still valid (within TTL and binary still exists)
+    if (Date.now() - data.timestamp < CACHE_TTL_MS && fs.existsSync(data.path)) {
+      return data
+    }
+  } catch {
+    // ignore
+  }
+  return null
+}
+
+/**
+ * Write copilot binary info to cache file.
+ */
+const writeCache = (info: { path: string; version: string }): void => {
+  try {
+    const cacheDir = path.dirname(CACHE_FILE)
+    if (!fs.existsSync(cacheDir)) {
+      fs.mkdirSync(cacheDir, { recursive: true })
+    }
+    fs.writeFileSync(CACHE_FILE, JSON.stringify({ ...info, timestamp: Date.now() }))
+  } catch {
+    // ignore cache write failures
+  }
+}
+
+/**
+ * Get version from a specific copilot binary path.
+ */
+const getVersionFromPath = (binPath: string): string | null => {
+  try {
+    const verOut = exec(`"${binPath}" --version`, true)
+    const m = verOut.match(/(\d+\.\d+\.\d+)/)
+    return m?.[1] ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Find the best (newest) copilot binary from known locations.
+ * Uses file-based caching to avoid slow exec calls on every startup.
+ */
+export const findBestCopilotBinary = (): { path: string; version: string } | null => {
+  const minNum = parseParts(MIN_COPILOT_VERSION)
+
+  // Super fast path: check cache first
+  const cached = readCache()
+  if (cached && parseParts(cached.version) >= minNum) {
+    return { path: cached.path, version: cached.version }
+  }
+
+  // Check PATH first (most common case)
+  try {
+    const pathBin = exec('which copilot', true).trim()
+    if (pathBin && fs.existsSync(pathBin)) {
+      const ver = getVersionFromPath(pathBin)
+      if (ver) {
+        const num = parseParts(ver)
+        if (num >= minNum) {
+          const result = { path: pathBin, version: ver }
+          writeCache(result)
+          return result
+        }
+      }
+    }
+  } catch {
+    // ignore, will check other locations
+  }
+
+  // PATH version is outdated or not found - scan known locations
+  const home = os.homedir()
+  const knownPaths = [
+    '/usr/local/bin/copilot',
+    '/usr/bin/copilot',
+    path.join(home, '.config/Code/User/globalStorage/github.copilot-chat/copilotCli/copilot'),
+    path.join(home, '.npm-global/bin/copilot'),
+    path.join(home, '.local/bin/copilot'),
+  ]
+
+  for (const binPath of knownPaths) {
+    if (fs.existsSync(binPath)) {
+      const ver = getVersionFromPath(binPath)
+      if (ver) {
+        const num = parseParts(ver)
+        if (num >= minNum) {
+          const result = { path: binPath, version: ver }
+          writeCache(result)
+          return result
+        }
+      }
+    }
+  }
+
+  return null
+}
+
+// Cached best copilot binary info
+let cachedCopilotPath: string | null = null
+
+/**
+ * Check if Copilot CLI version is compatible with SDK.
+ * Automatically finds the newest copilot binary to bypass PATH cache issues.
+ * Returns true if compatible, false otherwise.
+ */
+export const checkCopilotCliVersion = (): boolean => {
+  const best = findBestCopilotBinary()
+  if (!best) {
+    return false
+  }
+
+  const minNum = parseParts(MIN_COPILOT_VERSION)
+  const currentNum = parseParts(best.version)
+
+  if (currentNum >= minNum) {
+    // Cache the path for the SDK to use
+    cachedCopilotPath = best.path
+    // Update PATH so CopilotClient can find it
+    if (cachedCopilotPath) {
+      const binDir = path.dirname(cachedCopilotPath)
+      if (!process.env.PATH?.startsWith(binDir)) {
+        process.env.PATH = `${binDir}:${process.env.PATH}`
+      }
+    }
+    return true
+  }
+
+  return false
+}
+
 let client: _CopilotClient | null = null
+let versionChecked = false
+let versionCompatible = false
 
 const ensureClient = async (): Promise<boolean> => {
+  // Check CLI version once before attempting to start client
+  if (!versionChecked) {
+    versionChecked = true
+    versionCompatible = checkCopilotCliVersion()
+  }
+
+  if (!versionCompatible) {
+    return false
+  }
+
   if (client) {
     return true
   }
@@ -117,6 +291,7 @@ export const generateBranchName = async (
         .replaceAll(/^-|-$/g, '')
       return cleaned || null
     } catch (error) {
+      console.log('') // Force newline to separate from any active spinner
       log.error('Copilot Error: ' + String(error))
       return null
     }
@@ -154,6 +329,7 @@ fetching. Updates .gitignore for geeto binaries.`
       const normalized = cleaned.replaceAll(/\n\s*\n+/g, '\n\n').trim()
       return normalized && normalized.length >= 8 ? normalized : null
     } catch (error) {
+      console.log('') // Force newline to separate from any active spinner
       log.error('Copilot Error: ' + String(error))
       return null
     }

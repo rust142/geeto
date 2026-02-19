@@ -3,7 +3,11 @@ import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 
 import { DEFAULT_GEMINI_MODEL } from './config.js'
+import { isContextLimitFailure, isTransientAIFailure } from './git-ai-errors.js'
 import { log } from '../utils/logging.js'
+
+// Re-export error detection functions for backward compatibility
+export { isContextLimitFailure, isTransientAIFailure }
 
 // execGit not needed here
 
@@ -69,95 +73,6 @@ export function getModelDisplayName(aiProvider: string, model?: string): string 
   }
 
   return model
-}
-
-/**
- * Heuristics to detect transient AI errors (rate limits, quota, billing).
- */
-export const isTransientAIFailure = (s: string | null | undefined): boolean => {
-  // Empty/null isn't considered transient; callers decide whether to fallback
-  if (!s) {
-    return false
-  }
-
-  const low = String(s).toLowerCase()
-
-  // If the assistant returns something that looks like a model name, it's probably not
-  if (low.includes('-') || low.includes('_')) {
-    const allowed = /^[\d_a-z-]+$/.test(low)
-    const hasToken = low.split(/[_-]/).every((t) => t.length > 0)
-    if (allowed && hasToken) {
-      return false
-    }
-  }
-
-  if (/rate[\s_-]?limit(ed)?/.test(low)) {
-    return true
-  }
-
-  if (/quota/.test(low)) {
-    return true
-  }
-
-  if (/insufficient\s+credit|insufficient\s+credits|out\s+of\s+credits|out_of_credits/.test(low)) {
-    return true
-  }
-
-  if (/payment\s+required|payment\s+failed|billing/.test(low)) {
-    return true
-  }
-
-  const subscriptionPattern =
-    /subscription\s+required|requires\s+subscription|must\s+upgrade|upgrade\s+required/
-  if (subscriptionPattern.test(low)) {
-    return true
-  }
-
-  if (/not a valid model|model not found|invalid model id|model.*not found/.test(low)) {
-    return true
-  }
-
-  return false
-}
-
-/** Detect errors caused by model/context token length limits. */
-export const isContextLimitFailure = (s: string | null | undefined): boolean => {
-  if (!s) {
-    return false
-  }
-
-  const low = String(s).toLowerCase()
-
-  // Common phrases from OpenRouter/Gemini/OpenAI about context length / token limits
-  if (low.includes('maximum context length') || low.includes('context length is')) {
-    return true
-  }
-
-  if (low.includes('requested about') && low.includes('tokens')) {
-    return true
-  }
-
-  if (low.includes('middle-out')) {
-    return true
-  }
-
-  if (low.includes('context window') || low.includes('token limit')) {
-    return true
-  }
-
-  if (low.includes('large') || low.includes('many files')) {
-    return true
-  }
-
-  // fallback: mention of tokens + too many/too long
-  if (
-    low.includes('tokens') &&
-    (low.includes('too') || low.includes('exceed') || low.includes('exceeded'))
-  ) {
-    return true
-  }
-
-  return false
 }
 
 /** Ask the right provider to generate a branch-name suffix. */
@@ -366,7 +281,8 @@ export async function interactiveAIFallback(
         case 'gemini': {
           const gem = await import('../api/gemini.js')
           const { generateBranchName, generateCommitMessage } = gem
-          log.ai(
+          const spinner = log.spinner()
+          spinner.start(
             `Retrying with ${getAIProviderShortName(aiProvider)}${getModelValue(currentModel) ? ` (${getModelValue(currentModel)})` : ''}...`
           )
           if (isCommit) {
@@ -384,12 +300,14 @@ export async function interactiveAIFallback(
             )
             aiSuffix = res
           }
+          spinner.stop()
           break
         }
         case 'copilot': {
           const cop = await import('../api/copilot.js')
           const { generateBranchName, generateCommitMessage } = cop
-          log.ai(
+          const spinner = log.spinner()
+          spinner.start(
             `Retrying with ${getAIProviderShortName(aiProvider)}${getModelValue(currentModel) ? ` (${getModelValue(currentModel)})` : ''}...`
           )
           if (isCommit) {
@@ -407,12 +325,14 @@ export async function interactiveAIFallback(
             )
             aiSuffix = res
           }
+          spinner.stop()
           break
         }
         case 'openrouter': {
           const or = await import('../api/openrouter.js')
           const { generateBranchName, generateCommitMessage } = or
-          log.ai(
+          const spinner = log.spinner()
+          spinner.start(
             `Retrying with ${getAIProviderShortName(aiProvider)}${getModelValue(currentModel) ? ` (${getModelValue(currentModel)})` : ''}...`
           )
           if (isCommit) {
@@ -430,6 +350,7 @@ export async function interactiveAIFallback(
             )
             aiSuffix = res
           }
+          spinner.stop()
           break
         }
         default: {
@@ -460,7 +381,8 @@ export async function interactiveAIFallback(
         // user already selected a model from the menu — apply it immediately
         currentModel = chosen as GeminiModel
         updateModel?.('gemini', chosen as GeminiModel)
-        log.ai(
+        const spinner = log.spinner()
+        spinner.start(
           `${isCommit ? 'Generating commit message' : 'Generating branch name'} with Gemini (${chosen})...`
         )
 
@@ -475,6 +397,7 @@ export async function interactiveAIFallback(
           )
           aiSuffix = res
         }
+        spinner.stop()
         if (isTransientFailure(aiSuffix)) {
           failedModels.add(chosen as string)
         }
@@ -495,7 +418,8 @@ export async function interactiveAIFallback(
         // user already selected a model from the menu — apply it immediately
         currentModel = chosen as CopilotModel
         updateModel?.('copilot', chosen as CopilotModel)
-        log.ai(
+        const spinner = log.spinner()
+        spinner.start(
           `${isCommit ? 'Generating commit message' : 'Generating branch name'} with GitHub Copilot (${chosen})...`
         )
 
@@ -506,6 +430,7 @@ export async function interactiveAIFallback(
           const res = await generateBranchName(diff, correction, chosen as CopilotModel)
           aiSuffix = res
         }
+        spinner.stop()
         if (isTransientFailure(aiSuffix)) {
           failedModels.add(chosen as string)
         }
@@ -526,7 +451,8 @@ export async function interactiveAIFallback(
         // user already selected a model from the menu — apply it immediately
         currentModel = chosen as OpenRouterModel
         updateModel?.('openrouter', chosen as OpenRouterModel)
-        log.ai(
+        const spinner = log.spinner()
+        spinner.start(
           `${isCommit ? 'Generating commit message' : 'Generating branch name'} with OpenRouter (${chosen})...`
         )
 
@@ -584,7 +510,8 @@ export async function interactiveAIFallback(
         aiProvider = 'gemini'
         currentModel = chosenModel as GeminiModel
         updateModel?.('gemini', chosenModel as GeminiModel)
-        log.ai(
+        const spinner = log.spinner()
+        spinner.start(
           `${isCommit ? 'Generating commit message' : 'Generating branch name'} with Gemini (${chosenModel})...`
         )
 
@@ -596,6 +523,7 @@ export async function interactiveAIFallback(
           const res = await gem.generateBranchName(diff, correction, chosenModel as GeminiModel)
           aiSuffix = res
         }
+        spinner.stop()
       } else if (pickProv === 'copilot') {
         log.info(`Selected AI Provider: Copilot`)
         const { ensureAIProvider } = await import('../core/setup.js')
@@ -618,7 +546,8 @@ export async function interactiveAIFallback(
         aiProvider = 'copilot'
         currentModel = chosen as CopilotModel
         updateModel?.('copilot', chosen as CopilotModel)
-        log.ai(
+        const spinner = log.spinner()
+        spinner.start(
           `${isCommit ? 'Generating commit message' : 'Generating branch name'} with GitHub Copilot (${chosen})...`
         )
 
@@ -629,6 +558,7 @@ export async function interactiveAIFallback(
           const res = await generateBranchName(diff, correction, chosen as CopilotModel)
           aiSuffix = res
         }
+        spinner.stop()
       } else {
         log.info(`Selected AI Provider: OpenRouter`)
         const { ensureAIProvider } = await import('../core/setup.js')
@@ -650,7 +580,8 @@ export async function interactiveAIFallback(
         aiProvider = 'openrouter'
         currentModel = chosen as OpenRouterModel
         updateModel?.('openrouter', chosen as OpenRouterModel)
-        log.ai(
+        const spinner = log.spinner()
+        spinner.start(
           `${isCommit ? 'Generating commit message' : 'Generating branch name'} with OpenRouter (${chosen})...`
         )
 
@@ -661,6 +592,7 @@ export async function interactiveAIFallback(
           const res = await generateBranchName(diff, correction, chosen as OpenRouterModel)
           aiSuffix = res
         }
+        spinner.stop()
       }
 
       continue
@@ -698,6 +630,53 @@ export async function chooseModelForProvider(
 
     const cop = await import('../api/copilot.js')
     const models = (await cop.getCopilotModels()) as Array<{ label: string; value: string }>
+
+    // Check if no models are available (SDK not installed or not functioning)
+    if (models.length === 0) {
+      log.warn('⚠ Copilot SDK not available.')
+      console.log('')
+      log.info('The Copilot CLI is required to use GitHub Copilot models.')
+      console.log('')
+
+      const { confirm } = await import('../cli/input.js')
+      const shouldInstall = confirm('Setup Copilot CLI now?')
+
+      if (shouldInstall) {
+        console.log('')
+        // Use the comprehensive setup helper instead of manual exec
+        const { setupGitHubCopilotInteractive } = await import('../core/copilot-setup.js')
+        const setupSuccess = await setupGitHubCopilotInteractive()
+
+        if (setupSuccess) {
+          console.log('')
+          log.info('Verifying Copilot models...')
+          // Re-check if models are now available
+          const modelsAfterInstall = (await cop.getCopilotModels()) as Array<{
+            label: string
+            value: string
+          }>
+          if (modelsAfterInstall.length > 0) {
+            const options = modelsAfterInstall.some((m) => m.value === 'back')
+              ? modelsAfterInstall
+              : [...modelsAfterInstall, { label: backLabel ?? 'Back', value: 'back' }]
+            const { select } = await import('../cli/menu.js')
+            const chosen = await select(prompt ?? 'Choose Copilot model:', options)
+            return chosen as string | 'back'
+          } else {
+            log.warn('⚠ Installation completed but models still not available.')
+            log.info('You may need to restart your terminal or check your installation.')
+            return 'back'
+          }
+        } else {
+          log.info('Setup was not completed. Returning to provider selection.')
+          return 'back'
+        }
+      } else {
+        log.info('Setup skipped. Returning to provider selection.')
+        return 'back'
+      }
+    }
+
     const options = models.some((m) => m.value === 'back')
       ? models
       : [...models, { label: backLabel ?? 'Back', value: 'back' }]
@@ -717,6 +696,13 @@ export async function chooseModelForProvider(
 
     const or = await import('../api/openrouter.js')
     const models = (await or.getOpenRouterModels()) as Array<{ label: string; value: string }>
+
+    // Check if no models are available
+    if (models.length === 0) {
+      log.warn('⚠ No OpenRouter models available.')
+      return undefined
+    }
+
     const options = models.some((m) => m.value === 'back')
       ? models
       : [...models, { label: backLabel ?? 'Back', value: 'back' }]
@@ -736,6 +722,13 @@ export async function chooseModelForProvider(
 
   const gm = await import('../api/gemini.js')
   const models = (await gm.getGeminiModels()) as Array<{ label: string; value: string }>
+
+  // Check if no models are available
+  if (models.length === 0) {
+    log.warn('⚠ No Gemini models available.')
+    return undefined
+  }
+
   const options = models.some((m) => m.value === 'back')
     ? models
     : [...models, { label: backLabel ?? 'Back', value: 'back' }]

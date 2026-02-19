@@ -4,11 +4,11 @@ import { execSync, spawn } from 'node:child_process'
 
 import { log } from './logging.js'
 
-/** Run a command and return its trimmed stdout. */
+/** Run a command and return its stdout with trailing whitespace removed. */
 export const exec = (command: string, silent = false): string => {
   try {
     const result = execSync(command, { encoding: 'utf8', stdio: silent ? 'pipe' : 'inherit' })
-    return result?.trim() || ''
+    return result?.trimEnd() || ''
   } catch (error) {
     if (!silent) {
       log.error(`Error executing: ${command}`)
@@ -96,7 +96,7 @@ export const commandExists = (command: string): boolean => {
   const platform = process.platform
   const checkCommand = platform === 'win32' ? 'where' : 'which'
   try {
-    exec(`${checkCommand} ${command}`)
+    exec(`${checkCommand} ${command}`, true)
     return true
   } catch {
     return false

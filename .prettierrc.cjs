@@ -11,9 +11,7 @@ module.exports = {
   bracketSpacing: true,
   arrowParens: 'always',
   printWidth: 100,
-  plugins: [
-    '@ianvs/prettier-plugin-sort-imports'
-  ],
+  plugins: ['@ianvs/prettier-plugin-sort-imports'],
   importOrderParserPlugins: ['typescript', 'decorators-legacy', 'jsx'],
   importOrder: [
     '^node:',
@@ -22,7 +20,7 @@ module.exports = {
     '<THIRD_PARTY_MODULES>',
     '',
     '^./',
-    '^../'
+    '^../',
   ],
   importOrderTypeScriptVersion: '5.0.0',
   importOrderCaseSensitive: false,

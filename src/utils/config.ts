@@ -7,6 +7,7 @@ import os from 'node:os'
 import type {
   BranchStrategyConfig,
   GeminiConfig,
+  GitHubConfig,
   OpenRouterConfig,
   TrelloConfig,
 } from '../types/index.js'
@@ -80,6 +81,55 @@ export const getTrelloConfigPath = (): string => {
  */
 export const getBranchStrategyConfigPath = (): string => {
   return '.geeto/branch-strategy.toml'
+}
+
+/**
+ * Get path to user settings (project-local)
+ */
+/**
+ * Check trello.toml for skip flag
+ */
+export const hasSkippedTrelloPrompt = (): boolean => {
+  try {
+    const path = getTrelloConfigPath()
+    if (fs.existsSync(path)) {
+      const content = fs.readFileSync(path, 'utf8')
+      const m = content.match(/skip_setup\s*=\s*(?:true|false|"true"|"false")/)
+      if (m) {
+        const val = m[0].match(/(?:true|false|"true"|"false")/)?.[0]?.replaceAll('"', '')
+        return val === 'true'
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return false
+}
+
+export const setSkipTrelloPrompt = (v = true): void => {
+  try {
+    ensureGeetoIgnored()
+    const path = getTrelloConfigPath()
+    const configDir = path.slice(0, path.lastIndexOf('/'))
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true })
+    }
+
+    let content = ''
+    if (fs.existsSync(path)) {
+      content = fs.readFileSync(path, 'utf8')
+      // remove existing skip_setup line if present
+      content = content.replace(/\n?skip_setup\s*=.*(?:\n|$)/, '\n')
+    }
+
+    // append skip_setup at end
+    if (!content.endsWith('\n')) content += '\n'
+    content += `skip_setup = ${v ? 'true' : 'false'}\n`
+    fs.writeFileSync(path, content, 'utf8')
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    log.warn(`Failed to write trello config skip flag: ${msg}`)
+  }
 }
 
 const GEMINI_CONFIG_PATH = getGeminiConfigPath()
@@ -201,9 +251,18 @@ export const getBranchStrategyConfig = (): BranchStrategyConfig | null => {
       const separatorMatch = content.match(/separator\s*=\s*["']([^"']+)["']/)
       const namingMatch = content.match(/last_naming_strategy\s*=\s*["']([^"']+)["']/)
       const trelloListMatch = content.match(/last_trello_list\s*=\s*["']([^"']+)["']/)
+      const protectedMatch = content.match(/protected_branches\s*=\s*\[([^\]]*)\]/)
 
       // Only return config if separator has been explicitly set
       if (separatorMatch) {
+        let protectedBranches: string[] | undefined
+        if (protectedMatch?.[1]) {
+          protectedBranches = protectedMatch[1]
+            .split(',')
+            .map((s) => s.trim().replaceAll(/^["']|["']$/g, ''))
+            .filter(Boolean)
+        }
+
         return {
           separator: (separatorMatch?.[1] as '-' | '_') ?? '-',
           lastNamingStrategy: namingMatch?.[1] as
@@ -213,6 +272,7 @@ export const getBranchStrategyConfig = (): BranchStrategyConfig | null => {
             | 'manual'
             | undefined,
           lastTrelloList: trelloListMatch?.[1],
+          protectedBranches,
         }
       }
     }
@@ -236,17 +296,65 @@ export const saveBranchStrategyConfig = (config: BranchStrategyConfig): void => 
       fs.mkdirSync(configDir, { recursive: true })
     }
 
+    const protectedLine = config.protectedBranches?.length
+      ? `protected_branches = [${config.protectedBranches.map((b) => `"${b}"`).join(', ')}]\n`
+      : ''
+
     const configContent = `# Geeto Branch Strategy Configuration
 # Auto-generated on ${new Date().toISOString()}
 
 separator = "${config.separator}"
-${config.lastNamingStrategy ? `last_naming_strategy = "${config.lastNamingStrategy}"\n` : ''}${config.lastTrelloList ? `last_trello_list = "${config.lastTrelloList}"\n` : ''}`
+${config.lastNamingStrategy ? `last_naming_strategy = "${config.lastNamingStrategy}"\n` : ''}${config.lastTrelloList ? `last_trello_list = "${config.lastTrelloList}"\n` : ''}${protectedLine}`
 
     fs.writeFileSync(path, configContent, 'utf8')
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error)
     log.warn(`Failed to save branch strategy config: ${msg}`)
   }
+}
+
+/** Default protected branches that are always excluded from cleanup */
+const DEFAULT_PROTECTED_BRANCHES = ['main', 'master', 'development', 'develop']
+
+/**
+ * Get the full set of protected branches (defaults + user-configured)
+ */
+export const getProtectedBranches = (): string[] => {
+  const config = getBranchStrategyConfig()
+  const custom = config?.protectedBranches ?? []
+  return [...new Set([...DEFAULT_PROTECTED_BRANCHES, ...custom])]
+}
+
+/**
+ * Get path to GitHub config (project-local)
+ */
+export const getGithubConfigPath = (): string => {
+  return '.geeto/github.toml'
+}
+
+/**
+ * Read GitHub config from project-local config file
+ */
+export const getGithubConfig = (): GitHubConfig => {
+  try {
+    const path = getGithubConfigPath()
+    if (fs.existsSync(path)) {
+      const content = fs.readFileSync(path, 'utf8')
+      const tokenMatch = content.match(/token\s*=\s*["']([^"']+)["']/)
+      return { token: tokenMatch?.[1] ?? '' }
+    }
+  } catch {
+    // Ignore errors
+  }
+  return { token: '' }
+}
+
+/**
+ * Check if GitHub is configured (has token)
+ */
+export const hasGithubConfig = (): boolean => {
+  const config = getGithubConfig()
+  return !!(config.token && config.token.trim().length > 0)
 }
 
 /**

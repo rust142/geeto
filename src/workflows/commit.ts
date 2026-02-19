@@ -8,10 +8,12 @@ import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 import type { GeetoState } from '../types/index.js'
 
-import { askQuestion, confirm, editInEditor } from '../cli/input.js'
+import { askQuestion, confirm, editInline } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
+import { extractCommitTitle, getCommitTypes, normalizeAIOutput } from '../utils/commit-helpers.js'
 import { DEFAULT_GEMINI_MODEL } from '../utils/config.js'
+import { getStepProgress } from '../utils/display.js'
 import { execGit } from '../utils/exec.js'
 import {
   chooseModelForProvider,
@@ -23,21 +25,6 @@ import {
 } from '../utils/git-ai.js'
 import { log } from '../utils/logging.js'
 import { saveState } from '../utils/state.js'
-
-export const getCommitTypes = () => [
-  { label: 'feat     - New feature', value: 'feat' },
-  { label: 'fix      - Bug fix', value: 'fix' },
-  { label: 'docs     - Documentation', value: 'docs' },
-  { label: 'style    - Code style changes', value: 'style' },
-  { label: 'refactor - Code refactoring', value: 'refactor' },
-  { label: 'test     - Testing', value: 'test' },
-  { label: 'chore    - Maintenance', value: 'chore' },
-  { label: 'perf     - Performance improvement', value: 'perf' },
-  { label: 'ci       - CI/CD changes', value: 'ci' },
-  { label: 'build    - Build system changes', value: 'build' },
-  { label: 'revert   - Revert changes', value: 'revert' },
-  { label: 'cancel', value: 'cancel' },
-]
 
 export const getDefaultCommitTool = (
   aiProvider: 'gemini' | 'copilot' | 'openrouter' | 'manual'
@@ -56,135 +43,6 @@ export const getDefaultCommitTool = (
       return 'manual'
     }
   }
-}
-
-const normalizeAIOutput = (input: string): string => {
-  let t = String(input ?? '')
-
-  // Remove fenced code blocks and triple backticks
-  t = t.replaceAll(/```[\w-]*\n?/g, '').replaceAll('```', '')
-  // Remove inline backticks
-  t = t.replaceAll('`', '')
-  // Trim surrounding quotes and whitespace
-  t = t.replaceAll(/^"+|"+$/g, '').trim()
-
-  // Strip any explanatory preface before the conventional commit line
-  const lower = t.toLowerCase()
-  const typesList = [
-    'feat',
-    'fix',
-    'docs',
-    'style',
-    'refactor',
-    'test',
-    'chore',
-    'perf',
-    'ci',
-    'build',
-    'revert',
-  ]
-
-  let earliestIndex = -1
-  for (const typ of typesList) {
-    const pat1 = `${typ}(`
-    const pat2 = `${typ}:`
-    const i1 = lower.indexOf(pat1)
-    const i2 = lower.indexOf(pat2)
-    let i = -1
-    if (i1 === -1) {
-      i = i2
-    } else if (i2 === -1) {
-      i = i1
-    } else {
-      i = Math.min(i1, i2)
-    }
-
-    if (i !== -1 && (earliestIndex === -1 || i < earliestIndex)) {
-      earliestIndex = i
-    }
-  }
-
-  if (earliestIndex !== -1) {
-    return t.slice(earliestIndex).trim()
-  }
-
-  return t
-}
-
-const extractCommitTitle = (text: string): string | null => {
-  // Try line-by-line first
-  const lines = text
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean)
-
-  const typesList = [
-    'feat',
-    'fix',
-    'docs',
-    'style',
-    'refactor',
-    'test',
-    'chore',
-    'perf',
-    'ci',
-    'build',
-    'revert',
-  ]
-
-  for (const line of lines) {
-    const colonIndex = line.indexOf(':')
-    if (colonIndex === -1) {
-      continue
-    }
-
-    const left = line.slice(0, colonIndex).trim()
-    const type = (left.split('(')[0] ?? '').trim()
-    if (typesList.includes(type)) {
-      const after = line.slice(colonIndex + 1).trim()
-      if (after.length > 0) {
-        return line
-      }
-    }
-  }
-
-  // If not found line-by-line, scan the whole text for a conventional commit substring
-  const lower = text.toLowerCase()
-  let earliestIndex = -1
-  let foundType: string | null = null
-
-  for (const t of typesList) {
-    // look for 't(' or 't:' patterns
-    const pat1 = `${t}(`
-    const pat2 = `${t}:`
-    const i1 = lower.indexOf(pat1)
-    const i2 = lower.indexOf(pat2)
-    let i = -1
-    if (i1 === -1) {
-      i = i2
-    } else if (i2 === -1) {
-      i = i1
-    } else {
-      i = Math.min(i1, i2)
-    }
-    if (i !== -1 && (earliestIndex === -1 || i < earliestIndex)) {
-      earliestIndex = i
-      foundType = t
-    }
-  }
-
-  if (earliestIndex !== -1 && foundType) {
-    // extract the full line starting at earliestIndex
-    const rest = text.slice(earliestIndex)
-    const endIdx = rest.indexOf('\n')
-    const line = (endIdx === -1 ? rest : rest.slice(0, endIdx)).trim()
-    // basic validation
-    if (line.includes(':') && line.length > foundType.length + 2) {
-      return line
-    }
-  }
-
-  return null
 }
 
 const extractCommitBody = (text: string, title: string): string | null => {
@@ -275,7 +133,7 @@ export const handleCommitWorkflow = async (
   opts?: { suppressStep?: boolean; suppressConfirm?: boolean }
 ): Promise<boolean> => {
   if (!opts?.suppressStep) {
-    log.step('Step 3: Commit')
+    log.step(`Step 3: Commit  ${getStepProgress(3)}`)
   }
 
   const aiProvider = (state.aiProvider ?? 'gemini') as
@@ -327,14 +185,14 @@ export const handleCommitWorkflow = async (
       ])
 
       if (action === 'edit') {
-        const edited = editInEditor(`${titleStr}\n\n${bodyStr ?? ''}`, 'geeto-commit.txt')
+        const edited = await editInline(`${titleStr}\n\n${bodyStr ?? ''}`)
         if (!edited?.trim()) {
           return false
         }
 
         const normalized = normalizeAIOutput(edited.trim())
         const newTitle =
-          extractCommitTitle(normalized) ?? edited.split('\n').find((l) => l.trim()) ?? ''
+          extractCommitTitle(normalized) ?? edited.split('\n').find((l: string) => l.trim()) ?? ''
         const newBody = newTitle ? extractCommitBody(normalized, newTitle) : null
         return attemptCommit(newTitle as string, newBody)
       }
@@ -362,8 +220,6 @@ export const handleCommitWorkflow = async (
   // Log provider detected; if manual, skip AI prompts and go straight to conventional commit flow
   if (aiProvider === 'manual') {
     selectedTool = 'manual'
-  } else {
-    log.info(`AI provider detected: ${aiProvider}`)
   }
 
   let modelName = ''
@@ -374,10 +230,6 @@ export const handleCommitWorkflow = async (
   } else if (aiProvider === 'gemini') {
     // prefer persisted state selection, otherwise fall back to default
     modelName = state.geminiModel ?? DEFAULT_GEMINI_MODEL
-  }
-
-  if (modelName) {
-    log.info(`Using model: ${modelName}`)
   }
 
   // If not manual, ask whether to use AI provider for commit; otherwise skip to manual flow
@@ -497,6 +349,7 @@ export const handleCommitWorkflow = async (
     // Try generating commit message via AI
     let initialAiResult: string | null = null
     let currentModel: string | undefined
+    const spinner = log.spinner()
     try {
       let currentProvider: 'gemini' | 'copilot' | 'openrouter' | undefined
       if (state.aiProvider && state.aiProvider !== 'manual') {
@@ -513,7 +366,7 @@ export const handleCommitWorkflow = async (
         currentModel = state.geminiModel ?? DEFAULT_GEMINI_MODEL
       }
 
-      log.ai(
+      spinner.start(
         `Generating commit message with ${getAIProviderShortName(currentProvider)}${currentModel ? ` (${currentModel})` : ''}...`
       )
 
@@ -539,7 +392,9 @@ export const handleCommitWorkflow = async (
           state.geminiModel as GeminiModel
         )
       }
+      spinner.stop()
     } catch {
+      spinner.stop()
       log.warn('Initial AI generation attempt failed, will enter interactive fallback')
       initialAiResult = null
     }
@@ -575,26 +430,27 @@ export const handleCommitWorkflow = async (
         let directAttempt = 0
         const maxDirectAttempts = 2
         while (directAttempt < maxDirectAttempts && !aiResult) {
+          // Log which provider/model we're attempting for regenerate
+          let directModelName = ''
+          if (state.aiProvider === 'copilot' && state.copilotModel) {
+            directModelName = state.copilotModel as string
+          } else if (state.aiProvider === 'openrouter' && state.openrouterModel) {
+            directModelName = state.openrouterModel as string
+          } else if (state.aiProvider === 'gemini') {
+            directModelName = (state.geminiModel as string) ?? DEFAULT_GEMINI_MODEL
+          }
+
+          if (correction) {
+            console.log('')
+          }
+          const spinner = log.spinner()
+          spinner.start(
+            `Regenerating commit message with ${getAIProviderShortName(
+              state.aiProvider ?? 'gemini'
+            )}${directModelName ? ` (${directModelName})` : ''}...`
+          )
+
           try {
-            // Log which provider/model we're attempting for regenerate
-            let directModelName = ''
-            if (state.aiProvider === 'copilot' && state.copilotModel) {
-              directModelName = state.copilotModel as string
-            } else if (state.aiProvider === 'openrouter' && state.openrouterModel) {
-              directModelName = state.openrouterModel as string
-            } else if (state.aiProvider === 'gemini') {
-              directModelName = (state.geminiModel as string) ?? DEFAULT_GEMINI_MODEL
-            }
-
-            if (correction) {
-              console.log('')
-            }
-            log.ai(
-              `Regenerating commit message with ${getAIProviderShortName(
-                state.aiProvider ?? 'gemini'
-              )}${directModelName ? ` (${directModelName})` : ''}...`
-            )
-
             switch (state.aiProvider) {
               case 'copilot': {
                 const { generateCommitMessage } = await import('../api/copilot.js')
@@ -628,7 +484,9 @@ export const handleCommitWorkflow = async (
                 break
               }
             }
+            spinner.stop()
           } catch {
+            spinner.stop()
             aiResult = null
           }
 
@@ -766,7 +624,6 @@ export const handleCommitWorkflow = async (
       let acceptAi: string
       if (contextLimitDetected && !subjectLine) {
         // No usable suggestion present: force the user to change model/provider or edit
-        const editorName = process.env.EDITOR ?? (process.platform === 'win32' ? 'notepad' : 'vi')
         acceptAi = await select(
           'This model cannot process the input due to token/context limits. Please choose a different model or provider:',
           [
@@ -776,16 +633,15 @@ export const handleCommitWorkflow = async (
             },
             { label: 'Change model', value: 'change-model' },
             { label: 'Change AI provider', value: 'change-provider' },
-            { label: `Edit in editor (${editorName})`, value: 'edit' },
+            { label: 'Edit inline', value: 'edit' },
           ]
         )
       } else {
         // Either no context limits, or we have a usable suggestion (allow accepting)
-        const editorName = process.env.EDITOR ?? (process.platform === 'win32' ? 'notepad' : 'vi')
         acceptAi = await select('Accept this commit message?', [
           { label: 'Yes, use it', value: 'accept' },
           { label: 'Regenerate', value: 'regenerate' },
-          { label: `Edit in editor (${editorName})`, value: 'edit' },
+          { label: 'Edit inline', value: 'edit' },
           { label: 'Correct AI (give feedback)', value: 'correct' },
           { label: 'Change model', value: 'change-model' },
           { label: 'Change AI provider', value: 'change-provider' },
@@ -950,18 +806,16 @@ export const handleCommitWorkflow = async (
         }
         case 'correct': {
           correction = askQuestion(
-            'Provide corrections for the AI (e.g., shorten header, clarify scope): ',
-            undefined,
-            true
+            'Provide corrections for the AI (e.g., shorten header, clarify scope): '
           )
           // Immediately force a regenerate using the provided correction
           forceDirect = true
           continue
         }
         case 'edit': {
-          // Open user's editor for multi-line editing
+          // Open inline editor for multi-line editing
           const initial = commitMessage
-          const edited = editInEditor(initial, 'geeto-commit.txt')
+          const edited = await editInline(initial)
           if (edited?.trim()) {
             const editedMessage = edited.trim()
 
@@ -1015,18 +869,20 @@ export const handleCommitWorkflow = async (
     }
 
     if (mode === 'manual') {
-      // Freeform manual commit: prompt for a non-empty commit message
-      let message = ''
-      while (!message) {
-        message = askQuestion('Commit message: ').trim()
-        if (!message) {
-          log.error('Commit message cannot be empty!')
-        }
+      // Freeform manual commit: open inline editor
+      log.info('Write your commit message below:')
+      const edited = await editInline('')
+      if (!edited?.trim()) {
+        log.error('Commit message cannot be empty!')
+        process.exit(1)
       }
 
+      const message = edited.trim()
       const committed = await attemptCommit(message)
       if (committed) {
-        log.success(`Committed: ${colors.cyan}${message}${colors.reset}`)
+        log.success(
+          `Committed: ${colors.cyan}${colors.bright}${message.split('\n')[0]}${colors.reset}`
+        )
         return true
       }
 
@@ -1074,9 +930,32 @@ export const handleCommitWorkflow = async (
       ? `${commitType}(${scope}): ${description}`
       : `${commitType}: ${description}`
 
-    const committed = await attemptCommit(commitMsg)
+    // Allow the user to review and edit the assembled message inline
+    const reviewChoice = await select('Review commit message:', [
+      { label: `Use: ${commitMsg}`, value: 'use' },
+      { label: 'Edit inline', value: 'edit' },
+      { label: 'Cancel', value: 'cancel' },
+    ])
+
+    if (reviewChoice === 'cancel') {
+      log.warn('Commit cancelled.')
+      process.exit(0)
+    }
+
+    let finalMsg = commitMsg
+    if (reviewChoice === 'edit') {
+      const edited = await editInline(commitMsg)
+      if (!edited?.trim()) {
+        log.warn('Commit cancelled.')
+        process.exit(0)
+      }
+      finalMsg = edited.trim()
+    }
+
+    const committed = await attemptCommit(finalMsg)
     if (committed) {
-      log.success(`Committed: ${colors.cyan}${commitMsg}${colors.reset}`)
+      const display = finalMsg.split('\n')[0] ?? finalMsg
+      log.success(`Committed: ${colors.cyan}${colors.bright}${display}${colors.reset}`)
     } else {
       log.error('Commit failed or aborted.')
       process.exit(1)

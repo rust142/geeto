@@ -192,10 +192,59 @@ export const getAvailableModelsDetailed = async (): Promise<ModelDetail[] | null
           value: id || name,
         }
       })
-      .filter((m) => m.value.includes('gemini') || m.value.includes('gemma'))
-      .filter((m) => !m.value.includes('robotics'))
-      .filter((m) => !m.value.includes('experimental'))
-      .filter((m) => !m.value.includes('embedding')) // filter to Gemini models only
+      .filter((m: ModelDetail | null) => {
+        if (!m) return false
+
+        const id = m.id.toLowerCase()
+        const name = m.name.toLowerCase()
+
+        // Exclude non-text generation models (blacklist)
+        const excludePatterns = [
+          'vision',
+          'video',
+          'audio',
+          'embedding',
+          'imagen',
+          'text-embedding',
+          'aqa',
+          'whisper',
+          'speech',
+          'tts',
+          'multimodal',
+          'image',
+          'palm',
+          'e2b',
+          'e4b',
+          'banana',
+          'gemma',
+          'computer', // computer use models
+          'robotics', // robotics models
+        ]
+
+        for (const pattern of excludePatterns) {
+          if (id.includes(pattern) || name.includes(pattern)) {
+            return false
+          }
+        }
+
+        // Whitelist: only Gemini models (Flash, Pro, Experimental, Lite variants)
+        const includePatterns = ['gemini']
+
+        const hasValidPattern = includePatterns.some(
+          (pattern) => id.includes(pattern) || name.includes(pattern)
+        )
+
+        if (!hasValidPattern) {
+          return false
+        }
+
+        // Require at least 16384 output tokens for quality commit message generation
+        if (m.outputTokenLimit !== null && m.outputTokenLimit < 16384) {
+          return false
+        }
+
+        return true
+      })
       // eslint-disable-next-line unicorn/no-array-sort
       .sort((a, b) => a.name.localeCompare(b.name)) // sort by name
 

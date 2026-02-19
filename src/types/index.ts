@@ -34,13 +34,27 @@ export interface TrelloConfig {
   boardId: string
 }
 
+export interface TrelloChecklistItem {
+  id: string
+  name: string
+  state?: 'complete' | 'incomplete'
+}
+
+export interface TrelloChecklist {
+  id: string
+  name: string
+  checkItems: TrelloChecklistItem[]
+}
+
 export interface TrelloCard {
   id: string
   name: string
+  desc?: string
   idShort: number
   shortLink: string
   url: string
   idList: string
+  checklists?: TrelloChecklist[]
 }
 
 export interface TrelloList {
@@ -52,6 +66,7 @@ export interface BranchStrategyConfig {
   separator: '-' | '_'
   lastNamingStrategy?: 'title-full' | 'title-ai' | 'ai' | 'trello' | 'manual'
   lastTrelloList?: string // Last selected Trello list ID
+  protectedBranches?: string[] // Custom protected branches (beyond defaults)
 }
 
 export type TaskPlatform = 'trello' | 'none'
@@ -83,4 +98,8 @@ export interface GeminiConfig {
 
 export interface OpenRouterConfig {
   apiKey: string
+}
+
+export interface GitHubConfig {
+  token: string
 }

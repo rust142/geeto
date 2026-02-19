@@ -3,6 +3,7 @@ import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 
 import { execGit } from './exec.js'
+import { getChangedFiles } from './git.js'
 
 export interface BranchNamingResult {
   workingBranch: string
@@ -34,12 +35,54 @@ export const handleBranchNaming = async (
     cancelled: false,
   }
 
-  const diff = execGit('git diff --cached', true)
-  // If there are no staged changes, abort early with a helpful message
+  let diff = execGit('git diff --cached', true)
+  // If there are no staged changes, offer to stage
   if (!diff?.trim()) {
-    log.warn('No staged changes found. Cannot generate a branch name from empty diff. Aborting.')
-    result.cancelled = true
-    return result
+    const changedFiles = getChangedFiles()
+    if (changedFiles.length === 0) {
+      log.warn('No changes found. Cannot generate a branch name. Aborting.')
+      result.cancelled = true
+      return result
+    }
+
+    const stageChoice = (await select('What to stage?', [
+      { label: 'Stage all changes', value: 'all' },
+      { label: 'Already staged', value: 'skip' },
+      { label: 'Continue without staging', value: 'without' },
+      { label: 'Cancel', value: 'cancel' },
+    ])) as 'all' | 'skip' | 'without' | 'cancel'
+
+    switch (stageChoice) {
+      case 'all': {
+        exec('git add -A')
+        log.success('All changes staged')
+        console.log('')
+
+        diff = execGit('git diff --cached', true)
+        if (!diff?.trim()) {
+          log.error('Still no staged changes after staging. Aborting.')
+          result.cancelled = true
+          return result
+        }
+        break
+      }
+      case 'without':
+      case 'cancel': {
+        log.warn('Cancelled.')
+        result.cancelled = true
+        return result
+      }
+      case 'skip': {
+        // Re-check if there are actually staged changes
+        diff = execGit('git diff --cached', true)
+        if (!diff?.trim()) {
+          log.error('No staged changes found. Aborting.')
+          result.cancelled = true
+          return result
+        }
+        break
+      }
+    }
   }
   let correction = ''
   let aiSuffix: string | null = null
@@ -62,7 +105,9 @@ export const handleBranchNaming = async (
     if (correction) {
       console.log('')
     }
-    log.ai(
+
+    const spinner = log.spinner()
+    spinner.start(
       `Generating branch name with ${getAIProviderShortName(aiProvider)}${modelDisplay ? ` (${modelDisplay})` : ''}...`
     )
 
@@ -70,28 +115,35 @@ export const handleBranchNaming = async (
     if (skipRegenerate) {
       // consume the skip once - will reuse existing aiSuffix
       skipRegenerate = false
+      spinner.stop()
     } else {
       aiSuffix = null
-      switch (aiProvider) {
-        case 'gemini': {
-          const { generateBranchName } = await import('../api/gemini.js')
-          const word = diff
-          aiSuffix = await generateBranchName(word, correction, model as GeminiModel)
-          break
-        }
-        case 'copilot': {
-          const { generateBranchName } = await import('../api/copilot.js')
-          const word = diff
-          aiSuffix = await generateBranchName(word, correction, model as CopilotModel)
-          break
-        }
-        case 'openrouter': {
-          const { generateBranchName } = await import('../api/openrouter.js')
-          const word = diff
-          aiSuffix = await generateBranchName(word, correction, model as OpenRouterModel)
+      try {
+        switch (aiProvider) {
+          case 'gemini': {
+            const { generateBranchName } = await import('../api/gemini.js')
+            const word = diff
+            aiSuffix = await generateBranchName(word, correction, model as GeminiModel)
+            break
+          }
+          case 'copilot': {
+            const { generateBranchName } = await import('../api/copilot.js')
+            const word = diff
+            aiSuffix = await generateBranchName(word, correction, model as CopilotModel)
+            break
+          }
+          case 'openrouter': {
+            const { generateBranchName } = await import('../api/openrouter.js')
+            const word = diff
+            aiSuffix = await generateBranchName(word, correction, model as OpenRouterModel)
 
-          break
+            break
+          }
         }
+        spinner.stop()
+      } catch (error) {
+        spinner.stop()
+        throw error
       }
     }
 
@@ -164,7 +216,7 @@ export const handleBranchNaming = async (
     const contextLimitDetected = isContextLimitFailure(aiSuffix)
 
     if (!contextLimitDetected) {
-      log.ai(`Suggested: ${colors.cyan}${currentSuggestion}${colors.reset}`)
+      log.ai(`Suggested: ${colors.cyan}${colors.bright}${currentSuggestion}${colors.reset}`)
       log.info(
         'Incorrect Suggestion? check .geeto/last-ai-suggestion.json (possible AI/context limit).\n'
       )
@@ -291,9 +343,7 @@ export const handleBranchNaming = async (
         }
         case 'correct': {
           correction = askQuestion(
-            'Provide corrections for the AI (e.g., prefer kebab-case, shorten subject): ',
-            undefined,
-            true
+            'Provide corrections for the AI (e.g., prefer kebab-case, shorten subject): '
           )
           continue
         }
@@ -420,7 +470,7 @@ export const handleBranchNaming = async (
     }
 
     log.info(`Creating branch: ${result.workingBranch}`)
-    exec(`git checkout -b "${result.workingBranch}"`)
+    exec(`git checkout -b "${result.workingBranch}"`, true)
     log.success(`Branch created: ${result.workingBranch}`)
   }
 

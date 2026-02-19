@@ -1,4 +1,3 @@
-import path from 'node:path'
 import type { CopilotModel } from '../api/copilot.js'
 import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
@@ -47,9 +46,11 @@ export async function handleTrelloCase(
 ): Promise<TrelloCaseResult> {
   // Returns result explaining what to do next for the branch workflow
   if (!hasTrelloConfig()) {
-    log.info('No Trello configuration found. Setting up Trello integration...')
+    const spinner = log.spinner()
+    spinner.start('Setting up Trello integration...')
     const { setupTrelloConfigInteractive } = await import('../core/trello-setup.js')
     const setupSuccess = setupTrelloConfigInteractive()
+    spinner.stop()
     if (!setupSuccess) {
       log.warn('Trello setup failed or cancelled.')
       return { branchFlowComplete: false, branchMenuShown: false }
@@ -57,9 +58,11 @@ export async function handleTrelloCase(
     log.success('Trello integration configured!')
   }
 
-  log.info('🔍 Checking Trello for tasks...')
+  const spinner = log.spinner()
+  spinner.start('Checking Trello for tasks...')
 
   const trelloLists = await fetchTrelloLists()
+  spinner.stop()
   if (trelloLists.length === 0) {
     log.warn('No Trello lists found on board')
     return { branchFlowComplete: false, branchMenuShown: false }
@@ -91,8 +94,10 @@ export async function handleTrelloCase(
   }
 
   const filterListId = selectedListId === 'all' ? undefined : selectedListId
-  log.info('⏳ Loading Trello cards...')
+  const cardSpinner = log.spinner()
+  cardSpinner.start('Loading Trello cards...')
   const trelloCards = await fetchTrelloCards(filterListId)
+  cardSpinner.stop()
 
   if (trelloCards.length === 0) {
     log.warn('No cards found in selected list')
@@ -124,6 +129,7 @@ export async function handleTrelloCase(
   const namingChoice = await select('Branch naming strategy:', [
     { label: 'Use Trello title (full)', value: 'title-full' },
     { label: 'Use Trello title (AI shortened)', value: 'title-ai' },
+    { label: 'Use Trello title (AI shortened + English)', value: 'title-ai-en' },
     { label: 'Back to card selection', value: 'back' },
   ])
 
@@ -135,7 +141,7 @@ export async function handleTrelloCase(
     const branchSuffix = generateBranchNameFromTrelloTitle(cardData.title, cardData.id, separator)
     const workingBranch = `${defaultPrefix}${branchSuffix}`
     log.success(`Branch name: ${colors.cyan}${workingBranch}${colors.reset}`)
-    if (createBranch(workingBranch, state.currentBranch)) {
+    if (await createBranch(workingBranch, state.currentBranch)) {
       state.workingBranch = workingBranch
       state.step = STEP.BRANCH_CREATED
       saveState(state)
@@ -150,20 +156,62 @@ export async function handleTrelloCase(
     return { branchFlowComplete: false, branchMenuShown: false }
   }
 
-  // title-ai: use AI to shorten Trello title
+  // title-ai or title-ai-en: use AI to shorten Trello title (optionally translate to English first)
+  const shouldTranslateToEnglish = namingChoice === 'title-ai-en'
+
+  // First, ensure AI provider is configured
+  if (!state.aiProvider) {
+    log.warn('No AI provider configured yet.')
+    const providerChoice = await select('Choose AI provider:', [
+      { label: 'Gemini', value: 'gemini' },
+      { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
+      { label: 'OpenRouter', value: 'openrouter' },
+      { label: 'Back to naming strategy', value: 'back' },
+    ])
+
+    if (providerChoice === 'back') {
+      return { branchFlowComplete: false, branchMenuShown: false }
+    }
+
+    const chosenProvider = providerChoice as 'gemini' | 'copilot' | 'openrouter'
+
+    // Let user choose model for the selected provider
+    const chosenModel = await chooseModelForProvider(
+      chosenProvider,
+      'Choose model:',
+      'Back to provider selection'
+    )
+
+    if (!chosenModel || chosenModel === 'back') {
+      return { branchFlowComplete: false, branchMenuShown: false }
+    }
+
+    // Save selected provider and model to state
+    state.aiProvider = chosenProvider
+    if (chosenProvider === 'copilot') {
+      state.copilotModel = chosenModel as CopilotModel
+    } else if (chosenProvider === 'openrouter') {
+      state.openrouterModel = chosenModel as OpenRouterModel
+    } else {
+      state.geminiModel = chosenModel as GeminiModel
+    }
+    saveState(state)
+    log.success(`AI provider set to ${getAIProviderShortName(chosenProvider)}`)
+  }
+
   let correction = ''
   let aiSuffix: string | null = null
   let skipRegenerate = false
 
   while (true) {
-    const aiProvider = (state.aiProvider ?? 'gemini') as 'gemini' | 'copilot' | 'openrouter'
+    const aiProvider = state.aiProvider as 'gemini' | 'copilot' | 'openrouter'
     let modelParam: CopilotModel | OpenRouterModel | GeminiModel
     if (aiProvider === 'copilot') {
       modelParam = state.copilotModel as CopilotModel
     } else if (aiProvider === 'openrouter') {
       modelParam = state.openrouterModel as OpenRouterModel
     } else {
-      modelParam = DEFAULT_GEMINI_MODEL as GeminiModel
+      modelParam = (state.geminiModel ?? DEFAULT_GEMINI_MODEL) as GeminiModel
     }
 
     let model: string | undefined
@@ -175,7 +223,48 @@ export async function handleTrelloCase(
       model = (state.geminiModel as unknown as string) ?? DEFAULT_GEMINI_MODEL
     }
     const modelDisplay = getModelDisplayName(aiProvider, model)
-    log.ai(
+    const spinner = log.spinner()
+
+    let titleToProcess = cardData.title
+
+    // Step 1: Translate to English if requested
+    if (shouldTranslateToEnglish && !skipRegenerate) {
+      spinner.start(
+        `Translating to English using ${getAIProviderShortName(aiProvider)}${
+          modelDisplay ? ` (${modelDisplay})` : ''
+        }...`
+      )
+
+      const translatedTitle = await generateBranchNameWithProvider(
+        aiProvider,
+        `Translate this to English (keep it concise): "${cardData.title}"`,
+        '',
+        state.copilotModel,
+        state.openrouterModel,
+        state.geminiModel
+      )
+
+      // Stop spinner first to ensure error messages appear on new line
+      spinner.stop()
+
+      if (
+        translatedTitle &&
+        !isTransientAIFailure(translatedTitle) &&
+        !isContextLimitFailure(translatedTitle)
+      ) {
+        titleToProcess = translatedTitle
+        log.info(`Translated: ${colors.cyan}${titleToProcess}${colors.reset}`)
+      } else {
+        if (!translatedTitle || translatedTitle.includes('Execution failed')) {
+          log.warn('Translation unavailable, using original title')
+        } else {
+          log.warn('Translation failed, using original title')
+        }
+      }
+    }
+
+    // Step 2: Generate short branch name
+    spinner.start(
       `Generating short branch name using ${getAIProviderShortName(aiProvider)}${
         modelDisplay ? ` (${modelDisplay})` : ''
       }...`
@@ -184,48 +273,17 @@ export async function handleTrelloCase(
     if (skipRegenerate) {
       // consume skip once and reuse previous aiSuffix
       skipRegenerate = false
+      spinner.stop()
     } else {
       aiSuffix = await generateBranchNameWithProvider(
         aiProvider,
-        cardData.title,
+        titleToProcess,
         correction,
         state.copilotModel,
-        state.openrouterModel
+        state.openrouterModel,
+        state.geminiModel
       )
-    }
-
-    // Save the raw AI response so users can inspect it if the suggestion looks wrong
-    try {
-      const fs = await import('node:fs/promises')
-      const outDir = path.join(process.cwd(), '.geeto')
-      await fs.mkdir(outDir, { recursive: true })
-      const payload: Record<string, unknown> = {
-        provider: aiProvider,
-        model: modelParam ?? null,
-        raw: aiSuffix,
-        cardTitle: cardData.title,
-        timestamp: new Date().toISOString(),
-      }
-
-      try {
-        const existing = await fs.readFile(path.join(outDir, 'last-ai-suggestion.json'), 'utf8')
-        const parsed: unknown = JSON.parse(existing || '{}')
-        if (parsed && typeof parsed === 'object' && 'content' in parsed) {
-          payload.content = (parsed as Record<string, unknown>).content
-        }
-      } catch {
-        /* ignore read errors */
-      }
-
-      await fs.writeFile(
-        path.join(outDir, 'last-ai-suggestion.json'),
-        JSON.stringify(payload, null, 2)
-      )
-      log.info(
-        'Incorrect Suggestion? check .geeto/last-ai-suggestion.json (possible AI/context limit).\n'
-      )
-    } catch {
-      log.warn('Failed to write AI suggestion file')
+      spinner.stop()
     }
 
     if (!aiSuffix || isTransientAIFailure(aiSuffix) || isContextLimitFailure(aiSuffix)) {
@@ -253,16 +311,19 @@ export async function handleTrelloCase(
     if (aiSuffix === null) {
       workingBranch = promptManualBranch(state.currentBranch)
     } else {
-      const cleanSuffix = aiSuffix
-        .replaceAll(/[^\w-]/gi, separator)
-        .replace(separator === '-' ? /-+/g : /_+/g, separator)
-        .replace(separator === '-' ? /^-|-$/g : /^_|_$/g, '')
+      const tmp = aiSuffix
+        .replaceAll(/[^A-Za-z0-9]+/g, separator)
+        .replaceAll(/[-_]+/g, separator)
         .toLowerCase()
+
+      let cleanSuffix = tmp
+      while (cleanSuffix.startsWith(separator)) cleanSuffix = cleanSuffix.slice(separator.length)
+      while (cleanSuffix.endsWith(separator)) cleanSuffix = cleanSuffix.slice(0, -separator.length)
 
       workingBranch = `${defaultPrefix}${trelloCardId}${separator}${cleanSuffix}`
       const contextLimitDetected = isContextLimitFailure(aiSuffix)
       if (!contextLimitDetected) {
-        log.ai(`Suggested: ${colors.cyan}${workingBranch}${colors.reset}`)
+        log.ai(`Suggested: ${colors.cyan}${colors.bright}${workingBranch}${colors.reset}`)
         log.info(
           'Incorrect Suggestion? check .geeto/last-ai-suggestion.json (possible AI/context limit).\n'
         )
@@ -301,7 +362,7 @@ export async function handleTrelloCase(
     switch (acceptChoice) {
       case 'accept': {
         // create branch and return
-        if (createBranch(workingBranch, state.currentBranch)) {
+        if (await createBranch(workingBranch, state.currentBranch)) {
           state.workingBranch = workingBranch
           state.step = STEP.BRANCH_CREATED
           saveState(state)
@@ -420,18 +481,16 @@ export async function handleTrelloCase(
         break
       }
       case 'correct': {
-        const suggestionFirstLine = workingBranch.split('\n').find((l) => l.trim()) ?? ''
         correction = askQuestion(
-          'Provide corrections for the AI (e.g., shorten, prefer verb tense): ',
-          suggestionFirstLine,
-          true
+          'Provide corrections for the AI (e.g., shorten, prefer verb tense): '
         )
+        console.log('')
         break
       }
       case 'edit': {
         const edited = askQuestion(`Edit branch (${workingBranch}): `)
         workingBranch = edited || workingBranch
-        if (createBranch(workingBranch, state.currentBranch)) {
+        if (await createBranch(workingBranch, state.currentBranch)) {
           state.workingBranch = workingBranch
           state.step = STEP.BRANCH_CREATED
           saveState(state)

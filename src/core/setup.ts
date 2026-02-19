@@ -34,8 +34,6 @@ export const ensureGitHubCopilot = async (): Promise<boolean> => {
 
   // Fallback: cannot perform interactive setup because helper is missing
   log.warn('Unable to run Copilot setup helper.')
-  log.info('Please install and authenticate the GitHub Copilot CLI manually.')
-  log.info('Install: npm install -g @githubnext/github-copilot-cli')
   log.info('Authenticate: copilot auth')
   return false
 }

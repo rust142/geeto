@@ -4,48 +4,44 @@
 
 import os from 'node:os'
 
+import { findBestCopilotBinary, MIN_COPILOT_VERSION, parseParts } from '../api/copilot-sdk.js'
 import { confirm } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { ensureGeetoIgnored } from '../utils/config.js'
-import { commandExists, exec } from '../utils/exec.js'
+import { commandExists, exec, execAsync } from '../utils/exec.js'
 import { log } from '../utils/logging.js'
 
-// Helper: Check Copilot version and warn if outdated
-export const checkCopilotVersion = (): void => {
-  try {
-    // Check CLI availability
-    try {
-      exec('copilot --version', true)
-      // log.info('GitHub Copilot CLI available')
-      return
-    } catch {
-      // CLI not available
-    }
+/**
+ * Check Copilot CLI version and warn if outdated.
+ * Uses shared utility from copilot-sdk.ts.
+ */
+export const checkCopilotVersion = (): boolean => {
+  const best = findBestCopilotBinary()
 
-    const verOut = exec('copilot --version', true)
-    const m = verOut.match(/v?(\d+\.\d+\.\d+)/)
-    const ver = m?.[1]
-    if (ver) {
-      const current = ver.split('.').map((n) => Number.parseInt(n, 10))
-      while (current.length < 3) {
-        current.push(0)
-      }
-      const major = current[0] ?? 0
-      const minor = current[1] ?? 0
-      const patch = current[2] ?? 0
-      const currentNum = major * 1_000_000 + minor * 1_000 + patch
-      const minNum = 0 * 1e6 + 0 * 1e3 + 382
-      if (currentNum < minNum) {
-        log.warn(
-          'Detected Copilot CLI version is older than v0.0.382 — the latest Copilot models (GPT-5.2-Codex) are only supported on v0.0.382 and above. See: https://github.com/github/copilot-cli/releases'
-        )
-      } else {
-        log.info(`GitHub Copilot CLI version: v${ver}`)
-      }
-    }
-  } catch {
-    // ignore version parse errors
+  if (!best) {
+    return false
   }
+
+  const currentNum = parseParts(best.version)
+  const minNum = parseParts(MIN_COPILOT_VERSION)
+
+  if (currentNum < minNum) {
+    log.error(
+      `Copilot CLI version ${best.version} is outdated. Minimum required: ${MIN_COPILOT_VERSION}`
+    )
+    log.info('The Copilot SDK requires CLI version 0.0.400+ for session/server support.')
+    log.info('Please upgrade with: sudo npm install -g @github/copilot')
+    log.info('Or visit: https://github.com/github/copilot-cli/releases')
+    return false
+  }
+
+  // Update PATH so CopilotClient can find the newest binary
+  const binDir = best.path.slice(0, best.path.lastIndexOf('/'))
+  if (!process.env.PATH?.startsWith(binDir)) {
+    process.env.PATH = `${binDir}:${process.env.PATH}`
+  }
+
+  return true
 }
 
 // Helper: Setup GitHub CLI if needed
@@ -89,12 +85,78 @@ const setupGitHubCLI = (): boolean => {
   }
 
   if (installCommand) {
+    const spinner = log.spinner()
+    spinner.start('Installing GitHub CLI...')
     try {
-      exec(installCommand)
+      exec(installCommand, true)
+      spinner.stop()
+      log.success('GitHub CLI installed successfully')
+
+      // Windows-specific: Add gh to PATH if not found after install
+      if (platform === 'win32' && !commandExists('gh')) {
+        log.info('Adding GitHub CLI to PATH...')
+        let ghPath = ''
+        try {
+          // Common installation paths for gh on Windows
+          const ghPaths = [
+            'C:\\Program Files\\GitHub CLI\\',
+            'C:\\Program Files (x86)\\GitHub CLI\\',
+            `${process.env.LOCALAPPDATA}\\Programs\\GitHub CLI\\`,
+          ]
+
+          for (const p of ghPaths) {
+            try {
+              // Check if gh.exe exists in this path
+              const checkCmd = `powershell -Command "Test-Path '${p}gh.exe'"`
+              const exists = exec(checkCmd, true).trim()
+              if (exists === 'True') {
+                ghPath = p
+                break
+              }
+            } catch {
+              continue
+            }
+          }
+
+          if (ghPath) {
+            // Add to User PATH permanently and refresh current session
+            const addPathCmd = `powershell -Command "$currentPath = [Environment]::GetEnvironmentVariable('PATH', 'User'); if ($currentPath -notlike '*${ghPath}*') { [Environment]::SetEnvironmentVariable('PATH', $currentPath + ';${ghPath}', 'User'); $env:PATH = [Environment]::GetEnvironmentVariable('PATH', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('PATH', 'User') }"`
+            exec(addPathCmd, true)
+
+            // Also update current process PATH
+            if (!process.env.PATH?.includes(ghPath)) {
+              process.env.PATH = `${process.env.PATH};${ghPath}`
+            }
+
+            log.success('GitHub CLI added to PATH')
+          } else {
+            log.warn(
+              'Could not find GitHub CLI installation path. You may need to add it to PATH manually.'
+            )
+          }
+        } catch (error) {
+          log.warn(`Failed to add gh to PATH: ${error}`)
+          if (ghPath) {
+            log.info(`Please add this path to your PATH environment variable manually:`)
+            log.info(`  ${ghPath}`)
+            log.info('Then restart your terminal to apply changes.')
+          } else {
+            log.info('Please find the GitHub CLI installation path and add it to PATH manually.')
+            log.info('Common locations: C:\\Program Files\\GitHub CLI\\')
+          }
+        }
+      }
+
       return true
     } catch (error) {
+      spinner.stop()
       log.error(`Failed to install GitHub CLI: ${error}`)
       log.info('Please install GitHub CLI manually from: https://cli.github.com')
+      if (platform === 'win32') {
+        log.info('After installation, you may need to add it to PATH manually.')
+        log.info('Common installation path: C:\\Program Files\\GitHub CLI\\')
+        log.info('Or check: C:\\Program Files (x86)\\GitHub CLI\\')
+      }
       return false
     }
   }
@@ -234,6 +296,7 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
     ]
   }
 
+  console.log('')
   const choice = await select('Choose GitHub Copilot CLI installation method:', installOptions)
 
   switch (choice) {
@@ -277,82 +340,126 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
   }
 
   if (installCommand) {
-    log.info(`Installing GitHub Copilot CLI with: ${installCommand}`)
+    console.log('')
+
+    const spinner = log.spinner()
+    spinner.start(`Installing Copilot via ${choice}...`)
+
     try {
-      exec(installCommand)
+      // Use async exec to allow spinner to animate during installation
+      await execAsync(installCommand, true)
+      spinner.stop()
       log.success('GitHub Copilot CLI installed successfully!')
-
-      // Add npm global bin to PATH if npm was used
-      if (choice === 'npm') {
-        if (platform === 'win32') {
-          const npmBinPath = String.raw`${os.homedir()}\\AppData\\Roaming\\npm`
-          if (!process.env.PATH?.includes(npmBinPath)) {
-            process.env.PATH = `${process.env.PATH};${npmBinPath}`
-            log.info('Added npm global bin to PATH')
-          }
-        } else {
-          const possibleNpmPaths = [
-            '/usr/local/bin',
-            '/usr/bin',
-            String.raw`${os.homedir()}/.npm-global/bin`,
-          ]
-          let npmPathAdded = false
-          for (const npmPath of possibleNpmPaths) {
-            if (!process.env.PATH?.includes(npmPath)) {
-              process.env.PATH = `${process.env.PATH}:${npmPath}`
-              npmPathAdded = true
-            }
-          }
-          if (npmPathAdded) {
-            log.info('Added npm paths to PATH')
-          }
-        }
-      }
-
-      // For brew, add brew paths
-      if (choice === 'brew') {
-        const brewPaths = ['/opt/homebrew/bin', '/usr/local/bin']
-        let brewPathAdded = false
-        for (const brewPath of brewPaths) {
-          if (!process.env.PATH?.includes(brewPath)) {
-            process.env.PATH = `${process.env.PATH}:${brewPath}`
-            brewPathAdded = true
-          }
-        }
-        if (brewPathAdded) {
-          log.info('Added Homebrew paths to PATH')
-        }
-      }
-
-      // Re-check availability via CLI or SDK-managed client
-      let copilotNowAvailable = commandExists('copilot')
-      try {
-        const sdk = await import('../api/copilot-sdk.js')
-        if (sdk && typeof sdk.isAvailable === 'function') {
-          copilotNowAvailable = copilotNowAvailable || (await sdk.isAvailable())
-        }
-      } catch {
-        // ignore
-      }
-
-      if (!copilotNowAvailable) {
-        throw new Error('GitHub Copilot CLI command not found after installation')
-      }
-
-      log.info('GitHub Copilot CLI is ready to use!')
-
-      checkCopilotVersion()
-
-      ensureGeetoIgnored()
-
-      return true
     } catch (error) {
-      log.error(`Failed to install GitHub Copilot CLI: ${error}`)
-      log.info('You can try installing manually:')
-      log.info('  npm install -g @github/copilot')
-      log.info('Or visit: https://github.com/github/copilot-cli')
+      spinner.stop()
+      // Special handling for npm ENOTEMPTY error
+      const errorMsg = String(error)
+      if (choice === 'npm' && errorMsg.includes('ENOTEMPTY')) {
+        console.log('')
+        log.warn('Directory conflict detected. Retrying with force reinstall...')
+
+        const retrySpinner = log.spinner()
+        retrySpinner.start('Cleaning up and reinstalling...')
+
+        try {
+          // First uninstall, then reinstall
+          await execAsync('npm uninstall -g @github/copilot', true)
+          await execAsync('npm install -g @github/copilot --force', true)
+          retrySpinner.stop()
+          console.log('')
+          log.success('GitHub Copilot CLI installed successfully!')
+        } catch (retryError) {
+          retrySpinner.stop()
+          console.log('')
+          log.error(`Failed to install GitHub Copilot CLI: ${retryError}`)
+          log.info('Manual fix: Run these commands in your terminal:')
+          log.info('  npm uninstall -g @github/copilot')
+          log.info('  npm cache clean --force')
+          log.info('  npm install -g @github/copilot')
+          log.info('Or visit: https://github.com/github/copilot-cli')
+          return false
+        }
+      } else {
+        // Other errors
+        console.log('')
+        log.error(`Failed to install GitHub Copilot CLI: ${error}`)
+        log.info('You can try installing manually:')
+        if (choice === 'npm') {
+          log.info('  npm install -g @github/copilot --force')
+        } else {
+          log.info(`  ${installCommand}`)
+        }
+        log.info('Or visit: https://github.com/github/copilot-cli')
+        return false
+      }
+    }
+
+    // Add npm global bin to PATH if npm was used
+    if (choice === 'npm') {
+      if (platform === 'win32') {
+        const npmBinPath = String.raw`${os.homedir()}\\AppData\\Roaming\\npm`
+        if (!process.env.PATH?.includes(npmBinPath)) {
+          process.env.PATH = `${process.env.PATH};${npmBinPath}`
+          log.info('Added npm global bin to PATH')
+        }
+      } else {
+        const possibleNpmPaths = [
+          '/usr/local/bin',
+          '/usr/bin',
+          String.raw`${os.homedir()}/.npm-global/bin`,
+        ]
+        let npmPathAdded = false
+        for (const npmPath of possibleNpmPaths) {
+          if (!process.env.PATH?.includes(npmPath)) {
+            process.env.PATH = `${process.env.PATH}:${npmPath}`
+            npmPathAdded = true
+          }
+        }
+        if (npmPathAdded) {
+          log.info('Added npm paths to PATH')
+        }
+      }
+    }
+
+    // For brew, add brew paths
+    if (choice === 'brew') {
+      const brewPaths = ['/opt/homebrew/bin', '/usr/local/bin']
+      let brewPathAdded = false
+      for (const brewPath of brewPaths) {
+        if (!process.env.PATH?.includes(brewPath)) {
+          process.env.PATH = `${process.env.PATH}:${brewPath}`
+          brewPathAdded = true
+        }
+      }
+      if (brewPathAdded) {
+        log.info('Added Homebrew paths to PATH')
+      }
+    }
+
+    // Re-check availability via CLI or SDK-managed client
+    let copilotNowAvailable = commandExists('copilot')
+    try {
+      const sdk = await import('../api/copilot-sdk.js')
+      if (sdk && typeof sdk.isAvailable === 'function') {
+        copilotNowAvailable = copilotNowAvailable || (await sdk.isAvailable())
+      }
+    } catch {
+      // ignore
+    }
+
+    if (!copilotNowAvailable) {
+      log.error('GitHub Copilot CLI command not found after installation')
+      log.info('You may need to restart your terminal for PATH changes to take effect.')
       return false
     }
+
+    log.info('GitHub Copilot CLI is ready to use!')
+
+    checkCopilotVersion()
+
+    ensureGeetoIgnored()
+
+    return true
   }
 
   // Check if Copilot CLI is working after installation
