@@ -1,12 +1,14 @@
-# Release v0.3.0
+# Release v0.3.2
 
-**Release date:** February 19, 2026
-**Previous version:** v0.2.0
+**Release date:** February 20, 2026
+**Previous version:** v0.3.1
 
 ## What's New?
 
 ### New Features
 
+- add build & publish binaries workflow and packaging
+- add progress bar for git push in release workflow
 - add inline terminal editor for editing files and commits
 - add boxed UI, file status badges, and step progress
 - add short flag aliases and improve help output
@@ -69,12 +71,16 @@
 
 ### Other Improvements
 
+- v0.3.1
+- v0.3.0
 - add --no-verify to release commit and use H2 changelog header
 - remove interactive UI tips and noisy logs
+- release v0.1.1
 - move demo image and add demo link
 - add demo badge and demo image, remove duplicate section
 - replace asciicast badge with GitHub-hosted demo image
 - add Demo section with asciinema demo
+- release v0.1.0
 - release v0.1.0-beta.3
 - remove bin from published files
 - include bin and package.json, add pinst scripts, regen lock
