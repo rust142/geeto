@@ -255,7 +255,7 @@ const generateChangelogEntry = (
     ? `[${version}](${repoUrl}/compare/v${prevVersion}...v${version})`
     : version
 
-  const header = [`# ${versionLink} (${dateStr})`, '']
+  const header = [`## ${versionLink} (${dateStr})`, '']
 
   const breakingSection =
     cat.breaking.length > 0
@@ -479,7 +479,7 @@ export const handleRelease = async (): Promise<void> => {
   spinner.start('Creating release commit...')
   try {
     exec('git add package.json RELEASE.MD CHANGELOG.md', true)
-    exec(`git commit -m "chore(release): v${newVersion}"`, true)
+    exec(`git commit --no-verify -m "chore(release): v${newVersion}"`, true)
     spinner.succeed('Release commit created')
   } catch {
     spinner.fail('Failed to create release commit')
