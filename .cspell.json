@@ -71,7 +71,8 @@
     "setx",
     "LOGFILE",
     "asciicast",
-    "committerdate"
+    "committerdate",
+    "numstat"
   ],
   "ignorePaths": [
     "node_modules/**",
