@@ -17,6 +17,7 @@ import {
   getBranchStrategyConfig,
   saveBranchStrategyConfig,
 } from '../utils/config.js'
+import { getStepProgress } from '../utils/display.js'
 import { exec, execGit } from '../utils/exec.js'
 import {
   getBranchPrefix,
@@ -33,7 +34,7 @@ export const handleBranchCreationWorkflow = async (
   opts?: { suppressStep?: boolean; suppressConfirm?: boolean }
 ): Promise<{ branchName: string; created: boolean }> => {
   if (!opts?.suppressStep) {
-    log.step('Step 2: Create Branch')
+    log.step(`Step 2: Create Branch  ${getStepProgress(2)}`)
   }
 
   const defaultPrefix = getBranchPrefix(state.currentBranch)

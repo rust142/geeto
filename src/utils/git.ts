@@ -115,6 +115,22 @@ export const getChangedFiles = (): string[] => {
 }
 
 /**
+ * Get changed files with their git status indicator.
+ * Returns `{ status, file }` where status is the porcelain XY flags
+ * (e.g. "M ", " M", "??", "A ", "D ", etc.).
+ */
+export const getChangedFilesWithStatus = (): { status: string; file: string }[] => {
+  const raw = execSilent('git status --porcelain')
+  return raw
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => ({
+      status: line.slice(0, 2),
+      file: line.slice(3),
+    }))
+}
+
+/**
  * Get staged files
  */
 export const getStagedFiles = (): string[] => {

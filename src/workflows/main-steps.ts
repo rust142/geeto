@@ -4,6 +4,8 @@ import { handleCommitWorkflow } from './commit.js'
 import { confirm, ProgressBar } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { STEP } from '../core/constants.js'
+import { colors } from '../utils/colors.js'
+import { getStepProgress } from '../utils/display.js'
 import { exec, execAsync } from '../utils/exec.js'
 import { safeCheckout, safeMerge } from '../utils/git-errors.js'
 import { getCurrentBranch, pushWithRetry } from '../utils/git.js'
@@ -16,7 +18,7 @@ export async function handlePush(
 ): Promise<void> {
   if (state.step < STEP.PUSHED || opts?.force) {
     if (!opts?.suppressStep) {
-      log.step('Step 4: Push to Remote')
+      log.step(`Step 4: Push to Remote  ${getStepProgress(4)}`)
     }
 
     let shouldPush: boolean
@@ -147,7 +149,7 @@ export async function handleMerge(
   // Return the feature branch name used for later cleanup
   if (state.step < STEP.MERGED) {
     if (!opts?.suppressStep) {
-      log.step('Step 5: Merge to Target Branch')
+      log.step(`Step 5: Merge to Target  ${getStepProgress(5)}`)
     }
 
     const featureBranch = getCurrentBranch()
@@ -261,7 +263,9 @@ export async function handleMerge(
           await safeCheckout(featureBranch)
           return featureBranch
         }
-        log.success(`Merged ${featureBranch} into ${targetBranch} with --no-ff`)
+        log.success(
+          `${colors.cyan}${featureBranch}${colors.reset} → merged into ${colors.cyan}${targetBranch}${colors.reset}`
+        )
       } else {
         // Squash commits on feature branch first
         const commitCount = Number.parseInt(
@@ -282,7 +286,9 @@ export async function handleMerge(
           await safeCheckout(featureBranch)
           return featureBranch
         }
-        log.success(`Squashed ${featureBranch} and merged into ${targetBranch} with --no-ff`)
+        log.success(
+          `${colors.cyan}${featureBranch}${colors.reset} → squashed & merged into ${colors.cyan}${targetBranch}${colors.reset}`
+        )
       }
 
       console.log('')
@@ -299,9 +305,9 @@ export async function handleMerge(
           /* ignore */
         }
         if (remoteUrl) {
-          log.info(`Pushing ${targetBranch} to: ${remoteUrl}`)
+          log.info(`Push → ${colors.cyan}${targetBranch}${colors.reset} → ${remoteUrl}`)
         } else {
-          log.info(`Pushing ${targetBranch} to remote`)
+          log.info(`Push → ${colors.cyan}${targetBranch}${colors.reset} → origin`)
         }
 
         console.log('')
@@ -371,7 +377,7 @@ export async function handleMerge(
 
 export async function handleCleanup(featureBranch: string, state: GeetoState): Promise<void> {
   if (state.step < STEP.CLEANUP) {
-    log.step('Step 6: Cleanup')
+    log.step(`Step 6: Cleanup  ${getStepProgress(6)}`)
 
     if (featureBranch && featureBranch !== state.targetBranch) {
       // Protect canonical branches from accidental deletion

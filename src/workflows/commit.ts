@@ -13,6 +13,7 @@ import { select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
 import { extractCommitTitle, getCommitTypes, normalizeAIOutput } from '../utils/commit-helpers.js'
 import { DEFAULT_GEMINI_MODEL } from '../utils/config.js'
+import { getStepProgress } from '../utils/display.js'
 import { execGit } from '../utils/exec.js'
 import {
   chooseModelForProvider,
@@ -132,7 +133,7 @@ export const handleCommitWorkflow = async (
   opts?: { suppressStep?: boolean; suppressConfirm?: boolean }
 ): Promise<boolean> => {
   if (!opts?.suppressStep) {
-    log.step('Step 3: Commit')
+    log.step(`Step 3: Commit  ${getStepProgress(3)}`)
   }
 
   const aiProvider = (state.aiProvider ?? 'gemini') as
