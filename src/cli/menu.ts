@@ -40,56 +40,103 @@ export const select = async (question: string, options: SelectOption[]): Promise
       return { start, end }
     }
 
+    /**
+     * Strip ANSI escape codes to get visible text length
+     */
+    const stripAnsi = (str: string): string =>
+      str.replaceAll(/\u001B\[\d*;?\d*m|\u001B\]8;;[^\u0007]*\u0007/g, '')
+
+    const renderItem = (opt: SelectOption, idx: number) => {
+      const prefix = idx === selectedIndex ? `${colors.cyan}❯${colors.reset}` : ' '
+
+      // Truncate label to terminal width
+      const cols = process.stdout.columns || 80
+      const prefixLen = 2 // "❯ "
+      const maxLabelLen = cols - prefixLen - 1
+      const visibleLabel = stripAnsi(opt.label)
+      let displayLabel: string
+      if (visibleLabel.length > maxLabelLen && maxLabelLen > 3) {
+        const truncated = visibleLabel.slice(0, maxLabelLen - 1) + '…'
+        displayLabel =
+          idx === selectedIndex
+            ? `${colors.cyan}${colors.bright}${truncated}${colors.reset}`
+            : `${colors.gray}${truncated}${colors.reset}`
+      } else {
+        displayLabel =
+          idx === selectedIndex
+            ? `${colors.cyan}${colors.bright}${opt.label}${colors.reset}`
+            : `${colors.gray}${opt.label}${colors.reset}`
+      }
+      return `${prefix} ${displayLabel}`
+    }
+
+    // Track rendered line count for accurate clearing
+    let lastRenderedLines = 0
+
     const renderMenu = () => {
       const { start, end } = getVisibleRange()
-      const visibleCount = end - start
 
-      // Clear only the rendered lines (visible items + hint + search input + blank line)
-      const linesToClear = visibleCount + (searchMode ? 3 : 2)
-      for (let i = 0; i < linesToClear; i++) {
+      // If search mode, cursor is on the search input line (no newline)
+      if (searchMode) {
+        process.stdout.write('\u001B[2K\r') // Clear current search input line
+      }
+
+      // Clear previous render
+      for (let i = 0; i < lastRenderedLines; i++) {
         process.stdout.write('\u001B[1A\u001B[2K')
       }
 
-      // Re-render hint and items (question stays at top)
-      const hintText = searchMode
-        ? `  (Esc cancel search, Enter select)`
-        : `  (↑↓/jk arrows, / search, Enter select, 'c' clear, 'q' quit)`
-      console.log(`${colors.gray}${hintText}${colors.reset}`)
-
-      if (searchMode) {
-        console.log(`${colors.cyan}/ search:${colors.reset} ${searchQuery}`)
-      }
+      let linesRendered = 0
 
       console.log('') // Blank line
+      linesRendered++
 
       for (let idx = start; idx < end; idx++) {
         const opt = filteredOptions[idx]
         if (!opt) continue
-        const prefix = idx === selectedIndex ? `${colors.cyan}❯${colors.reset}` : ' '
-        const label =
-          idx === selectedIndex
-            ? `${colors.cyan}${colors.bright}${opt.label}${colors.reset}`
-            : `${colors.gray}${opt.label}${colors.reset}`
-        console.log(`${prefix} ${label}`)
+        console.log(renderItem(opt, idx))
+        linesRendered++
       }
+
+      // Hint + search at bottom
+      console.log('') // Separator
+      linesRendered++
+      const hintText = searchMode
+        ? `  (Esc cancel search, Enter select)`
+        : `  (↑↓/jk arrows, / search, Enter select, 'c' clear, 'q' quit)`
+      console.log(`${colors.gray}${hintText}${colors.reset}`)
+      linesRendered++
+
+      if (searchMode) {
+        process.stdout.write(`${colors.cyan}/ search:${colors.reset} ${searchQuery}`)
+      }
+
+      lastRenderedLines = linesRendered
     }
 
-    // Initial render (question + hint + items)
+    // Initial render (question + items + hint)
     console.log(`${colors.cyan}?${colors.reset} ${question}`)
-    console.log(
-      `${colors.gray}  (↑↓/jk arrows, / search, Enter select, 'c' clear, 'q' quit)${colors.reset}\n`
-    )
+    {
+      let initLines = 0
+      console.log('') // Blank line
+      initLines++
 
-    const { start, end } = getVisibleRange()
-    for (let idx = start; idx < end; idx++) {
-      const opt = filteredOptions[idx]
-      if (!opt) continue
-      const prefix = idx === selectedIndex ? `${colors.cyan}❯${colors.reset}` : ' '
-      const label =
-        idx === selectedIndex
-          ? `${colors.cyan}${colors.bright}${opt.label}${colors.reset}`
-          : `${colors.gray}${opt.label}${colors.reset}`
-      console.log(`${prefix} ${label}`)
+      const { start, end } = getVisibleRange()
+      for (let idx = start; idx < end; idx++) {
+        const opt = filteredOptions[idx]
+        if (!opt) continue
+        console.log(renderItem(opt, idx))
+        initLines++
+      }
+
+      // Hint at bottom
+      console.log('')
+      initLines++
+      console.log(
+        `${colors.gray}  (↑↓/jk arrows, / search, Enter select, 'c' clear, 'q' quit)${colors.reset}`
+      )
+      initLines++
+      lastRenderedLines = initLines
     }
 
     if (process.stdin.isTTY) {
@@ -206,21 +253,24 @@ export const select = async (question: string, options: SelectOption[]): Promise
         case 'C': {
           console.clear()
           console.log(`${colors.cyan}?${colors.reset} ${question}`)
-          console.log(
-            `${colors.gray}  (↑↓/jk arrows, / search, Enter select, 'c' clear, 'q' quit)${colors.reset}\n`
-          )
+          let clearLines = 0
+          console.log('')
+          clearLines++
 
           const { start, end } = getVisibleRange()
           for (let idx = start; idx < end; idx++) {
             const opt = filteredOptions[idx]
             if (!opt) continue
-            const prefix = idx === selectedIndex ? `${colors.cyan}❯${colors.reset}` : ' '
-            const label =
-              idx === selectedIndex
-                ? `${colors.cyan}${colors.bright}${opt.label}${colors.reset}`
-                : `${colors.gray}${opt.label}${colors.reset}`
-            console.log(`${prefix} ${label}`)
+            console.log(renderItem(opt, idx))
+            clearLines++
           }
+          console.log('')
+          clearLines++
+          console.log(
+            `${colors.gray}  (↑↓/jk arrows, / search, Enter select, 'c' clear, 'q' quit)${colors.reset}`
+          )
+          clearLines++
+          lastRenderedLines = clearLines
           break
         }
       }
