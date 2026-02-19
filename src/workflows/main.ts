@@ -117,7 +117,10 @@ export const main = async (opts?: {
         // Format saved checkpoint timestamp using system locale when available.
         const formattedTimestamp = formatTimestampLocale(savedState.timestamp)
         log.warn(`Found saved checkpoint from: ${formattedTimestamp}`)
-        log.info(`Last step: ${getStepName(savedState.step)}`)
+        const stepName = getStepName(savedState.step)
+        if (stepName !== 'Unknown') {
+          log.info(`Last step: ${stepName}`)
+        }
       }
 
       // Use the real git branch at startup so manual `git checkout` is reflected
@@ -245,9 +248,12 @@ export const main = async (opts?: {
               )
             }
           }
-          console.log(
-            `${colors.cyan}│${colors.reset} Resuming from: ${colors.cyan}${getStepName(savedState.step)}${colors.reset}`
-          )
+          const resumeStepName = getStepName(savedState.step)
+          if (resumeStepName !== 'Unknown') {
+            console.log(
+              `${colors.cyan}│${colors.reset} Resuming from: ${colors.cyan}${resumeStepName}${colors.reset}`
+            )
+          }
           console.log(
             `${colors.cyan}└─────────────────────────────────────────────────────────┘${colors.reset}`
           )
