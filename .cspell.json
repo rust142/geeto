@@ -72,7 +72,9 @@
     "LOGFILE",
     "asciicast",
     "committerdate",
-    "numstat"
+    "numstat",
+    "unpushed",
+    "Unpushed"
   ],
   "ignorePaths": [
     "node_modules/**",

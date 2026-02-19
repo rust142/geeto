@@ -29,6 +29,8 @@ let showCleanup = false
 let showSwitch = false
 let showCompare = false
 let showCherryPick = false
+let showPR = false
+let showIssue = false
 let showTrello = false
 let showTrelloLists = false
 let showTrelloGenerate = false
@@ -39,6 +41,7 @@ let settingsAction:
   | 'gemini'
   | 'openrouter'
   | 'trello'
+  | 'github'
   | undefined
 for (const arg of argv) {
   if (arg === '-c' || arg === '--commit') {
@@ -90,6 +93,9 @@ for (const arg of argv) {
   if (arg === '--setup-trello') {
     settingsAction = 'trello'
   }
+  if (arg === '--setup-github') {
+    settingsAction = 'github'
+  }
   if (arg === '--cleanup' || arg === '-cl') {
     showCleanup = true
   }
@@ -101,6 +107,12 @@ for (const arg of argv) {
   }
   if (arg === '--cherry-pick' || arg === '-cp') {
     showCherryPick = true
+  }
+  if (arg === '--pr') {
+    showPR = true
+  }
+  if (arg === '--issue') {
+    showIssue = true
   }
   if (arg === '--trello') {
     showTrello = true
@@ -135,6 +147,8 @@ const validFlags = new Set([
   '-cmp',
   '--cherry-pick',
   '-cp',
+  '--pr',
+  '--issue',
   '-f',
   '--fresh',
   '-r',
@@ -149,6 +163,7 @@ const validFlags = new Set([
   '--setup-gemini',
   '--setup-openrouter',
   '--setup-trello',
+  '--setup-github',
   '--trello',
   '--trello-list',
   '--trello-generate',
@@ -186,6 +201,8 @@ for (const arg of argv) {
     console.log('  -sw, --switch        Interactive branch switcher with fuzzy search')
     console.log('  -cmp, --compare      Compare current branch with another branch')
     console.log('  -cp, --cherry-pick   Interactive cherry-pick commits from another branch')
+    console.log('  --pr                 Create a GitHub Pull Request')
+    console.log('  --issue              Create a GitHub Issue')
     console.log('  -f, --fresh          Start fresh workflow (ignore checkpoint)')
     console.log('  -r, --resume         Resume from checkpoint (default if exists)')
     console.log('  -v, --version        Show version')
@@ -198,6 +215,7 @@ for (const arg of argv) {
     console.log('  --setup-gemini       Setup Gemini AI integration')
     console.log('  --setup-openrouter   Setup OpenRouter AI integration')
     console.log('  --setup-trello       Setup Trello integration')
+    console.log('  --setup-github       Setup GitHub integration (token for PR/issues)')
     console.log('')
     console.log('Trello:')
     console.log('  --trello             Open Trello menu')
@@ -246,6 +264,28 @@ for (const arg of argv) {
       process.exit(0)
     } catch (error) {
       console.error('Cherry-pick error:', error)
+      process.exit(1)
+    }
+  }
+
+  if (showPR) {
+    try {
+      const { handleCreatePR } = await import('./workflows/pr.js')
+      await handleCreatePR()
+      process.exit(0)
+    } catch (error) {
+      console.error('PR error:', error)
+      process.exit(1)
+    }
+  }
+
+  if (showIssue) {
+    try {
+      const { handleCreateIssue } = await import('./workflows/issue.js')
+      await handleCreateIssue()
+      process.exit(0)
+    } catch (error) {
+      console.error('Issue error:', error)
       process.exit(1)
     }
   }
@@ -316,6 +356,11 @@ for (const arg of argv) {
         }
         case 'trello': {
           await handleTrelloSetting()
+          break
+        }
+        case 'github': {
+          const { setupGithubConfigInteractive } = await import('./core/github-setup.js')
+          setupGithubConfigInteractive()
           break
         }
       }
