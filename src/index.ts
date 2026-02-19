@@ -33,6 +33,7 @@ let showPR = false
 let showIssue = false
 let showHistory = false
 let showStash = false
+let showAmend = false
 let showTrello = false
 let showTrelloLists = false
 let showTrelloGenerate = false
@@ -122,6 +123,9 @@ for (const arg of argv) {
   if (arg === '--stash') {
     showStash = true
   }
+  if (arg === '--amend') {
+    showAmend = true
+  }
   if (arg === '--trello') {
     showTrello = true
   }
@@ -160,6 +164,7 @@ const validFlags = new Set([
   '--log',
   '-lg',
   '--stash',
+  '--amend',
   '-f',
   '--fresh',
   '-r',
@@ -216,6 +221,7 @@ for (const arg of argv) {
     console.log('  --issue              Create a GitHub Issue')
     console.log('  -lg, --log           View commit history with elegant timeline')
     console.log('  --stash              Interactive stash manager')
+    console.log('  --amend              Amend the last commit (message, files, or both)')
     console.log('  -f, --fresh          Start fresh workflow (ignore checkpoint)')
     console.log('  -r, --resume         Resume from checkpoint (default if exists)')
     console.log('  -v, --version        Show version')
@@ -321,6 +327,17 @@ for (const arg of argv) {
       process.exit(0)
     } catch (error) {
       console.error('Stash error:', error)
+      process.exit(1)
+    }
+  }
+
+  if (showAmend) {
+    try {
+      const { handleAmend } = await import('./workflows/amend.js')
+      await handleAmend()
+      process.exit(0)
+    } catch (error) {
+      console.error('Amend error:', error)
       process.exit(1)
     }
   }
