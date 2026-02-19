@@ -1,7 +1,5 @@
 # Changelog
 
-## [0.3.0](https://github.com/rust142/geeto/compare/v0.2.0...v0.3.0) (2026-02-19)
-
 ### Features
 
 * feat(cli): add inline terminal editor for editing files and commits ([9192e84](https://github.com/rust142/geeto/commit/9192e84))
