@@ -68,7 +68,9 @@
     "phpstorm",
     "rubymine",
     "USERPROFILE",
-    "setx"
+    "setx",
+    "LOGFILE",
+    "asciicast"
   ],
   "ignorePaths": [
     "node_modules/**",

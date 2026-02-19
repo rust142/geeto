@@ -71,7 +71,7 @@ export const log = {
   spinner: () => new Spinner(),
   banner: () => {
     console.log(
-      `${colors.cyan}${colors.bright}Geeto v1.1.0${colors.reset} ${colors.gray}— AI-Powered Git Workflow Automation${colors.reset}`
+      `${colors.cyan}${colors.bright}Geeto${colors.reset} ${colors.gray}— AI-Powered Git Workflow Automation${colors.reset}`
     )
   },
 } as const

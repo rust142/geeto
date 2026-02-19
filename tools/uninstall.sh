@@ -72,7 +72,6 @@ else
             rm -f "$BINARY_PATH"
             echo -e "${GREEN}✓ Removed ${BINARY_PATH}${NC}"
         else
-            echo -e "${YELLOW}Need sudo permission to remove from ${INSTALL_DIR}${NC}"
             sudo rm -f "$BINARY_PATH"
             echo -e "${GREEN}✓ Removed ${BINARY_PATH}${NC}"
         fi
@@ -86,7 +85,7 @@ echo ""
 
 if [ "$FOUND" = true ]; then
     echo -e "${GREEN}════════════════════════════════════════${NC}"
-    echo -e "${GREEN}  Uninstallation successful! 👋${NC}"
+    echo -e "${GREEN}  Uninstallation successful! ${NC}"
     echo -e "${GREEN}════════════════════════════════════════${NC}"
 else
     echo -e "${YELLOW}════════════════════════════════════════${NC}"
