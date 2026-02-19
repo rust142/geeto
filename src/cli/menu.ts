@@ -262,6 +262,12 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
       return { start, end }
     }
 
+    /**
+     * Strip ANSI escape codes to get visible text length
+     */
+    const stripAnsi = (str: string): string =>
+      str.replaceAll(/\u001B\[\d*;?\d*m|\u001B\]8;;[^\u0007]*\u0007/g, '')
+
     const renderItem = (opt: SelectOption, idx: number) => {
       const cursor = idx === selectedIndex ? `${colors.cyan}❯${colors.reset}` : ' '
       const box = checked.has(opt.value)
@@ -269,16 +275,34 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
         : `${colors.gray}○${colors.reset}`
       // Show 1-based number for quick range selection
       const num = `${colors.gray}${String(idx + 1).padStart(2, ' ')}${colors.reset}`
-      const label =
-        idx === selectedIndex
-          ? `${colors.cyan}${colors.bright}${opt.label}${colors.reset}`
-          : `${colors.gray}${opt.label}${colors.reset}`
-      return `${cursor} ${box} ${num} ${label}`
+
+      // Truncate label to fit terminal width
+      const cols = process.stdout.columns || 80
+      const prefixLen = 5 + Math.max(2, String(idx + 1).length) // "❯ ◉ XX "
+      const maxLabelLen = cols - prefixLen - 1
+      const visibleLabel = stripAnsi(opt.label)
+      let displayLabel = opt.label
+      if (visibleLabel.length > maxLabelLen && maxLabelLen > 3) {
+        // Truncate the visible text and re-apply color
+        const truncated = visibleLabel.slice(0, maxLabelLen - 1) + '…'
+        displayLabel =
+          idx === selectedIndex
+            ? `${colors.cyan}${colors.bright}${truncated}${colors.reset}`
+            : `${colors.gray}${truncated}${colors.reset}`
+      } else {
+        displayLabel =
+          idx === selectedIndex
+            ? `${colors.cyan}${colors.bright}${opt.label}${colors.reset}`
+            : `${colors.gray}${opt.label}${colors.reset}`
+      }
+      return `${cursor} ${box} ${num} ${displayLabel}`
     }
+
+    // Track how many lines the previous render produced (for accurate clearing)
+    let lastRenderedLines = 0
 
     const renderMenu = () => {
       const { start, end } = getVisibleRange()
-      const visibleCount = end - start
 
       // If range mode, cursor is on the range input line (no newline was written)
       // First clear current line, then go up for the rest
@@ -286,32 +310,36 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
         process.stdout.write('\u001B[2K\r') // Clear current range input line
       }
 
-      // Clear rendered lines: count line + blank + items + separator + hint + optional search
-      const extraLines = searchMode ? 1 : 0
-      // +4 = count + blank + separator + hint
-      const linesToClear = visibleCount + 4 + extraLines
-      for (let i = 0; i < linesToClear; i++) {
+      // Clear exactly the number of lines the PREVIOUS render produced
+      for (let i = 0; i < lastRenderedLines; i++) {
         process.stdout.write('\u001B[1A\u001B[2K')
       }
 
+      let linesRendered = 0
+
       if (searchMode) {
         console.log(`${colors.cyan}/ search:${colors.reset} ${searchQuery}`)
+        linesRendered++
       }
 
       // Count line
       console.log(
         `${colors.gray}  Selected: ${colors.cyan}${checked.size}${colors.gray}/${options.length}${colors.reset}`
       )
+      linesRendered++
 
       console.log('') // Blank line
+      linesRendered++
 
       for (let idx = start; idx < end; idx++) {
         const opt = filteredOptions[idx]
         if (!opt) continue
         console.log(renderItem(opt, idx))
+        linesRendered++
       }
 
       console.log('') // Separator before hint
+      linesRendered++
 
       // Hint line at bottom
       const hintText = rangeMode
@@ -320,32 +348,44 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
           ? `  (Esc cancel search, Space toggle, Enter confirm)`
           : `  (↑↓/jk Space toggle, 'a' all, 'n' none, '#' range, / search, Enter confirm, 'q' quit)`
       console.log(`${colors.gray}${hintText}${colors.reset}`)
+      linesRendered++
 
       // Range input at the very bottom (no newline so cursor stays at end)
       if (rangeMode) {
         process.stdout.write(`${colors.cyan}# range:${colors.reset} ${rangeQuery}`)
       }
+
+      lastRenderedLines = linesRendered
     }
 
     // Initial render
     console.log(`${colors.cyan}?${colors.reset} ${question}`)
-    console.log(
-      `${colors.gray}  Selected: ${colors.cyan}${checked.size}${colors.gray}/${options.length}${colors.reset}`
-    )
-    console.log('')
+    {
+      let initLines = 0
+      console.log(
+        `${colors.gray}  Selected: ${colors.cyan}${checked.size}${colors.gray}/${options.length}${colors.reset}`
+      )
+      initLines++
+      console.log('')
+      initLines++
 
-    const { start, end } = getVisibleRange()
-    for (let idx = start; idx < end; idx++) {
-      const opt = filteredOptions[idx]
-      if (!opt) continue
-      console.log(renderItem(opt, idx))
+      const { start, end } = getVisibleRange()
+      for (let idx = start; idx < end; idx++) {
+        const opt = filteredOptions[idx]
+        if (!opt) continue
+        console.log(renderItem(opt, idx))
+        initLines++
+      }
+
+      // Hint at bottom
+      console.log('')
+      initLines++
+      console.log(
+        `${colors.gray}  (↑↓/jk Space toggle, 'a' all, 'n' none, '#' range, / search, Enter confirm, 'q' quit)${colors.reset}`
+      )
+      initLines++
+      lastRenderedLines = initLines
     }
-
-    // Hint at bottom
-    console.log('')
-    console.log(
-      `${colors.gray}  (↑↓/jk Space toggle, 'a' all, 'n' none, '#' range, / search, Enter confirm, 'q' quit)${colors.reset}`
-    )
 
     if (process.stdin.isTTY) {
       process.stdin.setRawMode(true)
@@ -578,21 +618,28 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
         case 'C': {
           console.clear()
           console.log(`${colors.cyan}?${colors.reset} ${question}`)
+          let clearLines = 0
           console.log(
             `${colors.gray}  Selected: ${colors.cyan}${checked.size}${colors.gray}/${options.length}${colors.reset}`
           )
+          clearLines++
           console.log('')
+          clearLines++
 
           const { start, end } = getVisibleRange()
           for (let idx = start; idx < end; idx++) {
             const opt = filteredOptions[idx]
             if (!opt) continue
             console.log(renderItem(opt, idx))
+            clearLines++
           }
           console.log('')
+          clearLines++
           console.log(
             `${colors.gray}  (↑↓/jk Space toggle, 'a' all, 'n' none, '#' range, / search, Enter confirm, 'q' quit)${colors.reset}`
           )
+          clearLines++
+          lastRenderedLines = clearLines
           break
         }
       }

@@ -9,7 +9,7 @@ import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 
 import { confirm } from '../cli/input.js'
-import { select } from '../cli/menu.js'
+import { multiSelect, select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
 import { exec } from '../utils/exec.js'
 import { getCurrentBranch, getStagedFiles } from '../utils/git.js'
@@ -70,6 +70,82 @@ function collectSecurityData(): { diff: string; files: string[]; hasDependencies
     diff: truncatedDiff,
     files,
     hasDependencies,
+  }
+}
+
+/**
+ * Collect data from specific commits for security analysis
+ */
+function collectCommitData(commitHashes: string[]): {
+  diff: string
+  files: string[]
+  hasDependencies: boolean
+} {
+  let diff = ''
+  const allFiles = new Set<string>()
+
+  for (const hash of commitHashes) {
+    try {
+      const commitDiff = exec(`git show ${hash} --format="" --patch`, true)
+      diff += commitDiff + '\n'
+    } catch {
+      // skip if commit can't be read
+    }
+
+    try {
+      const files = exec(`git show ${hash} --format="" --name-only`, true)
+        .split('\n')
+        .filter(Boolean)
+      for (const f of files) allFiles.add(f)
+    } catch {
+      // skip
+    }
+  }
+
+  const files = [...allFiles]
+
+  // Truncate if too long
+  const truncatedDiff =
+    diff.length > 10000 ? diff.slice(0, 10000) + '\n\n... (diff truncated)' : diff
+
+  const hasDependencies = files.some(
+    (f) =>
+      f.includes('package.json') ||
+      f.includes('requirements.txt') ||
+      f.includes('Gemfile') ||
+      f.includes('pom.xml') ||
+      f.includes('go.mod')
+  )
+
+  return { diff: truncatedDiff, files, hasDependencies }
+}
+
+/**
+ * Get recent commits for selection
+ */
+function getRecentCommits(count = 30): Array<{
+  hash: string
+  shortHash: string
+  subject: string
+  date: string
+}> {
+  try {
+    const logOutput = exec(`git log -${count} --no-merges --format="%H|%h|%s|%cr"`, true)
+    return logOutput
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => {
+        const [hash, shortHash, subject, date] = line.split('|')
+        return {
+          hash: hash ?? '',
+          shortHash: shortHash ?? '',
+          subject: subject ?? '',
+          date: date ?? '',
+        }
+      })
+      .filter((c) => c.hash !== '')
+  } catch {
+    return []
   }
 }
 
@@ -470,6 +546,7 @@ export async function showSecurityGateMenu(): Promise<void> {
   const scanChoice = await select('What would you like to analyze?', [
     { label: 'Staged changes', value: 'staged' },
     { label: 'All uncommitted changes', value: 'all' },
+    { label: 'Specific commits', value: 'commits' },
     { label: 'Cancel', value: 'cancel' },
   ])
 
@@ -477,11 +554,48 @@ export async function showSecurityGateMenu(): Promise<void> {
     return
   }
 
-  // Collect data
-  const spinner = log.spinner()
-  spinner.start('Collecting code changes...')
-  const scanData = collectSecurityData()
-  spinner.stop()
+  let scanData: { diff: string; files: string[]; hasDependencies: boolean }
+
+  if (scanChoice === 'commits') {
+    // Fetch recent commits and let user pick
+    const commits = getRecentCommits()
+
+    if (commits.length === 0) {
+      log.warn('No commits found.')
+      return
+    }
+
+    console.log('')
+    log.info(
+      `${colors.cyan}💡 Tip:${colors.reset} Use ${colors.green}Space${colors.reset} to toggle, ${colors.green}'#'${colors.reset} range, ${colors.green}Enter${colors.reset} to confirm`
+    )
+    console.log('')
+
+    const commitChoices = commits.map((c) => ({
+      label: `${colors.yellow}${c.shortHash}${colors.reset} ${c.subject} ${colors.gray}(${c.date})${colors.reset}`,
+      value: c.hash,
+    }))
+
+    const selectedHashes = await multiSelect('Select commits to analyze:', commitChoices)
+
+    if (selectedHashes.length === 0) {
+      log.warn('No commits selected. Cancelled.')
+      return
+    }
+
+    log.info(`Analyzing ${colors.cyan}${selectedHashes.length}${colors.reset} commits`)
+
+    const spinner = log.spinner()
+    spinner.start('Collecting commit changes...')
+    scanData = collectCommitData(selectedHashes)
+    spinner.stop()
+  } else {
+    // Collect staged or all uncommitted changes
+    const spinner = log.spinner()
+    spinner.start('Collecting code changes...')
+    scanData = collectSecurityData()
+    spinner.stop()
+  }
 
   if (!scanData.diff || scanData.diff === 'No diff available' || scanData.diff.trim() === '') {
     log.warn('No code changes detected. Nothing to analyze.')
