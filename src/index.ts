@@ -28,6 +28,7 @@ let showHelp = false
 let showCleanup = false
 let showSwitch = false
 let showCompare = false
+let showCherryPick = false
 let showTrello = false
 let showTrelloLists = false
 let showTrelloGenerate = false
@@ -98,6 +99,9 @@ for (const arg of argv) {
   if (arg === '--compare' || arg === '-cmp') {
     showCompare = true
   }
+  if (arg === '--cherry-pick' || arg === '-cp') {
+    showCherryPick = true
+  }
   if (arg === '--trello') {
     showTrello = true
   }
@@ -129,6 +133,8 @@ const validFlags = new Set([
   '-sw',
   '--compare',
   '-cmp',
+  '--cherry-pick',
+  '-cp',
   '-f',
   '--fresh',
   '-r',
@@ -179,6 +185,7 @@ for (const arg of argv) {
     )
     console.log('  -sw, --switch        Interactive branch switcher with fuzzy search')
     console.log('  -cmp, --compare      Compare current branch with another branch')
+    console.log('  -cp, --cherry-pick   Interactive cherry-pick commits from another branch')
     console.log('  -f, --fresh          Start fresh workflow (ignore checkpoint)')
     console.log('  -r, --resume         Resume from checkpoint (default if exists)')
     console.log('  -v, --version        Show version')
@@ -228,6 +235,17 @@ for (const arg of argv) {
       process.exit(0)
     } catch (error) {
       console.error('Compare error:', error)
+      process.exit(1)
+    }
+  }
+
+  if (showCherryPick) {
+    try {
+      const { handleCherryPick } = await import('./workflows/cherry-pick.js')
+      await handleCherryPick()
+      process.exit(0)
+    } catch (error) {
+      console.error('Cherry-pick error:', error)
       process.exit(1)
     }
   }
