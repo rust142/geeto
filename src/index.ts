@@ -34,6 +34,7 @@ let showIssue = false
 let showHistory = false
 let showStash = false
 let showAmend = false
+let showStats = false
 let showTrello = false
 let showTrelloLists = false
 let showTrelloGenerate = false
@@ -126,6 +127,9 @@ for (const arg of argv) {
   if (arg === '--amend') {
     showAmend = true
   }
+  if (arg === '--stats') {
+    showStats = true
+  }
   if (arg === '--trello') {
     showTrello = true
   }
@@ -165,6 +169,7 @@ const validFlags = new Set([
   '-lg',
   '--stash',
   '--amend',
+  '--stats',
   '-f',
   '--fresh',
   '-r',
@@ -222,6 +227,7 @@ for (const arg of argv) {
     console.log('  -lg, --log           View commit history with elegant timeline')
     console.log('  --stash              Interactive stash manager')
     console.log('  --amend              Amend the last commit (message, files, or both)')
+    console.log('  --stats              Repository statistics dashboard')
     console.log('  -f, --fresh          Start fresh workflow (ignore checkpoint)')
     console.log('  -r, --resume         Resume from checkpoint (default if exists)')
     console.log('  -v, --version        Show version')
@@ -338,6 +344,17 @@ for (const arg of argv) {
       process.exit(0)
     } catch (error) {
       console.error('Amend error:', error)
+      process.exit(1)
+    }
+  }
+
+  if (showStats) {
+    try {
+      const { handleStats } = await import('./workflows/stats.js')
+      handleStats()
+      process.exit(0)
+    } catch (error) {
+      console.error('Stats error:', error)
       process.exit(1)
     }
   }
