@@ -75,7 +75,8 @@
     "numstat",
     "unpushed",
     "Unpushed",
-    "shortlog"
+    "shortlog",
+    "reflog"
   ],
   "ignorePaths": [
     "node_modules/**",

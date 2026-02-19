@@ -36,6 +36,7 @@ let showStash = false
 let showAmend = false
 let showStats = false
 let showUndo = false
+let showRelease = false
 let showTrello = false
 let showTrelloLists = false
 let showTrelloGenerate = false
@@ -134,6 +135,9 @@ for (const arg of argv) {
   if (arg === '--undo') {
     showUndo = true
   }
+  if (arg === '--tag') {
+    showRelease = true
+  }
   if (arg === '--trello') {
     showTrello = true
   }
@@ -175,6 +179,7 @@ const validFlags = new Set([
   '--amend',
   '--stats',
   '--undo',
+  '--tag',
   '-f',
   '--fresh',
   '-r',
@@ -234,6 +239,7 @@ for (const arg of argv) {
     console.log('  --amend              Amend the last commit (message, files, or both)')
     console.log('  --stats              Repository statistics dashboard')
     console.log('  --undo               Undo the last git action safely')
+    console.log('  --tag                Release/tag manager with semver bumping')
     console.log('  -f, --fresh          Start fresh workflow (ignore checkpoint)')
     console.log('  -r, --resume         Resume from checkpoint (default if exists)')
     console.log('  -v, --version        Show version')
@@ -372,6 +378,17 @@ for (const arg of argv) {
       process.exit(0)
     } catch (error) {
       console.error('Undo error:', error)
+      process.exit(1)
+    }
+  }
+
+  if (showRelease) {
+    try {
+      const { handleRelease } = await import('./workflows/release.js')
+      await handleRelease()
+      process.exit(0)
+    } catch (error) {
+      console.error('Release error:', error)
       process.exit(1)
     }
   }
