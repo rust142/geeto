@@ -347,9 +347,7 @@ export const main = async (opts?: {
       // If actual branch equals saved working branch, resume from the saved step.
       const savedBranch = savedState.currentBranch ?? ''
       if (savedBranch && savedBranch !== actualBranch) {
-        log.warn(
-          `Branch changed from '${savedBranch}' to '${actualBranch}', resetting workflow state`
-        )
+        // Branch changed since last run — silently reset workflow state
         state = {
           ...savedState,
           step: STEP.INIT,
@@ -689,9 +687,9 @@ export const main = async (opts?: {
         }
 
         if (remoteUrl) {
-          log.info(`Pushing ${getCurrentBranch()} to: ${remoteUrl}`)
+          // remote URL available for push
         } else {
-          log.info(`Pushing ${getCurrentBranch()} to remote`)
+          // push to default remote
         }
         const currentBranch = state.workingBranch || getCurrentBranch()
         console.log('')
