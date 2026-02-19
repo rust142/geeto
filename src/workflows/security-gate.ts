@@ -382,7 +382,6 @@ async function runSecurityScan(
     spinner.stop()
 
     if (result) {
-      log.success('Security analysis complete!')
       return result
     }
 
@@ -564,12 +563,6 @@ export async function showSecurityGateMenu(): Promise<void> {
       log.warn('No commits found.')
       return
     }
-
-    console.log('')
-    log.info(
-      `${colors.cyan}💡 Tip:${colors.reset} Use ${colors.green}Space${colors.reset} to toggle, ${colors.green}'#'${colors.reset} range, ${colors.green}Enter${colors.reset} to confirm`
-    )
-    console.log('')
 
     const commitChoices = commits.map((c) => ({
       label: `${colors.yellow}${c.shortHash}${colors.reset} ${c.subject} ${colors.gray}(${c.date})${colors.reset}`,
