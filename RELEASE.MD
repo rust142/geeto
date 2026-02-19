@@ -1,7 +1,7 @@
-# Release v0.3.3
+# Release v0.3.4
 
 **Release date:** February 20, 2026
-**Previous version:** v0.3.2
+**Previous version:** v0.3.3
 
 ## What's New?
 
@@ -71,6 +71,9 @@
 
 ### Other Improvements
 
+- generate Homebrew formula using env vars and heredoc
+- remove GitHub Actions release workflow
+- v0.3.3
 - trim RELEASE.MD release history
 - normalize geeto bin path
 - v0.3.2
