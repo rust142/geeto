@@ -188,7 +188,7 @@ for (const arg of argv) {
   if (showCleanup) {
     try {
       const { handleInteractiveCleanup } = await import('./workflows/cleanup.js')
-      handleInteractiveCleanup()
+      await handleInteractiveCleanup()
       process.exit(0)
     } catch (error) {
       console.error('Cleanup error:', error)
