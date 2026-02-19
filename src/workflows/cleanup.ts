@@ -191,12 +191,6 @@ export const handleInteractiveCleanup = async (): Promise<void> => {
     }
   })
 
-  console.log('')
-  log.info(
-    `${colors.cyan}💡 Tip:${colors.reset} Use ${colors.green}Space${colors.reset} to toggle, ${colors.green}'a'${colors.reset} select all, ${colors.green}Enter${colors.reset} to confirm`
-  )
-  console.log('')
-
   const selectedNames = await multiSelect('Select branches to delete:', branchChoices)
 
   if (selectedNames.length === 0) {

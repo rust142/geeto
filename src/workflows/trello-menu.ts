@@ -114,12 +114,6 @@ export const handleGenerateTaskInstructions = async (): Promise<void> => {
   }
 
   spinner2.succeed(`Found ${allCards.length} cards`)
-
-  // Let user select which cards to include
-  console.log('')
-  log.info(
-    `${colors.cyan}💡 Tip:${colors.reset} Use ${colors.green}Space${colors.reset} to toggle, ${colors.green}'a'${colors.reset} select all, ${colors.green}Enter${colors.reset} to confirm`
-  )
   console.log('')
 
   const cardChoices = allCards.map((card) => ({
