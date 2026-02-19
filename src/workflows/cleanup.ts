@@ -6,6 +6,7 @@
 import { confirm } from '../cli/input.js'
 import { multiSelect } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
+import { getProtectedBranches } from '../utils/config.js'
 import { exec, execSilent } from '../utils/exec.js'
 import { getCurrentBranch } from '../utils/git.js'
 import { log } from '../utils/logging.js'
@@ -26,7 +27,8 @@ interface BranchInfo {
  */
 const getUnifiedBranchList = (): BranchInfo[] => {
   const current = getCurrentBranch()
-  const protectedBranches = new Set(['main', 'master', 'development', 'develop', 'dev', current])
+  const configProtected = getProtectedBranches()
+  const protectedBranches = new Set([...configProtected.map((b) => b.toLowerCase()), current])
 
   // Get local branches
   const localBranches = new Set<string>()
