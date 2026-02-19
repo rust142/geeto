@@ -137,13 +137,13 @@ export const safeCheckout = async (
       const cmd = options.create
         ? `git checkout -b "${branchName}"`
         : `git checkout -f "${branchName}"`
-      exec(cmd)
+      exec(cmd, true)
       return { success: true }
     }
 
     // Try checkout first - git will allow it if changes don't conflict
     try {
-      exec(`git checkout "${branchName}"`)
+      exec(`git checkout "${branchName}"`, true)
       return { success: true }
     } catch (checkoutError) {
       const checkoutErrMsg =
@@ -235,7 +235,7 @@ export const safeCheckout = async (
         }
 
         // User chose stash or force - retry checkout
-        exec(`git checkout "${branchName}"`)
+        exec(`git checkout "${branchName}"`, true)
         return { success: true }
       }
 

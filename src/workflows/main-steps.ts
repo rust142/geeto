@@ -305,9 +305,9 @@ export async function handleMerge(
           /* ignore */
         }
         if (remoteUrl) {
-          log.info(`Push → ${colors.cyan}${targetBranch}${colors.reset} → ${remoteUrl}`)
+          // remote URL available for push
         } else {
-          log.info(`Push → ${colors.cyan}${targetBranch}${colors.reset} → origin`)
+          // push to default remote
         }
 
         console.log('')

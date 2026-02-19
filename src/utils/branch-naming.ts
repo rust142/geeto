@@ -470,7 +470,7 @@ export const handleBranchNaming = async (
     }
 
     log.info(`Creating branch: ${result.workingBranch}`)
-    exec(`git checkout -b "${result.workingBranch}"`)
+    exec(`git checkout -b "${result.workingBranch}"`, true)
     log.success(`Branch created: ${result.workingBranch}`)
   }
 
