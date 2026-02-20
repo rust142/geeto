@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.4.1](https://github.com/rust142/geeto/compare/v0.4.0...v0.4.1) (2026-02-20)
+
+### Other Changes
+
+* docs(repo): update contributing, security, code of conduct, and license ([44dcbe3](https://github.com/rust142/geeto/commit/44dcbe3))
+
 ## [0.4.0](https://github.com/rust142/geeto/compare/v0.3.11...v0.4.0) (2026-02-20)
 
 ### Features

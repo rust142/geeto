@@ -1,5 +1,15 @@
 # Releases
 
+## v0.4.1 — February 20, 2026
+
+### What's New?
+
+#### Other Improvements
+
+- Updated the contributing guidelines, security policy, code of conduct, and license to clarify repository rules and expectations.
+
+---
+
 ## v0.4.0 — February 20, 2026
 
 ### What's New?
