@@ -1,6 +1,6 @@
 {
   "name": "geeto",
-  "version": "0.3.9",
+  "version": "0.3.10",
   "description": "AI-powered Git workflow automation CLI with smart commit messages, branch naming, and Trello integration",
   "author": {
     "email": "amdev142@gmail.com",
