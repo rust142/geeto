@@ -14,7 +14,7 @@ import { select } from '../cli/menu.js'
 import { setupGithubConfigInteractive } from '../core/github-setup.js'
 import { colors } from '../utils/colors.js'
 import { hasGithubConfig } from '../utils/config.js'
-import { exec, execSilent } from '../utils/exec.js'
+import { execAsync, execSilent } from '../utils/exec.js'
 import { getCurrentBranch } from '../utils/git.js'
 import { log } from '../utils/logging.js'
 
@@ -266,7 +266,7 @@ export const handleCreatePR = async (): Promise<void> => {
     const pushSpinner = log.spinner()
     pushSpinner.start(`Pushing ${current} to origin...`)
     try {
-      exec(`git push -u origin ${current}`, true)
+      await execAsync(`git push -u origin ${current}`, true)
       pushSpinner.succeed(`Pushed ${current} to origin`)
     } catch {
       pushSpinner.fail('Failed to push')
