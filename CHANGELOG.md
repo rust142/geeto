@@ -6,9 +6,12 @@
 
 * feat(release): add AI-generated release notes via providers ([41d3e0b](https://github.com/rust142/geeto/commit/41d3e0b))
 
+### Bug Fixes
+
+* fix(release): sort git tags by creation date in release workflow ([3ceb687](https://github.com/rust142/geeto/commit/3ceb687))
+
 ### Other Changes
 
-* chore(release): v0.3.8 ([ad07150](https://github.com/rust142/geeto/commit/ad07150))
 * chore(cspell): add Bahasa to custom dictionary ([4d557b0](https://github.com/rust142/geeto/commit/4d557b0))
 
 ## [0.3.7](https://github.com/rust142/geeto/compare/v0.3.6...v0.3.7) (2026-02-20)
@@ -311,4 +314,3 @@
 * chore(lint): ignore generated CHANGELOG.md ([ac167de](https://github.com/rust142/geeto/commit/ac167de))
 * chore(lint): move lint-staged config into .lintstagedrc ([a610acf](https://github.com/rust142/geeto/commit/a610acf))
 * chore(release): disable npm publish in release-it config ([08767e3](https://github.com/rust142/geeto/commit/08767e3))
-
