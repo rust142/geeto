@@ -1,5 +1,15 @@
 # Releases
 
+## v0.3.11 — February 20, 2026
+
+### What's New?
+
+#### New Features
+
+- Synchronizes GitHub Releases for existing tags so release pages are created for previously tagged versions.
+
+---
+
 ## v0.3.10 — February 20, 2026
 
 ### What's New?
