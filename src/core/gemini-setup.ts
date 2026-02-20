@@ -6,6 +6,7 @@ import fs from 'node:fs'
 
 import { askQuestion, confirm } from '../cli/input.js'
 import { ensureGeetoIgnored, getGeminiConfigPath } from '../utils/config.js'
+import { openBrowser } from '../utils/exec.js'
 import { log } from '../utils/logging.js'
 
 /**
@@ -40,6 +41,17 @@ export const setupGeminiConfigInteractive = (): boolean => {
     return false
   }
 
+  // Offer to open the API key page
+  const openKeyPage = confirm('Open Gemini API key page in your browser?')
+  if (openKeyPage) {
+    const opened = openBrowser('https://aistudio.google.com/apikey')
+    if (opened) {
+      log.success('Opened API key page in your browser')
+    } else {
+      log.warn('Could not open browser\u2014please visit the URL above manually')
+    }
+  }
+
   if (process.stdin.isTTY) {
     process.stdin.setRawMode(false)
   }
@@ -49,6 +61,12 @@ export const setupGeminiConfigInteractive = (): boolean => {
   if (!geminiKey) {
     log.warn('No API key provided. Gemini setup cancelled.')
     return false
+  }
+
+  // Soft validation: warn if key format looks unexpected
+  if (!geminiKey.startsWith('AI') || geminiKey.length < 30) {
+    log.warn('API key format looks unusual (expected: starts with "AI", 30+ chars).')
+    log.info('Saving anyway\u2014if authentication fails, re-run setup with a valid key.')
   }
 
   const path = getGeminiConfigPath()

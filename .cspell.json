@@ -86,7 +86,19 @@
     "untap",
     "Bahasa",
     "creatordate",
-    "oneline"
+    "oneline",
+    "Zorin",
+    "linuxmint",
+    "zorin",
+    "Nobara",
+    "almalinux",
+    "nobara",
+    "Garuda",
+    "endeavouros",
+    "garuda",
+    "artix",
+    "pacman",
+    "noconfirm"
   ],
   "ignorePaths": [
     "node_modules/**",
