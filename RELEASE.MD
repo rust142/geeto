@@ -1,5 +1,35 @@
 # Releases
 
+## v0.4.0 — February 20, 2026
+
+### What's New?
+
+#### New Features
+
+- Added a repository settings workflow and new provider APIs for generating text.
+- Added tag recovery and safer tag pushes to make releases more resilient.
+- Built-in AI-generated release notes with support for saved AI provider and model, and automatic publishing of GitHub Releases when available.
+- Added syncing of GitHub Releases for existing tags.
+- Added branch base validation and a configurable list of allowed base branches.
+- Added a Homebrew formula and tooling to build and publish binaries.
+- Added a progress bar for git push during releases.
+
+#### Bug Fixes
+
+- Fixed tag sorting so releases use the correct creation order.
+- Improved push error messages and ensure workflows exit on fatal errors.
+- Suppressed noisy Node.js experimental warnings from the Copilot subprocess.
+
+#### Other Improvements
+
+- Updated and reorganized release and packaging workflows, including generated version constants and normalized binary paths.
+- Trimmed and tidied CHANGELOG and RELEASE.MD to remove outdated history.
+- Moved Homebrew formula updates to the tap repository and updated the formula version.
+- Added a Bahasa entry to the custom spelling dictionary.
+- Minor UI text formatting fix to add a blank line after the saved AI config message.
+
+---
+
 ## v0.3.11 — February 20, 2026
 
 ### What's New?
