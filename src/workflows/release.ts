@@ -47,6 +47,39 @@ interface CategorizedCommits {
 
 // ─── Helpers ───
 
+/**
+ * Normalize markdown spacing for consistent markdownlint-friendly output.
+ * Ensures: one blank line after ### and #### headings, one blank line between sections,
+ * no double blank lines, trailing newline.
+ */
+const normalizeReleaseMarkdown = (md: string): string => {
+  const lines = md.split('\n')
+  const result: string[] = []
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? ''
+    const nextLine = lines[i + 1] ?? ''
+
+    result.push(line)
+
+    // After a heading (### or ####), ensure exactly one blank line before content
+    if ((line.startsWith('###') || line.startsWith('####')) && nextLine.trim() !== '') {
+      result.push('')
+    }
+
+    // After a bullet line, if next line is a heading, ensure blank line
+    if (line.startsWith('-') && (nextLine.startsWith('###') || nextLine.startsWith('####'))) {
+      result.push('')
+    }
+  }
+
+  // Collapse multiple blank lines into one
+  return result
+    .join('\n')
+    .replaceAll(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 const parseSemver = (version: string): SemVer | null => {
   const match = version.match(/^(\d+)\.(\d+)\.(\d+)/)
   if (!match) return null
@@ -682,7 +715,9 @@ export const handleRelease = async (): Promise<void> => {
         month: 'long',
         day: 'numeric',
       })
-      newEntry = [`## v${newVersion} — ${date}`, '', aiReleaseNotes, '', '---', ''].join('\n')
+      const normalizedNotes = normalizeReleaseMarkdown(aiReleaseNotes)
+      newEntry =
+        [`## v${newVersion} — ${date}`, '', normalizedNotes, '', '---', ''].join('\n') + '\n'
     } else {
       newEntry = generateReleaseMd(newVersion, commits, currentVersion)
     }
@@ -804,6 +839,52 @@ export const handleRelease = async (): Promise<void> => {
     }
   }
 
+  // 6. Create GitHub Release (if tag was pushed and gh CLI is available)
+  let ghReleaseCreated = false
+  if (pushChoice === 'both') {
+    try {
+      execSilent('gh --version')
+      // gh CLI is available — create a GitHub Release
+
+      // Build release body from AI notes or template
+      const releaseBody = aiReleaseNotes
+        ? normalizeReleaseMarkdown(aiReleaseNotes)
+        : generateReleaseMd(newVersion, commits, currentVersion)
+            .replace(/^## .*\n+/, '')
+            .replace(/\n---\n*$/, '')
+            .trim()
+
+      // Write to temp file to avoid shell quoting issues
+      const os = await import('node:os')
+      const tempFile = `${os.tmpdir()}/geeto-release-${Date.now()}.md`
+      writeFileSync(tempFile, releaseBody, 'utf8')
+
+      const releaseSpinner = log.spinner()
+      releaseSpinner.start('Creating GitHub Release...')
+
+      try {
+        await execAsync(
+          `gh release create v${newVersion} --title "v${newVersion}" --notes-file "${tempFile}"`,
+          true
+        )
+        releaseSpinner.succeed('GitHub Release created')
+        ghReleaseCreated = true
+      } catch {
+        releaseSpinner.fail('Failed to create GitHub Release (check gh auth)')
+      }
+
+      // Cleanup temp file
+      try {
+        const { unlinkSync } = await import('node:fs')
+        unlinkSync(tempFile)
+      } catch {
+        /* ignore cleanup errors */
+      }
+    } catch {
+      // gh CLI not available — skip silently
+    }
+  }
+
   // Summary
   console.log('')
   console.log(`${colors.cyan}┌${line}┐${colors.reset}`)
@@ -823,5 +904,10 @@ export const handleRelease = async (): Promise<void> => {
   console.log(
     `${colors.cyan}│${colors.reset}  ${colors.green}✓${colors.reset} Tag v${newVersion} created`
   )
+  if (ghReleaseCreated) {
+    console.log(
+      `${colors.cyan}│${colors.reset}  ${colors.green}✓${colors.reset} GitHub Release published`
+    )
+  }
   console.log(`${colors.cyan}└${line}┘${colors.reset}`)
 }
