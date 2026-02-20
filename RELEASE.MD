@@ -1,5 +1,19 @@
 # Releases
 
+## v0.4.2 — February 20, 2026
+
+### What's New?
+
+#### New Features
+
+- Improved the interactive setup experience and installer scripts to make installation smoother.
+
+#### Other Improvements
+
+- Improved Homebrew publishing reliability by using a secure token for cloning the tap repository.
+
+---
+
 ## v0.4.1 — February 20, 2026
 
 ### What's New?

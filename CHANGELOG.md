@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.2](https://github.com/rust142/geeto/compare/v0.4.1...v0.4.2) (2026-02-20)
+
+### Features
+
+* feat(setup): improve interactive setup flows and installer scripts ([e3c0516](https://github.com/rust142/geeto/commit/e3c0516))
+
+### Other Changes
+
+* ci(publish-binaries): use HOMEBREW_TAP_TOKEN for tap repo cloning ([f6807be](https://github.com/rust142/geeto/commit/f6807be))
+
 ## [0.4.1](https://github.com/rust142/geeto/compare/v0.4.0...v0.4.1) (2026-02-20)
 
 ### Other Changes
