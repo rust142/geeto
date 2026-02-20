@@ -3,9 +3,17 @@ name: Build & Publish Binaries
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g., v0.3.0)'
+        required: true
 
 permissions:
   contents: write
+
+env:
+  RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.tag }}
 
 jobs:
   build-binaries:
@@ -55,7 +63,7 @@ jobs:
       - name: Upload binary to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ github.event.release.tag_name }}" "${{ matrix.binary }}" --clobber
+        run: gh release upload "${{ env.RELEASE_TAG }}" "${{ matrix.binary }}" --clobber
 
   build-deb:
     name: Build .deb packages
@@ -82,17 +90,17 @@ jobs:
           bun run geeto:build:linux:arm64
 
       - name: Build .deb (amd64)
-        run: bash scripts/build-deb.sh "${GITHUB_REF_NAME#v}" amd64
+        run: bash scripts/build-deb.sh "${RELEASE_TAG#v}" amd64
 
       - name: Build .deb (arm64)
-        run: bash scripts/build-deb.sh "${GITHUB_REF_NAME#v}" arm64
+        run: bash scripts/build-deb.sh "${RELEASE_TAG#v}" arm64
 
       - name: Upload .deb packages to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          gh release upload "${{ github.event.release.tag_name }}" \
+          VERSION="${RELEASE_TAG#v}"
+          gh release upload "${{ env.RELEASE_TAG }}" \
             "dist/geeto_${VERSION}_amd64.deb" \
             "dist/geeto_${VERSION}_arm64.deb" \
             --clobber
@@ -104,12 +112,15 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download binaries and compute SHA256
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${{ github.event.release.tag_name }}"
+          TAG="${{ env.RELEASE_TAG }}"
           VERSION="${TAG#v}"
           BASE="https://github.com/rust142/geeto/releases/download/${TAG}"
 
