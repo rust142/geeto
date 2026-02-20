@@ -35,6 +35,11 @@ let showRepoSettings = false
 let showTrello = false
 let showTrelloLists = false
 let showTrelloGenerate = false
+let showAbort = false
+let showPull = false
+let showPrune = false
+let showFetch = false
+let showStatus = false
 let settingsAction:
   | 'separator'
   | 'models'
@@ -124,7 +129,7 @@ for (const arg of argv) {
   if (arg === '--amend' || arg === '-am') {
     showAmend = true
   }
-  if (arg === '--stats' || arg === '-st') {
+  if (arg === '--stats' || arg === '-sts') {
     showStats = true
   }
   if (arg === '--undo' || arg === '-u') {
@@ -144,6 +149,21 @@ for (const arg of argv) {
   }
   if (arg === '--trello-generate' || arg === '-tg') {
     showTrelloGenerate = true
+  }
+  if (arg === '--abort') {
+    showAbort = true
+  }
+  if (arg === '--pull' || arg === '-pl') {
+    showPull = true
+  }
+  if (arg === '--prune') {
+    showPrune = true
+  }
+  if (arg === '--fetch' || arg === '-ft') {
+    showFetch = true
+  }
+  if (arg === '--status' || arg === '-st') {
+    showStatus = true
   }
 }
 
@@ -180,7 +200,7 @@ const validFlags = new Set([
   '--amend',
   '-am',
   '--stats',
-  '-st',
+  '-sts',
   '--undo',
   '-u',
   '--tag',
@@ -208,6 +228,14 @@ const validFlags = new Set([
   '-tl',
   '--trello-generate',
   '-tg',
+  '--abort',
+  '--pull',
+  '-pl',
+  '--prune',
+  '--fetch',
+  '-ft',
+  '--status',
+  '-st',
 ])
 
 // Detect file path argument (non-flag arg → open in inline editor)
@@ -265,7 +293,12 @@ for (const arg of argv) {
     console.log(`    ${C}-sh, --stash${R}              Manage stashes interactively`)
     console.log(`    ${C}-am, --amend${R}              Amend the last commit`)
     console.log(`    ${C}-u,  --undo${R}               Undo the last git action safely`)
-    console.log(`    ${C}-st, --stats${R}              Repository statistics dashboard`)
+    console.log(`    ${C}-sts, --stats${R}             Repository statistics dashboard`)
+    console.log(`    ${C}     --abort${R}              Abort in-progress operation`)
+    console.log(`    ${C}-pl, --pull${R}               Pull from remote interactively`)
+    console.log(`    ${C}-ft, --fetch${R}              Fetch latest from remote`)
+    console.log(`    ${C}     --prune${R}              Remove stale remote branches`)
+    console.log(`    ${C}-st, --status${R}             Pretty git status overview`)
     console.log('')
 
     console.log(`  ${B}GITHUB${R}`)
@@ -332,6 +365,61 @@ for (const arg of argv) {
       process.exit(0)
     } catch (error) {
       console.error('Editor error:', error)
+      process.exit(1)
+    }
+  }
+
+  if (showAbort) {
+    try {
+      const { handleAbort } = await import('./workflows/abort.js')
+      await handleAbort()
+      process.exit(0)
+    } catch (error) {
+      console.error('Abort error:', error)
+      process.exit(1)
+    }
+  }
+
+  if (showPull) {
+    try {
+      const { handlePull } = await import('./workflows/pull.js')
+      await handlePull()
+      process.exit(0)
+    } catch (error) {
+      console.error('Pull error:', error)
+      process.exit(1)
+    }
+  }
+
+  if (showPrune) {
+    try {
+      const { handlePrune } = await import('./workflows/prune.js')
+      handlePrune()
+      process.exit(0)
+    } catch (error) {
+      console.error('Prune error:', error)
+      process.exit(1)
+    }
+  }
+
+  if (showFetch) {
+    try {
+      const { handleFetch } = await import('./workflows/fetch.js')
+      await handleFetch()
+      process.exit(0)
+    } catch (error) {
+      console.error('Fetch error:', error)
+      process.exit(1)
+    }
+  }
+
+  if (showStatus) {
+    try {
+      const { handleStatus } = await import('./workflows/status.js')
+      handleStatus()
+      process.exit(0)
+    } catch (error) {
+      console.error('Status error:', error)
       process.exit(1)
     }
   }
