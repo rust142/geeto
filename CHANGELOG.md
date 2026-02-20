@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.11](https://github.com/rust142/geeto/compare/v0.3.10...v0.3.11) (2026-02-20)
+
+### Features
+
+* feat(release): sync GitHub Releases for existing tags ([536f03e](https://github.com/rust142/geeto/commit/536f03e))
+
 ## [0.3.10](https://github.com/rust142/geeto/compare/v0.3.9...v0.3.10) (2026-02-20)
 
 ### Features
