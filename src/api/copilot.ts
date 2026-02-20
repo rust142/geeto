@@ -7,6 +7,7 @@ import path from 'node:path'
 import {
   generateBranchName as sdkGenerateBranchName,
   generateCommitMessage as sdkGenerateCommitMessage,
+  generateReleaseNotes as sdkGenerateReleaseNotes,
   getAvailableModelChoices as sdkGetAvailableModels,
   isAvailable as sdkIsAvailable,
 } from './copilot-sdk.js'
@@ -105,6 +106,26 @@ export const generateCommitMessage = async (
     return sdkRes
   } catch (error) {
     console.log('') // Force newline to separate from any active spinner
+    log.warn('Copilot Error: ' + String(error))
+    return null
+  }
+}
+
+export const generateReleaseNotes = async (
+  commits: string,
+  language: 'en' | 'id',
+  correction?: string,
+  model: CopilotModel = 'claude-haiku-4.5'
+): Promise<string | null> => {
+  try {
+    const ok = await sdkIsAvailable()
+    if (!ok) {
+      log.warn('Copilot SDK not available; install @github/copilot-sdk to enable Copilot features.')
+      return null
+    }
+    return await sdkGenerateReleaseNotes(commits, language, correction, model)
+  } catch (error) {
+    console.log('')
     log.warn('Copilot Error: ' + String(error))
     return null
   }

@@ -100,6 +100,31 @@ export async function generateBranchNameWithProvider(
   }
 }
 
+export async function generateReleaseNotesWithProvider(
+  aiProvider: string,
+  commits: string,
+  language: 'en' | 'id',
+  correction?: string,
+  copilotModel?: CopilotModel,
+  openrouterModel?: OpenRouterModel,
+  geminiModel?: GeminiModel
+): Promise<string | null> {
+  switch (aiProvider) {
+    case 'gemini': {
+      const { generateReleaseNotes } = await import('../api/gemini.js')
+      return generateReleaseNotes(commits, language, correction, geminiModel as GeminiModel)
+    }
+    case 'copilot': {
+      const { generateReleaseNotes } = await import('../api/copilot.js')
+      return generateReleaseNotes(commits, language, correction, copilotModel)
+    }
+    default: {
+      const { generateReleaseNotes } = await import('../api/openrouter.js')
+      return generateReleaseNotes(commits, language, correction, openrouterModel)
+    }
+  }
+}
+
 /**
  * Interactive fallback menu when AI generation fails.
  */

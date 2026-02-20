@@ -287,7 +287,49 @@ export const getAvailableModelChoices = async () => {
   return choices
 }
 
+export const generateReleaseNotes = async (
+  commits: string,
+  language: 'en' | 'id',
+  correction?: string,
+  model?: GeminiModel
+): Promise<string | null> => {
+  const langLabel = language === 'id' ? 'Indonesian (Bahasa Indonesia)' : 'English'
+  const promptBase = `You are a release notes writer. Given a list of git commit messages, generate user-friendly release notes in ${langLabel}. Output ONLY the release notes content (no title/heading, no version number, no date — those are added separately).
+
+Rules:
+- Group changes into clear sections: New Features, Bug Fixes, Improvements, etc.
+- Use simple, non-technical language that end users can understand
+- Each item should be a bullet point starting with "-"
+- Strip conventional commit prefixes (feat:, fix:, chore:, etc.)
+- Keep it concise but informative
+- If there are breaking changes, highlight them prominently
+- Do NOT include commit hashes or author names
+- Section headers should use "###" markdown format`
+
+  const prompt = correction
+    ? `${promptBase}\n\nCommits:\n${commits}\n\nAdjustment: ${correction}`
+    : `${promptBase}\n\nCommits:\n${commits}`
+
+  const result = await client?.models.generateContent({
+    model: model ?? 'gemini-2.5-flash',
+    contents: prompt,
+  })
+
+  try {
+    const content = (result as GenerateContentResponse).text
+    const cleaned = String(content)
+      .replaceAll(/```[\S\s]*?```/g, '')
+      .replaceAll(/^"+|"+$/g, '')
+      .trim()
+    return cleaned || null
+  } catch (error) {
+    log.error('Google GenAI Error: ' + String(error))
+    return null
+  }
+}
+
 export default {
   generateBranchName,
   generateCommitMessage,
+  generateReleaseNotes,
 }

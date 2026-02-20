@@ -6,6 +6,7 @@ import path from 'node:path'
 import {
   generateBranchName as sdkGenerateBranchName,
   generateCommitMessage as sdkGenerateCommitMessage,
+  generateReleaseNotes as sdkGenerateReleaseNotes,
   isAvailable as sdkIsAvailable,
 } from './openrouter-sdk.js'
 import { log } from '../utils/logging.js'
@@ -135,6 +136,28 @@ export const generateCommitMessage = async (
     return sdkRes
   } catch (error) {
     console.log('') // Force newline to separate from any active spinner
+    log.warn('OpenRouter Error: ' + String(error))
+    return null
+  }
+}
+
+export const generateReleaseNotes = async (
+  commits: string,
+  language: 'en' | 'id',
+  correction?: string,
+  model: OpenRouterModel = 'gemini-2.5-flash'
+): Promise<string | null> => {
+  try {
+    const ok = sdkIsAvailable()
+    if (!ok) {
+      log.warn(
+        'OpenRouter SDK not available; install @openrouter/sdk to enable OpenRouter features.'
+      )
+      return null
+    }
+    return await sdkGenerateReleaseNotes(commits, language, correction, model)
+  } catch (error) {
+    console.log('')
     log.warn('OpenRouter Error: ' + String(error))
     return null
   }

@@ -7,6 +7,7 @@ import path from 'node:path'
 import {
   generateBranchName as sdkGenerateBranchName,
   generateCommitMessage as sdkGenerateCommitMessage,
+  generateReleaseNotes as sdkGenerateReleaseNotes,
   getAvailableModelChoices as sdkGetAvailableModels,
   isAvailable as sdkIsAvailable,
 } from './gemini-sdk.js'
@@ -103,6 +104,26 @@ export const generateCommitMessage = async (
     return sdkRes
   } catch (error) {
     console.log('') // Force newline to separate from any active spinner
+    log.warn('Gemini Error: ' + String(error))
+    return null
+  }
+}
+
+export const generateReleaseNotes = async (
+  commits: string,
+  language: 'en' | 'id',
+  correction?: string,
+  model: GeminiModel = 'gemini-2.5-flash'
+): Promise<string | null> => {
+  try {
+    const ok = sdkIsAvailable()
+    if (!ok) {
+      log.warn('Gemini SDK not available; install @google/genai to enable Gemini features.')
+      return null
+    }
+    return await sdkGenerateReleaseNotes(commits, language, correction, model)
+  } catch (error) {
+    console.log('')
     log.warn('Gemini Error: ' + String(error))
     return null
   }
