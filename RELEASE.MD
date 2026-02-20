@@ -1,182 +1,66 @@
 # Releases
 
-## v0.3.7 — February 20, 2026
-
-> Previous version: v0.3.6
-
-### What's New?
-
-#### New Features
-
-- add allowedBases config and branch base validation
-- add Homebrew formula and update CI/.gitignore
-- add build & publish binaries workflow and packaging
-- add progress bar for git push in release workflow
-- add inline terminal editor for editing files and commits
-- add boxed UI, file status badges, and step progress
-- add short flag aliases and improve help output
-- add release/tag manager workflow and --tag CLI flag
-- add interactive undo last action workflow
-- add --stats command and repository statistics dashboard
-- add interactive commit amend workflow
-- add interactive stash manager
-- add interactive commit history viewer
-- add interactive PR and Issue workflows
-- add interactive cherry-pick workflow
-- add interactive branch compare command
-- add interactive branch switcher and improve menu rendering
-- add custom protected branches
-- include branch age and sort branches by staleness
-- improve multiSelect rendering and add commit selection in security gate
-- add range selection and clickable branch links
-- add checklist support and multi-select card selection
-- print package.json version instead of hardcoded value
-- initial commit
-- add Security & Quality Gate workflow
-- add searchable select menu and structured UI helpers
-- add uninstall script and enhance installer
-- improve checkpoint flow and staged-files preview
-- include card descriptions in API, types, and menu
-- improve Copilot install flow and AI error handling
-- add AI-agent safety instructions and numbered tasks to Trello export
-- add AI English translation and context-aware safeCheckout
-- pass geminiModel to correction helper
-- prompt and persist AI provider and model for title-ai
-- generate tasks.instructions.md from Trello lists
-- add Trello menu, CLI flags and list command
-- offer to stage changes when no staged files
-- add interactive branch cleanup workflow
-- add safe git error handling and integrate into workflows
-- add --stage-all option to auto-stage changes
-- improve UX and AI provider robustness
-- display push progress and remote URL before push
-- add execAsync and integrate into push flow
-
-#### Bug Fixes
-
-- improve push error messages and exit on fatal error
-- suppress Node.js experimental warnings from copilot subprocess
-- pass true to exec and silence push/branch logs
-- pass true flag to exec when deleting local branches
-- avoid logging 'Unknown' step when resuming workflow
-- remove hard-coded version from banner
-- force newline before error/warn logs to separate from spinner
-- ensure spinner/newline separation and refine staged preview
-- improve interactive cleanup force-delete flow and errors
-- preserve AI provider state after cleanup and add Trello agent tip
-- treat branch creation as safe for checkout and improve cleanup messages
-- initialize progress bar at start of push
-- remove redundant progress updates and improve development creation
-- increase progress bar granularity for git pushes
-- add newline after progress updates to avoid output interleaving
-- stop silencing git push and command checks
-- add main and master to protected branches
-- exclude current and feature branches from merge targets
-- improve spellcheck scripts, use bun in lint-staged, clean pre-push
-
-#### Other Improvements
-
-- add generated VERSION constant and update release workflow
-- trim RELEASE.MD history and remove outdated Homebrew/workflow notes
-- v0.3.6
-- Merge branch 'main' of github.com:rust142/geeto
-- move Homebrew formula updates to tap repo
-- v0.3.5
-- add workflow_dispatch tag input and use RELEASE_TAG
-- v0.3.4
-- generate Homebrew formula using env vars and heredoc
-- remove GitHub Actions release workflow
-- v0.3.3
-- trim RELEASE.MD release history
-- normalize geeto bin path
-- v0.3.2
-- v0.3.1
-- v0.3.0
-- add --no-verify to release commit and use H2 changelog header
-- remove interactive UI tips and noisy logs
-- release v0.1.1
-- move demo image and add demo link
-- add demo badge and demo image, remove duplicate section
-- replace asciicast badge with GitHub-hosted demo image
-- add Demo section with asciinema demo
-- release v0.1.0
-- release v0.1.0-beta.3
-- remove bin from published files
-- include bin and package.json, add pinst scripts, regen lock
-- release v0.1.0-beta.2
-- add Support Palestine badges and update npm badge
-- release v0.1.0-beta.1
-- update package description
-- rename package to geeto and update install instructions
-- release v0.1.0-beta.0
-- ignore generated CHANGELOG.md
-- move lint-staged config into .lintstagedrc
-- disable npm publish in release-it config
-- remove noisy AI provider logs and streamline README quick start
-- overhaul CONTRIBUTING and README; add install.sh
-- add implementation checklists for backend and frontend
-- extract Copilot utilities and add shared helpers
-- use log.step for Trello lists header
-- code structure for improved readability and maintainability
-- normalize plugins array and add trailing comma
-- remove redundant progressBar.update(0) calls
-- normalize console spacing around prompts and push progress
-- switch quality-checks to Bun-only (avoid Node 18 runtime)
-
----
-# Release v0.3.6
-
-**Release date:** February 20, 2026
-**Previous version:** v0.3.5
-
-## What's New?
+## v0.3.8 — February 20, 2026
 
 ### New Features
 
-- add allowedBases config and branch base validation
-- add progress bar for git push in release workflow
-- add inline terminal editor for editing files and commits
-- add boxed UI, file status badges, and step progress
-- add short flag aliases and improve help output
-- add release/tag manager workflow and --tag CLI flag
-- add interactive undo last action workflow
-- add --stats command and repository statistics dashboard
-- add interactive commit amend workflow
-- add interactive stash manager
-- add interactive commit history viewer
-- add interactive PR and Issue workflows
-- add interactive cherry-pick workflow
-- add interactive branch compare command
-- add interactive branch switcher and improve menu rendering
-- add custom protected branches
-- include branch age and sort branches by staleness
-- improve multiSelect rendering and add commit selection in security gate
-- add range selection and clickable branch links
-- add checklist support and multi-select card selection
+- Releases can now generate release notes automatically using supported AI providers.
 
 ### Bug Fixes
 
-- pass true to exec and silence push/branch logs
-- pass true flag to exec when deleting local branches
-- avoid logging 'Unknown' step when resuming workflow
-- remove hard-coded version from banner
-- force newline before error/warn logs to separate from spinner
-- ensure spinner/newline separation and refine staged preview
-- improve interactive cleanup force-delete flow and errors
-- preserve AI provider state after cleanup and add Trello agent tip
-- treat branch creation as safe for checkout and improve cleanup messages
-- initialize progress bar at start of push
-- remove redundant progress updates and improve development creation
-- increase progress bar granularity for git pushes
-- add newline after progress updates to avoid output interleaving
-- stop silencing git push and command checks
-- add main and master to protected branches
-- exclude current and feature branches from merge targets
-- improve spellcheck scripts, use bun in lint-staged, clean pre-push
+- Release workflow now sorts Git tags by creation date so releases are produced in the correct chronological order.
+
+### Improvements
+
+- Spell checker now recognizes Bahasa (Indonesian) by adding it to the custom dictionary.
 
 ---
 
-*This document was automatically generated by [Geeto CLI](https://github.com/rust142/geeto)*
+## v0.3.7 — February 20, 2026
 
+### Breaking Changes
+
+- Package renamed to "geeto"; update your install commands and any scripts that referenced the old package name.
+- Homebrew formula updates were moved to a separate tap repository, so Homebrew formula changes are no longer updated in this repo.
+
+### New Features
+
+- Generate release notes automatically using AI providers.
+- Add an inline terminal editor for editing files and commit messages inside the CLI.
+- Add boxed UI, file status badges, and step progress indicators for a clearer interface.
+- Add interactive workflows: undo last action, commit amend, stash manager, commit history viewer, PR & Issue workflows, cherry-pick, branch compare, and branch cleanup.
+- Add a release/tag manager and a --tag CLI flag for releasing.
+- Add a repository statistics dashboard accessible via --stats.
+- Add Trello integration: menu, checklist support, multi-select card selection, and export of task instructions.
+- Add searchable and multi-select menus, range selection, clickable branch links, and short flag aliases for faster navigation.
+- Add an uninstall script and improved installer.
+
+### Improvements
+
+- Show push progress and remote URL, and improve push progress granularity and handling.
+- Add build and publish binaries workflow, packaging, and a generated VERSION constant for releases.
+- Add Homebrew formula generation via CI environment variables.
+- Improve UX and menu rendering, including better multiSelect rendering and commit selection in security gate.
+- Add custom protected branches and sort branches by age/staleness.
+- Offer to stage changes automatically and add a --stage-all option.
+- Improve AI-related flows: Copilot install flow, provider/model prompts, provider state persistence, English translation, and safety instructions.
+
+### Bug Fixes
+
+- Suppress noisy Node.js experimental warnings coming from the Copilot subprocess.
+- Improve git push/error handling and make fatal errors exit cleanly.
+- Fix spinner and progress bar output so logs and progress do not interleave.
+- Treat newly created branches as safe for checkout and improve branch cleanup messages.
+- Fix various workflow logging issues (avoid 'Unknown' step, remove hard-coded version in banner, preserve provider state after cleanup).
+- Ensure git commands run with correct flags so push/branch logs behave properly.
+
+### Documentation & Packaging
+
+- Clean up RELEASE.MD history and remove outdated Homebrew/workflow notes.
+- Overhaul README and CONTRIBUTING, add a Demo section with images and an asciinema demo, and add install.sh.
+- Update package metadata and normalize the executable path; update install instructions to match the package rename.
+- Move Homebrew formula handling to the tap repo and update CI to generate formulas as needed.
+
+---
 
 *This document was automatically generated by [Geeto CLI](https://github.com/rust142/geeto)*
