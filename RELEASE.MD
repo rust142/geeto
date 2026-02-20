@@ -3,16 +3,20 @@
 ## v0.3.8 — February 20, 2026
 
 ### New Features
+
 - Releases can now generate release notes automatically using supported AI providers.
 
 ### Bug Fixes
+
 - Release workflow now sorts Git tags by creation date so releases are produced in the correct chronological order.
 
 ### Improvements
+
 - Spell checker now recognizes Bahasa (Indonesian) by adding it to the custom dictionary.
 
 ---
-## v0.3.8 — February 20, 2026
+
+## v0.3.7 — February 20, 2026
 
 ### Breaking Changes
 
