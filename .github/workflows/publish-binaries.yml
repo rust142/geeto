@@ -137,7 +137,7 @@ jobs:
 
       - name: Clone and update tap repo
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           git clone "https://x-access-token:${GH_TOKEN}@github.com/rust142/homebrew-geeto.git" tap
           cd tap
