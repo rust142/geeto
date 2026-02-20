@@ -3,7 +3,7 @@ import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 
 import { execGit } from './exec.js'
-import { getChangedFiles } from './git.js'
+import { getChangedFiles, getChangedFilesWithStatus } from './git.js'
 
 export interface BranchNamingResult {
   workingBranch: string
@@ -44,6 +44,11 @@ export const handleBranchNaming = async (
       result.cancelled = true
       return result
     }
+
+    const { displayChangedFiles } = await import('./display.js')
+    log.info(`Changed files: ${changedFiles.length}`)
+    console.log('')
+    displayChangedFiles(getChangedFilesWithStatus())
 
     const stageChoice = (await select('What to stage?', [
       { label: 'Stage all changes', value: 'all' },
