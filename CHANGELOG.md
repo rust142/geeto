@@ -1,5 +1,56 @@
 # Changelog
 
+## [0.4.0](https://github.com/rust142/geeto/compare/v0.3.11...v0.4.0) (2026-02-20)
+
+### Features
+
+* feat(cli): add repo settings workflow and provider generateText APIs ([efe8e27](https://github.com/rust142/geeto/commit/efe8e27))
+* feat(release): add tag recovery and use --no-verify for tag pushes ([53b4f43](https://github.com/rust142/geeto/commit/53b4f43))
+* feat(release): add AI release notes, push tags, and delete releases ([bce046e](https://github.com/rust142/geeto/commit/bce046e))
+* feat(release): sync GitHub Releases for existing tags ([536f03e](https://github.com/rust142/geeto/commit/536f03e))
+* feat(release): normalize release notes and publish GitHub Release when available ([d205085](https://github.com/rust142/geeto/commit/d205085))
+* feat(release): use saved AI provider and model from state ([406c35c](https://github.com/rust142/geeto/commit/406c35c))
+* feat(release): add AI-generated release notes via providers ([41d3e0b](https://github.com/rust142/geeto/commit/41d3e0b))
+* feat(branch): add allowedBases config and branch base validation ([c6460cf](https://github.com/rust142/geeto/commit/c6460cf))
+* feat(brew): add Homebrew formula and update CI/.gitignore ([e3f80e7](https://github.com/rust142/geeto/commit/e3f80e7))
+* feat(release): add build & publish binaries workflow and packaging ([c8cdba2](https://github.com/rust142/geeto/commit/c8cdba2))
+* feat(release): add progress bar for git push in release workflow ([bb0afe4](https://github.com/rust142/geeto/commit/bb0afe4))
+
+### Bug Fixes
+
+* fix(release): sort git tags by creation date in release workflow ([3ceb687](https://github.com/rust142/geeto/commit/3ceb687))
+* fix(workflows): improve push error messages and exit on fatal error ([05f8b64](https://github.com/rust142/geeto/commit/05f8b64))
+* fix(copilot-sdk): suppress Node.js experimental warnings from copilot subprocess ([645ae75](https://github.com/rust142/geeto/commit/645ae75))
+
+### Other Changes
+
+* chore(brew): update formula to v0.3.5 ([5e29310](https://github.com/rust142/geeto/commit/5e29310))
+* chore(release): v0.3.11 ([85c4756](https://github.com/rust142/geeto/commit/85c4756))
+* chore(release): v0.3.10 ([f3ba11b](https://github.com/rust142/geeto/commit/f3ba11b))
+* chore(release): v0.3.9 ([dbbe7d7](https://github.com/rust142/geeto/commit/dbbe7d7))
+* style(release): add blank line after saved AI config message ([8db8308](https://github.com/rust142/geeto/commit/8db8308))
+* docs(release): tidy CHANGELOG and RELEASE.MD ([b912c70](https://github.com/rust142/geeto/commit/b912c70))
+* chore(release): v0.3.8 ([0948f41](https://github.com/rust142/geeto/commit/0948f41))
+* chore(cspell): add Bahasa to custom dictionary ([4d557b0](https://github.com/rust142/geeto/commit/4d557b0))
+* chore(release): v0.3.7 ([20b2133](https://github.com/rust142/geeto/commit/20b2133))
+* chore(release): add generated VERSION constant and update release workflow ([f2f70ef](https://github.com/rust142/geeto/commit/f2f70ef))
+* docs(release): trim RELEASE.MD history and remove outdated Homebrew/workflow notes ([0d31bf6](https://github.com/rust142/geeto/commit/0d31bf6))
+* chore(release): v0.3.6 ([1371edc](https://github.com/rust142/geeto/commit/1371edc))
+* Merge branch 'main' of github.com:rust142/geeto ([1abbb50](https://github.com/rust142/geeto/commit/1abbb50))
+* chore(brew): move Homebrew formula updates to tap repo ([238635a](https://github.com/rust142/geeto/commit/238635a))
+* chore(release): v0.3.5 ([b76e443](https://github.com/rust142/geeto/commit/b76e443))
+* ci(publish-binaries): add workflow_dispatch tag input and use RELEASE_TAG ([176b383](https://github.com/rust142/geeto/commit/176b383))
+* chore(release): v0.3.4 ([e58ab05](https://github.com/rust142/geeto/commit/e58ab05))
+* ci(publish-binaries): generate Homebrew formula using env vars and heredoc ([97efaa9](https://github.com/rust142/geeto/commit/97efaa9))
+* ci(release): remove GitHub Actions release workflow ([69a3706](https://github.com/rust142/geeto/commit/69a3706))
+* chore(release): v0.3.3 ([0172211](https://github.com/rust142/geeto/commit/0172211))
+* docs(release): trim RELEASE.MD release history ([6cacdbb](https://github.com/rust142/geeto/commit/6cacdbb))
+* chore(package.json): normalize geeto bin path ([5f5d347](https://github.com/rust142/geeto/commit/5f5d347))
+* chore(release): v0.3.2 ([e7498c5](https://github.com/rust142/geeto/commit/e7498c5))
+* chore(release): v0.3.1 ([2be2863](https://github.com/rust142/geeto/commit/2be2863))
+* chore: release v0.1.1 ([152c99c](https://github.com/rust142/geeto/commit/152c99c))
+* chore: release v0.1.0 ([e841ee6](https://github.com/rust142/geeto/commit/e841ee6))
+
 ## [0.3.11](https://github.com/rust142/geeto/compare/v0.3.10...v0.3.11) (2026-02-20)
 
 ### Features
