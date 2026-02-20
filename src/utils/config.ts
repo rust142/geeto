@@ -252,12 +252,21 @@ export const getBranchStrategyConfig = (): BranchStrategyConfig | null => {
       const namingMatch = content.match(/last_naming_strategy\s*=\s*["']([^"']+)["']/)
       const trelloListMatch = content.match(/last_trello_list\s*=\s*["']([^"']+)["']/)
       const protectedMatch = content.match(/protected_branches\s*=\s*\[([^\]]*)\]/)
+      const allowedBasesMatch = content.match(/allowed_bases\s*=\s*\[([^\]]*)\]/)
 
       // Only return config if separator has been explicitly set
       if (separatorMatch) {
         let protectedBranches: string[] | undefined
         if (protectedMatch?.[1]) {
           protectedBranches = protectedMatch[1]
+            .split(',')
+            .map((s) => s.trim().replaceAll(/^["']|["']$/g, ''))
+            .filter(Boolean)
+        }
+
+        let allowedBases: string[] | undefined
+        if (allowedBasesMatch?.[1]) {
+          allowedBases = allowedBasesMatch[1]
             .split(',')
             .map((s) => s.trim().replaceAll(/^["']|["']$/g, ''))
             .filter(Boolean)
@@ -273,6 +282,7 @@ export const getBranchStrategyConfig = (): BranchStrategyConfig | null => {
             | undefined,
           lastTrelloList: trelloListMatch?.[1],
           protectedBranches,
+          allowedBases,
         }
       }
     }
@@ -300,11 +310,15 @@ export const saveBranchStrategyConfig = (config: BranchStrategyConfig): void => 
       ? `protected_branches = [${config.protectedBranches.map((b) => `"${b}"`).join(', ')}]\n`
       : ''
 
+    const allowedBasesLine = config.allowedBases?.length
+      ? `allowed_bases = [${config.allowedBases.map((b) => `"${b}"`).join(', ')}]\n`
+      : ''
+
     const configContent = `# Geeto Branch Strategy Configuration
 # Auto-generated on ${new Date().toISOString()}
 
 separator = "${config.separator}"
-${config.lastNamingStrategy ? `last_naming_strategy = "${config.lastNamingStrategy}"\n` : ''}${config.lastTrelloList ? `last_trello_list = "${config.lastTrelloList}"\n` : ''}${protectedLine}`
+${config.lastNamingStrategy ? `last_naming_strategy = "${config.lastNamingStrategy}"\n` : ''}${config.lastTrelloList ? `last_trello_list = "${config.lastTrelloList}"\n` : ''}${protectedLine}${allowedBasesLine}`
 
     fs.writeFileSync(path, configContent, 'utf8')
   } catch (error: unknown) {
