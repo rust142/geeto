@@ -17,11 +17,12 @@ import {
   getBranchStrategyConfig,
   saveBranchStrategyConfig,
 } from '../utils/config.js'
-import { getStepProgress } from '../utils/display.js'
+import { displayChangedFiles, getStepProgress } from '../utils/display.js'
 import { exec, execGit } from '../utils/exec.js'
 import {
   getBranchPrefix,
   getChangedFiles,
+  getChangedFilesWithStatus,
   handleBranchNaming,
   interactiveAIFallback,
   isContextLimitFailure,
@@ -358,6 +359,10 @@ export const handleBranchCreationWorkflow = async (
                     log.warn('No changes found. Cannot generate a branch name. Aborting.')
                     process.exit(0)
                   }
+
+                  log.info(`Changed files: ${changedFiles.length}`)
+                  console.log('')
+                  displayChangedFiles(getChangedFilesWithStatus())
 
                   const stageChoice = (await select('What to stage?', [
                     { label: 'Stage all changes', value: 'all' },
