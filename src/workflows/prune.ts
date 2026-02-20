@@ -5,15 +5,16 @@
 
 import { confirm } from '../cli/input.js'
 import { colors } from '../utils/colors.js'
-import { exec, execSilent } from '../utils/exec.js'
+import { execAsync, execSilent } from '../utils/exec.js'
 import { log } from '../utils/logging.js'
 
 /**
  * Get list of stale remote-tracking branches
  */
-const getStaleBranches = (remote: string): string[] => {
+const getStaleBranches = async (remote: string): Promise<string[]> => {
   try {
-    const output = execSilent(`git remote prune ${remote} --dry-run`).trim()
+    const result = await execAsync(`git remote prune ${remote} --dry-run`, true)
+    const output = result.stdout.trim()
     if (!output) return []
 
     // Parse lines like: * [would prune] origin/feature-x
@@ -41,7 +42,7 @@ const getRemotes = (): string[] => {
 /**
  * Handle the prune workflow
  */
-export const handlePrune = (): void => {
+export const handlePrune = async (): Promise<void> => {
   const C = colors.cyan
   const R = colors.reset
   const G = colors.green
@@ -67,13 +68,17 @@ export const handlePrune = (): void => {
   for (const remote of remotes) {
     console.log(`  ${GR}Remote:${R} ${C}${remote}${R}`)
 
-    const stale = getStaleBranches(remote)
+    console.log('')
+    const scanSpinner = log.spinner()
+    scanSpinner.start(`Scanning stale branches on ${remote}...`)
+    const stale = await getStaleBranches(remote)
 
     if (stale.length === 0) {
-      console.log(`    ${G}✓${R} No stale branches`)
+      scanSpinner.succeed('No stale branches')
       console.log('')
       continue
     }
+    scanSpinner.stop()
 
     console.log(`    ${Y}${stale.length} stale branch${stale.length === 1 ? '' : 'es'} found:${R}`)
     for (const branch of stale) {
@@ -92,9 +97,14 @@ export const handlePrune = (): void => {
     }
 
     try {
-      exec(`git remote prune ${remote}`, true)
+      console.log('')
+      const spinner = log.spinner()
+      spinner.start(`Pruning ${remote}...`)
+      await execAsync(`git remote prune ${remote}`, true)
+      spinner.succeed(
+        `Pruned ${stale.length} branch${stale.length === 1 ? '' : 'es'} from ${remote}`
+      )
       totalPruned += stale.length
-      log.success(`Pruned ${stale.length} branch${stale.length === 1 ? '' : 'es'} from ${remote}.`)
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
       log.error(`Failed to prune ${remote}: ${msg}`)

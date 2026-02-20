@@ -7,7 +7,7 @@ import { confirm } from '../cli/input.js'
 import { multiSelect } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
 import { getProtectedBranches } from '../utils/config.js'
-import { exec, execSilent } from '../utils/exec.js'
+import { exec, execAsync, execSilent } from '../utils/exec.js'
 import { getCurrentBranch } from '../utils/git.js'
 import { log } from '../utils/logging.js'
 
@@ -321,7 +321,7 @@ export const handleInteractiveCleanup = async (): Promise<void> => {
         const spinner = log.spinner()
         spinner.start(`Deleting remote: ${branch.name}`)
         try {
-          exec(`git push origin --delete "${branch.name}"`, true)
+          await execAsync(`git push origin --delete "${branch.name}"`, true)
           spinner.succeed(`Deleted remote: ${branch.name}`)
           remoteSuccessCount++
         } catch {

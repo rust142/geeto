@@ -394,7 +394,7 @@ for (const arg of argv) {
   if (showPrune) {
     try {
       const { handlePrune } = await import('./workflows/prune.js')
-      handlePrune()
+      await handlePrune()
       process.exit(0)
     } catch (error) {
       console.error('Prune error:', error)

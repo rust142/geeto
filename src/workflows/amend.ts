@@ -6,7 +6,7 @@
 import { askQuestion, confirm } from '../cli/input.js'
 import { multiSelect, select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
-import { exec, execSilent } from '../utils/exec.js'
+import { exec, execAsync, execSilent } from '../utils/exec.js'
 import { getCurrentBranch } from '../utils/git.js'
 import { log } from '../utils/logging.js'
 
@@ -249,7 +249,7 @@ export const handleAmend = async (): Promise<void> => {
         const pushSpinner = log.spinner()
         pushSpinner.start('Force pushing...')
         try {
-          exec(`git push --force-with-lease origin ${current}`, true)
+          await execAsync(`git push --force-with-lease origin ${current}`, true)
           pushSpinner.succeed('Force pushed!')
         } catch {
           pushSpinner.fail('Failed to force push')

@@ -6,7 +6,7 @@
 import { confirm } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
-import { exec, execSilent } from '../utils/exec.js'
+import { exec, execAsync, execSilent } from '../utils/exec.js'
 import { getCurrentBranch } from '../utils/git.js'
 import { log } from '../utils/logging.js'
 
@@ -97,11 +97,16 @@ export const handlePull = async (): Promise<void> => {
   }
 
   // Fetch to get latest state
+  console.log('')
+  const fetchSpinner = log.spinner()
+  fetchSpinner.start('Fetching latest from remote...')
   try {
     const fetchRemote = tracking?.remote ?? 'origin'
-    execSilent(`git fetch ${fetchRemote} --quiet`)
+    await execAsync(`git fetch ${fetchRemote} --quiet`, true)
+    fetchSpinner.succeed('Fetched latest from remote')
   } catch {
-    log.warn('Could not fetch from remote. Continuing with local info...')
+    fetchSpinner.fail('Could not fetch from remote')
+    log.warn('Continuing with local info...')
   }
 
   const counts = getAheadBehind()
@@ -194,16 +199,17 @@ export const handlePull = async (): Promise<void> => {
 
   // Execute pull
   console.log('')
-  console.log(`  ${GR}Running: ${pullCmd}${R}`)
-  console.log('')
+  const pullSpinner = log.spinner()
+  pullSpinner.start(`Pulling from ${remote}...`)
 
   try {
-    const output = exec(pullCmd, false)
-    if (output.trim()) {
-      console.log(output)
+    const result = await execAsync(pullCmd, true)
+    pullSpinner.succeed('Pull completed successfully')
+    if (result.stdout.trim()) {
+      console.log(result.stdout)
     }
-    log.success('Pull completed successfully.')
   } catch (error) {
+    pullSpinner.fail('Pull failed')
     const msg = error instanceof Error ? error.message : String(error)
 
     if (msg.includes('CONFLICT') || msg.includes('conflict')) {
