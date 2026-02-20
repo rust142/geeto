@@ -111,23 +111,17 @@ jobs:
     needs: build-binaries
 
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-          token: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Download binaries and compute SHA256
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ env.RELEASE_TAG }}"
           VERSION="${TAG#v}"
-          BASE="https://github.com/rust142/geeto/releases/download/${TAG}"
 
           mkdir -p /tmp/bins
           for bin in geeto-mac geeto-mac-arm64 geeto-linux geeto-linux-arm64; do
             echo "Downloading ${bin}..."
-            gh release download "${TAG}" -p "${bin}" -D /tmp/bins
+            gh release download "${TAG}" -p "${bin}" -R rust142/geeto -D /tmp/bins
           done
 
           MAC_X64_SHA=$(sha256sum /tmp/bins/geeto-mac | awk '{print $1}')
@@ -141,9 +135,14 @@ jobs:
           echo "LINUX_ARM_SHA=${LINUX_ARM_SHA}" >> "$GITHUB_ENV"
           echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
 
-      - name: Update formula
+      - name: Clone and update tap repo
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/rust142/homebrew-geeto.git" tap
+          cd tap
           mkdir -p Formula
+
           cat > Formula/geeto.rb <<EOF
           # typed: false
           # frozen_string_literal: true
@@ -199,12 +198,8 @@ jobs:
           # Remove leading whitespace from heredoc indentation
           sed -i 's/^          //' Formula/geeto.rb
 
-      - name: Commit and push formula update
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -f Formula/geeto.rb
-          git commit -m "chore(brew): update formula to v${VERSION}" --no-verify || true
+          git commit -m "chore: update formula to v${VERSION}" --no-verify || true
           git push
