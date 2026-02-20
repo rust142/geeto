@@ -8,6 +8,7 @@ import {
   generateBranchName as sdkGenerateBranchName,
   generateCommitMessage as sdkGenerateCommitMessage,
   generateReleaseNotes as sdkGenerateReleaseNotes,
+  generateText as sdkGenerateText,
   getAvailableModelChoices as sdkGetAvailableModels,
   isAvailable as sdkIsAvailable,
 } from './gemini-sdk.js'
@@ -124,6 +125,20 @@ export const generateReleaseNotes = async (
     return await sdkGenerateReleaseNotes(commits, language, correction, model)
   } catch (error) {
     console.log('')
+    log.warn('Gemini Error: ' + String(error))
+    return null
+  }
+}
+
+export const generateText = async (
+  prompt: string,
+  model: GeminiModel = 'gemini-2.5-flash'
+): Promise<string | null> => {
+  try {
+    const ok = sdkIsAvailable()
+    if (!ok) return null
+    return await sdkGenerateText(prompt, model)
+  } catch (error) {
     log.warn('Gemini Error: ' + String(error))
     return null
   }

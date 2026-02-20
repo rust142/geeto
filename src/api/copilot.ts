@@ -8,6 +8,7 @@ import {
   generateBranchName as sdkGenerateBranchName,
   generateCommitMessage as sdkGenerateCommitMessage,
   generateReleaseNotes as sdkGenerateReleaseNotes,
+  generateText as sdkGenerateText,
   getAvailableModelChoices as sdkGetAvailableModels,
   isAvailable as sdkIsAvailable,
 } from './copilot-sdk.js'
@@ -126,6 +127,20 @@ export const generateReleaseNotes = async (
     return await sdkGenerateReleaseNotes(commits, language, correction, model)
   } catch (error) {
     console.log('')
+    log.warn('Copilot Error: ' + String(error))
+    return null
+  }
+}
+
+export const generateText = async (
+  prompt: string,
+  model: CopilotModel = 'claude-haiku-4.5'
+): Promise<string | null> => {
+  try {
+    const ok = await sdkIsAvailable()
+    if (!ok) return null
+    return await sdkGenerateText(prompt, model)
+  } catch (error) {
     log.warn('Copilot Error: ' + String(error))
     return null
   }

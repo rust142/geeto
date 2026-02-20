@@ -485,8 +485,30 @@ Formatting (follow EXACTLY — this is markdownlint-compliant):
   }
 }
 
+/** Send a raw prompt to OpenRouter and return the text response. */
+export const generateText = async (prompt: string, model?: string): Promise<string | null> => {
+  if (!ensureClient()) return null
+
+  const completion = await client?.chat.send({
+    model: model ?? 'gemini-2.5-flash',
+    messages: [{ role: 'user', content: prompt }],
+  })
+
+  try {
+    const content = completion?.choices[0]?.message?.content as string
+    const cleaned = String(content)
+      .replaceAll(/```[\S\s]*?```/g, '')
+      .replaceAll(/^"+|"+$/g, '')
+      .trim()
+    return cleaned || null
+  } catch {
+    return null
+  }
+}
+
 export default {
   generateBranchName,
   generateCommitMessage,
   generateReleaseNotes,
+  generateText,
 }

@@ -438,12 +438,6 @@ const handleSyncReleases = async (): Promise<void> => {
       copilotModel = savedState.copilotModel
       openrouterModel = savedState.openrouterModel
       geminiModel = savedState.geminiModel
-      const modelDisplay = getModelValue(copilotModel ?? openrouterModel ?? geminiModel ?? '')
-      log.info(
-        `Using saved AI config: ${getAIProviderShortName(aiProvider)}` +
-          (modelDisplay ? ` (${modelDisplay})` : '')
-      )
-      console.log('')
     } else {
       let providerChosen = false
       while (!providerChosen) {
@@ -1039,12 +1033,6 @@ export const handleRelease = async (): Promise<void> => {
       copilotModel = savedState.copilotModel
       openrouterModel = savedState.openrouterModel
       geminiModel = savedState.geminiModel
-      const modelDisplay = getModelValue(copilotModel ?? openrouterModel ?? geminiModel ?? '')
-      log.info(
-        `Using saved AI config: ${getAIProviderShortName(aiProvider)}` +
-          (modelDisplay ? ` (${modelDisplay})` : '')
-      )
-      console.log('')
     } else {
       // No saved config — ask user to pick provider + model
       let providerChosen = false

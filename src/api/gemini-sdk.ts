@@ -350,8 +350,30 @@ Formatting (follow EXACTLY — this is markdownlint-compliant):
   }
 }
 
+/** Send a raw prompt to Gemini and return the text response. */
+export const generateText = async (prompt: string, model?: GeminiModel): Promise<string | null> => {
+  if (!ensureClient()) return null
+
+  const result = await client?.models.generateContent({
+    model: model ?? 'gemini-2.5-flash',
+    contents: prompt,
+  })
+
+  try {
+    const content = (result as GenerateContentResponse).text
+    const cleaned = String(content)
+      .replaceAll(/```[\S\s]*?```/g, '')
+      .replaceAll(/^"+|"+$/g, '')
+      .trim()
+    return cleaned || null
+  } catch {
+    return null
+  }
+}
+
 export default {
   generateBranchName,
   generateCommitMessage,
   generateReleaseNotes,
+  generateText,
 }
