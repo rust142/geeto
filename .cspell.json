@@ -84,7 +84,8 @@
     "lintstagedrc",
     "dpkg",
     "untap",
-    "Bahasa"
+    "Bahasa",
+    "creatordate"
   ],
   "ignorePaths": [
     "node_modules/**",

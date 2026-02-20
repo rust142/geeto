@@ -69,7 +69,9 @@ const getCurrentVersion = (): string => {
 
 const getExistingTags = (): string[] => {
   try {
-    const output = execSilent('git tag --list --sort=-v:refname').trim()
+    // Sort by creation date (newest first), NOT version number.
+    // Version sort breaks when older dummy/test tags have higher semver (e.g. v2.0.0 before v0.3.x).
+    const output = execSilent('git tag --list --sort=-creatordate').trim()
     return output ? output.split('\n').filter(Boolean) : []
   } catch {
     return []
