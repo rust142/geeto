@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.4.4](https://github.com/rust142/geeto/compare/v0.4.3...v0.4.4) (2026-02-20)
+
+### Features
+
+* feat(branch): display changed files with status before staging ([944603a](https://github.com/rust142/geeto/commit/944603a))
+
 ## [0.4.3](https://github.com/rust142/geeto/compare/v0.4.2...v0.4.3) (2026-02-20)
 
 ### Features

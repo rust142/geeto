@@ -1,5 +1,15 @@
 # Releases
 
+## v0.4.4 — February 21, 2026
+
+### What's New?
+
+#### New Features
+
+- Shows changed files and their status before you stage them
+
+---
+
 ## v0.4.3 — February 21, 2026
 
 ### What's New?
