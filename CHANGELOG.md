@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.5.0](https://github.com/rust142/geeto/compare/v0.4.4...v0.5.0) (2026-02-20)
+
+### Features
+
+* feat(cli): add interactive git workflows (abort, pull, fetch, prune, status) ([fd3c564](https://github.com/rust142/geeto/commit/fd3c564))
+
+## [0.4.4](https://github.com/rust142/geeto/compare/v0.4.3...v0.4.4) (2026-02-20)
+
+### Features
+
+* feat(branch): display changed files with status before staging ([944603a](https://github.com/rust142/geeto/commit/944603a))
+
+## [0.4.3](https://github.com/rust142/geeto/compare/v0.4.2...v0.4.3) (2026-02-20)
+
+### Features
+
+* feat(updater): add update script and improve install/uninstall docs ([442518a](https://github.com/rust142/geeto/commit/442518a))
+
+## [0.4.2](https://github.com/rust142/geeto/compare/v0.4.1...v0.4.2) (2026-02-20)
+
+### Features
+
+* feat(setup): improve interactive setup flows and installer scripts ([e3c0516](https://github.com/rust142/geeto/commit/e3c0516))
+
+### Other Changes
+
+* ci(publish-binaries): use HOMEBREW_TAP_TOKEN for tap repo cloning ([f6807be](https://github.com/rust142/geeto/commit/f6807be))
+
+## [0.4.1](https://github.com/rust142/geeto/compare/v0.4.0...v0.4.1) (2026-02-20)
+
+### Other Changes
+
+* docs(repo): update contributing, security, code of conduct, and license ([44dcbe3](https://github.com/rust142/geeto/commit/44dcbe3))
+
 ## [0.4.0](https://github.com/rust142/geeto/compare/v0.3.11...v0.4.0) (2026-02-20)
 
 ### Features

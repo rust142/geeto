@@ -1,5 +1,63 @@
 # Releases
 
+## v0.5.0 — February 21, 2026
+
+### What's New?
+
+#### New Features
+
+- Added interactive Git workflows to the CLI so you can abort operations, pull or fetch updates, clean up old branches, and check repository status.
+
+---
+
+## v0.4.4 — February 21, 2026
+
+### What's New?
+
+#### New Features
+
+- Shows changed files and their status before you stage them
+
+---
+
+## v0.4.3 — February 21, 2026
+
+### What's New?
+
+#### New Features
+
+- Added an update script to make keeping the app up to date easier.
+
+#### Other Improvements
+
+- Improved the installation and uninstallation documentation to make setup and removal clearer.
+
+---
+
+## v0.4.2 — February 20, 2026
+
+### What's New?
+
+#### New Features
+
+- Improved the interactive setup experience and installer scripts to make installation smoother.
+
+#### Other Improvements
+
+- Improved Homebrew publishing reliability by using a secure token for cloning the tap repository.
+
+---
+
+## v0.4.1 — February 20, 2026
+
+### What's New?
+
+#### Other Improvements
+
+- Updated the contributing guidelines, security policy, code of conduct, and license to clarify repository rules and expectations.
+
+---
+
 ## v0.4.0 — February 20, 2026
 
 ### What's New?
