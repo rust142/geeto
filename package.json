@@ -64,13 +64,24 @@
   },
   "keywords": [
     "git",
-    "flow",
-    "automation",
-    "gemini",
+    "cli",
     "ai",
+    "workflow",
+    "automation",
+    "commit",
     "branch-naming",
+    "release-manager",
+    "conventional-commits",
+    "github-copilot",
+    "gemini",
+    "openrouter",
     "trello",
-    "cli"
+    "developer-tools",
+    "git-workflow",
+    "changelog",
+    "semver",
+    "pull-request",
+    "typescript"
   ],
   "devDependencies": {
     "@commitlint/cli": "^20.4.0",

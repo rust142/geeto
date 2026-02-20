@@ -362,6 +362,7 @@ const handleSyncReleases = async (): Promise<void> => {
     return
   }
 
+  console.log('')
   const spinner = log.spinner()
   spinner.start('Checking GitHub releases...')
 
@@ -395,7 +396,6 @@ const handleSyncReleases = async (): Promise<void> => {
   let tagsToRelease = missingTags
 
   if (action === 'select') {
-    // Use multi-select imported from menu
     const { multiSelect } = await import('../cli/menu.js')
     const choices = missingTags.map((t) => ({ label: t, value: t }))
     const selected = await multiSelect('Select tags to create releases for:', choices)
@@ -404,6 +404,73 @@ const handleSyncReleases = async (): Promise<void> => {
       return
     }
     tagsToRelease = selected
+  }
+
+  // Choose release notes mode: AI or template
+  console.log('')
+  const notesMode = await select('How should release notes be generated?', [
+    { label: 'AI-generated (recommended)', value: 'ai' },
+    { label: 'Auto-generate (template-based)', value: 'auto' },
+  ])
+
+  // AI setup if needed
+  let useAI = notesMode === 'ai'
+  let language: 'en' | 'id' = 'en'
+  let aiProvider: 'gemini' | 'copilot' | 'openrouter' = 'copilot'
+  let copilotModel: CopilotModel | undefined
+  let openrouterModel: OpenRouterModel | undefined
+  let geminiModel: GeminiModel | undefined
+
+  if (useAI) {
+    language = (await select('Release notes language:', [
+      { label: 'English', value: 'en' },
+      { label: 'Indonesian (Bahasa Indonesia)', value: 'id' },
+    ])) as 'en' | 'id'
+
+    // Check saved config
+    const savedState = loadState()
+    if (
+      savedState?.aiProvider &&
+      savedState.aiProvider !== 'manual' &&
+      (savedState.copilotModel || savedState.openrouterModel || savedState.geminiModel)
+    ) {
+      aiProvider = savedState.aiProvider as 'gemini' | 'copilot' | 'openrouter'
+      copilotModel = savedState.copilotModel
+      openrouterModel = savedState.openrouterModel
+      geminiModel = savedState.geminiModel
+    } else {
+      let providerChosen = false
+      while (!providerChosen) {
+        aiProvider = (await select('Choose AI Provider:', [
+          { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
+          { label: 'Gemini', value: 'gemini' },
+          { label: 'OpenRouter', value: 'openrouter' },
+        ])) as 'gemini' | 'copilot' | 'openrouter'
+
+        const chosen = await chooseModelForProvider(
+          aiProvider,
+          undefined,
+          'Back to AI provider menu'
+        )
+        if (!chosen || chosen === 'back') continue
+
+        switch (aiProvider) {
+          case 'gemini': {
+            geminiModel = chosen as GeminiModel
+            break
+          }
+          case 'copilot': {
+            copilotModel = chosen as CopilotModel
+            break
+          }
+          case 'openrouter': {
+            openrouterModel = chosen as OpenRouterModel
+            break
+          }
+        }
+        providerChosen = true
+      }
+    }
   }
 
   // Preview and confirm
@@ -417,6 +484,9 @@ const handleSyncReleases = async (): Promise<void> => {
       `${colors.cyan}│${colors.reset}  ${colors.green}+${colors.reset} Create release for ${colors.yellow}${ver}${colors.reset}`
     )
   }
+  console.log(
+    `${colors.cyan}│${colors.reset}  ${colors.gray}Mode: ${useAI ? 'AI-generated' : 'Template-based'}${colors.reset}`
+  )
   console.log(`${colors.cyan}└${line}┘${colors.reset}`)
 
   console.log('')
@@ -432,13 +502,83 @@ const handleSyncReleases = async (): Promise<void> => {
     const tagIdx = allTags.indexOf(tag)
     const prevTag = allTags[tagIdx + 1]
     const commits = getCommitsSinceTag(prevTag)
-    const releaseBody = generateReleaseMd(ver, commits, prevTag?.replace(/^v/, '') ?? '0.0.0')
-      .replace(/^## .*\n+/, '')
-      .replace(/\n---\n*$/, '')
-      .trim()
+    const commitList = commits.map((c) => c.subject).join('\n')
 
+    let releaseBody: string
+
+    if (useAI && commits.length > 0) {
+      console.log('')
+      const aiSpinner = log.spinner()
+      const modelDisplay = getModelValue(copilotModel ?? openrouterModel ?? geminiModel ?? '')
+      aiSpinner.start(
+        `Generating notes for ${tag} with ${getAIProviderShortName(aiProvider)}` +
+          (modelDisplay ? ` (${modelDisplay})` : '') +
+          '...'
+      )
+
+      const aiResult = await generateReleaseNotesWithProvider(
+        aiProvider,
+        commitList,
+        language,
+        undefined,
+        copilotModel,
+        openrouterModel,
+        geminiModel
+      )
+
+      if (aiResult) {
+        aiSpinner.succeed(`Notes generated for ${tag}`)
+        releaseBody = normalizeReleaseMarkdown(aiResult)
+
+        // Preview notes for user review
+        console.log('')
+        console.log(`${colors.cyan}┌${'─'.repeat(56)}┐${colors.reset}`)
+        console.log(
+          `${colors.cyan}│${colors.reset} ${colors.bright}Release Notes — ${tag}${colors.reset}`
+        )
+        console.log(`${colors.cyan}├${'─'.repeat(56)}┤${colors.reset}`)
+        for (const noteLine of releaseBody.split('\n')) {
+          console.log(`${colors.cyan}│${colors.reset} ${noteLine}`)
+        }
+        console.log(`${colors.cyan}└${'─'.repeat(56)}┘${colors.reset}`)
+
+        console.log('')
+        const reviewAction = await select(`Publish release for ${tag}?`, [
+          { label: 'Yes, publish', value: 'accept' },
+          { label: 'Skip this tag', value: 'skip' },
+        ])
+
+        if (reviewAction === 'skip') continue
+      } else {
+        aiSpinner.fail(`AI failed for ${tag}, using template`)
+        useAI = false
+        releaseBody = generateReleaseMd(ver, commits, prevTag?.replace(/^v/, '') ?? '0.0.0')
+          .replace(/^## .*\n+/, '')
+          .replace(/\n---\n*$/, '')
+          .trim()
+      }
+    } else {
+      releaseBody = generateReleaseMd(ver, commits, prevTag?.replace(/^v/, '') ?? '0.0.0')
+        .replace(/^## .*\n+/, '')
+        .replace(/\n---\n*$/, '')
+        .trim()
+    }
+
+    console.log('')
     const releaseSpinner = log.spinner()
-    releaseSpinner.start(`Creating release ${colors.yellow}${tag}${colors.reset}...`)
+
+    // Ensure tag exists on remote before creating GitHub Release
+    releaseSpinner.start(`Pushing tag ${colors.yellow}${tag}${colors.reset} to remote...`)
+    try {
+      await execAsync(`git push origin ${tag} --no-verify`, true)
+      releaseSpinner.succeed(`Tag ${tag} pushed to remote`)
+    } catch {
+      // Tag might already exist on remote — that's fine, continue
+    }
+
+    console.log('')
+    const createSpinner = log.spinner()
+    createSpinner.start(`Creating release ${colors.yellow}${tag}${colors.reset}...`)
 
     const os = await import('node:os')
     const tempFile = `${os.tmpdir()}/geeto-sync-${Date.now()}.md`
@@ -446,10 +586,12 @@ const handleSyncReleases = async (): Promise<void> => {
 
     try {
       await execAsync(`gh release create ${tag} --title "${tag}" --notes-file "${tempFile}"`, true)
-      releaseSpinner.succeed(`Release ${tag} created`)
+      createSpinner.succeed(`Release ${tag} created`)
       successCount++
-    } catch {
-      releaseSpinner.fail(`Failed to create release for ${tag}`)
+    } catch (error) {
+      const stderr = (error as { stderr?: string }).stderr?.trim()
+      createSpinner.fail(`Failed to create release for ${tag}`)
+      if (stderr) log.error(`  ${stderr.split('\n')[0]}`)
     }
 
     // Cleanup temp file
@@ -469,20 +611,256 @@ const handleSyncReleases = async (): Promise<void> => {
   }
 }
 
+// ─── Delete GitHub Releases ───
+
+const handleDeleteReleases = async (): Promise<void> => {
+  // Check if gh CLI is available
+  try {
+    execSilent('gh --version')
+  } catch {
+    log.error('GitHub CLI (gh) is not installed. Install it: https://cli.github.com')
+    return
+  }
+
+  console.log('')
+  const spinner = log.spinner()
+  spinner.start('Fetching GitHub releases...')
+
+  const ghReleases = getExistingGithubReleases()
+
+  spinner.succeed(`Found ${ghReleases.length} GitHub releases`)
+
+  if (ghReleases.length === 0) {
+    console.log('')
+    log.info('No GitHub Releases to delete.')
+    return
+  }
+
+  console.log('')
+  const { multiSelect } = await import('../cli/menu.js')
+  const choices = ghReleases.map((t) => ({ label: t, value: t }))
+  const selected = await multiSelect('Select releases to delete:', choices)
+
+  if (selected.length === 0) {
+    log.info('No releases selected.')
+    return
+  }
+
+  console.log('')
+  const alsoDeleteTag = confirm('Also delete the associated git tags?')
+
+  console.log('')
+  const proceed = confirm(
+    `Delete ${selected.length} GitHub Release(s)${alsoDeleteTag ? ' + tags' : ''}?`
+  )
+  if (!proceed) return
+
+  let successCount = 0
+
+  for (const release of selected) {
+    console.log('')
+    const releaseSpinner = log.spinner()
+    releaseSpinner.start(`Deleting release ${colors.yellow}${release}${colors.reset}...`)
+
+    try {
+      await execAsync(`gh release delete ${release} --yes`, true)
+      if (alsoDeleteTag) {
+        try {
+          await execAsync(`git tag -d ${release}`, true)
+          await execAsync(`git push origin --delete ${release} --no-verify`, true)
+        } catch {
+          /* Tag deletion is best-effort */
+        }
+      }
+      releaseSpinner.succeed(`Release ${release} deleted${alsoDeleteTag ? ' + tag' : ''}`)
+      successCount++
+    } catch (error) {
+      const stderr = (error as { stderr?: string }).stderr?.trim()
+      releaseSpinner.fail(`Failed to delete ${release}`)
+      if (stderr) log.error(`  ${stderr.split('\n')[0]}`)
+    }
+  }
+
+  console.log('')
+  if (successCount === selected.length) {
+    log.success(`All ${successCount} releases deleted!`)
+  } else {
+    log.warn(`${successCount}/${selected.length} releases deleted`)
+  }
+}
+
+// ─── Recover missing tags ───
+
+const handleRecoverTags = async (): Promise<void> => {
+  const line = '─'.repeat(56)
+
+  console.log('')
+  const spinner = log.spinner()
+  spinner.start('Scanning release commits...')
+
+  // Find all release commits: "chore(release): vX.Y.Z"
+  let gitLog: string
+  try {
+    gitLog = exec('git log --all --oneline --grep="^chore(release): v" --format="%H %s"', true)
+  } catch {
+    spinner.fail('Failed to scan git log')
+    return
+  }
+
+  const releasePattern = /^([a-f0-9]+) chore\(release\): v(.+)$/
+  const releaseCommits: { hash: string; version: string; tag: string }[] = []
+
+  for (const logLine of gitLog.split('\n').filter(Boolean)) {
+    const match = logLine.match(releasePattern)
+    if (match?.[1] && match[2]) {
+      releaseCommits.push({
+        hash: match[1],
+        version: match[2],
+        tag: `v${match[2]}`,
+      })
+    }
+  }
+
+  if (releaseCommits.length === 0) {
+    spinner.fail('No release commits found')
+    return
+  }
+
+  // Compare with existing tags
+  const existingTags = new Set(getExistingTags())
+  const missingTags = releaseCommits.filter((rc) => !existingTags.has(rc.tag))
+
+  spinner.succeed(`Found ${releaseCommits.length} release commits, ${existingTags.size} tags`)
+
+  if (missingTags.length === 0) {
+    console.log('')
+    log.success('All release commits have matching tags! Nothing to recover.')
+    return
+  }
+
+  // Show missing tags
+  console.log('')
+  log.info(
+    `${colors.bright}${missingTags.length}${colors.reset} tags missing (release commit exists but no tag):`
+  )
+  for (const mt of missingTags) {
+    console.log(
+      `  ${colors.yellow}${mt.tag}${colors.reset} ${colors.gray}← ${mt.hash.slice(0, 7)}${colors.reset}`
+    )
+  }
+
+  console.log('')
+  const action = await select('What do you want to do?', [
+    { label: 'Recover all missing tags', value: 'all' },
+    { label: 'Select which tags to recover', value: 'select' },
+    { label: 'Cancel', value: 'cancel' },
+  ])
+
+  if (action === 'cancel') return
+
+  let tagsToRecover = missingTags
+
+  if (action === 'select') {
+    const { multiSelect } = await import('../cli/menu.js')
+    const choices = missingTags.map((mt) => ({
+      label: `${mt.tag} (${mt.hash.slice(0, 7)})`,
+      value: mt.tag,
+    }))
+    const selected = await multiSelect('Select tags to recover:', choices)
+    if (selected.length === 0) {
+      log.info('No tags selected.')
+      return
+    }
+    tagsToRecover = missingTags.filter((mt) => selected.includes(mt.tag))
+  }
+
+  // Preview
+  console.log('')
+  console.log(`${colors.cyan}┌${line}┐${colors.reset}`)
+  console.log(`${colors.cyan}│${colors.reset} ${colors.bright}Recovery Plan${colors.reset}`)
+  console.log(`${colors.cyan}├${line}┤${colors.reset}`)
+  for (const mt of tagsToRecover) {
+    console.log(
+      `${colors.cyan}│${colors.reset}  ${colors.green}+${colors.reset} ${colors.yellow}${mt.tag}${colors.reset} → commit ${colors.gray}${mt.hash.slice(0, 7)}${colors.reset}`
+    )
+  }
+  console.log(`${colors.cyan}└${line}┘${colors.reset}`)
+
+  console.log('')
+  const proceed = confirm(`Create ${tagsToRecover.length} tags?`)
+  if (!proceed) return
+
+  let successCount = 0
+
+  for (const mt of tagsToRecover) {
+    console.log('')
+    const tagSpinner = log.spinner()
+    tagSpinner.start(`Creating tag ${colors.yellow}${mt.tag}${colors.reset}...`)
+
+    try {
+      exec(`git tag -a ${mt.tag} ${mt.hash} -m "Release ${mt.tag}"`, true)
+      tagSpinner.succeed(`Tag ${mt.tag} created`)
+      successCount++
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error)
+      tagSpinner.fail(`Failed to create ${mt.tag}`)
+      log.error(`  ${errMsg.split('\n')[0]}`)
+    }
+  }
+
+  console.log('')
+  if (successCount === tagsToRecover.length) {
+    log.success(`All ${successCount} tags recovered!`)
+  } else {
+    log.warn(`${successCount}/${tagsToRecover.length} tags recovered`)
+  }
+
+  // Offer to push tags to remote
+  if (successCount > 0) {
+    console.log('')
+    const pushTags = confirm('Push recovered tags to remote?')
+    if (pushTags) {
+      console.log('')
+      const pushSpinner = log.spinner()
+      pushSpinner.start('Pushing tags to remote...')
+      try {
+        await execAsync('git push --tags --no-verify', true)
+        pushSpinner.succeed('Tags pushed to remote')
+      } catch (error) {
+        const stderr = (error as { stderr?: string }).stderr?.trim()
+        pushSpinner.fail('Failed to push tags')
+        if (stderr) log.error(`  ${stderr.split('\n')[0]}`)
+      }
+    }
+  }
+}
+
 // ─── Main handler ───
 
 export const handleRelease = async (): Promise<void> => {
   log.banner()
   log.step(`${colors.cyan}Release / Tag Manager${colors.reset}\n`)
 
-  // Main menu: create new release OR sync existing tags
+  // Main menu: create new release, sync, or manage releases
   const mode = await select('What do you want to do?', [
     { label: 'Create a new release', value: 'create' },
     { label: 'Sync GitHub Releases for existing tags', value: 'sync' },
+    { label: 'Recover missing tags from release commits', value: 'recover' },
+    { label: 'Delete GitHub Releases', value: 'delete' },
   ])
 
   if (mode === 'sync') {
     await handleSyncReleases()
+    return
+  }
+
+  if (mode === 'recover') {
+    await handleRecoverTags()
+    return
+  }
+
+  if (mode === 'delete') {
+    await handleDeleteReleases()
     return
   }
 
@@ -655,12 +1033,6 @@ export const handleRelease = async (): Promise<void> => {
       copilotModel = savedState.copilotModel
       openrouterModel = savedState.openrouterModel
       geminiModel = savedState.geminiModel
-      const modelDisplay = getModelValue(copilotModel ?? openrouterModel ?? geminiModel ?? '')
-      log.info(
-        `Using saved AI config: ${getAIProviderShortName(aiProvider)}` +
-          (modelDisplay ? ` (${modelDisplay})` : '')
-      )
-      console.log('')
     } else {
       // No saved config — ask user to pick provider + model
       let providerChosen = false
@@ -950,8 +1322,8 @@ export const handleRelease = async (): Promise<void> => {
   // 5. Push
   console.log('')
   const pushChoice = await select('Push to remote?', [
-    { label: 'Push commit + tag', value: 'both' },
-    { label: 'Push commit only', value: 'commit' },
+    { label: 'Push release + tag', value: 'both' },
+    { label: 'Push release only', value: 'commit' },
     { label: 'Skip pushing', value: 'skip' },
   ])
 
@@ -966,13 +1338,13 @@ export const handleRelease = async (): Promise<void> => {
     try {
       await execAsync(`git push`, true)
       if (pushChoice === 'both') {
-        await execAsync(`git push origin v${newVersion}`, true)
+        await execAsync(`git push origin v${newVersion} --no-verify`, true)
       }
       clearInterval(interval)
       progressBar.update(100)
       progressBar.complete()
       console.log('')
-      log.success(pushChoice === 'both' ? 'Pushed commit + tag' : 'Pushed commit')
+      log.success(pushChoice === 'both' ? 'Pushed release + tag' : 'Pushed release')
     } catch {
       clearInterval(interval)
       progressBar.complete()
@@ -1011,8 +1383,10 @@ export const handleRelease = async (): Promise<void> => {
         )
         releaseSpinner.succeed('GitHub Release created')
         ghReleaseCreated = true
-      } catch {
-        releaseSpinner.fail('Failed to create GitHub Release (check gh auth)')
+      } catch (error) {
+        const stderr = (error as { stderr?: string }).stderr?.trim()
+        releaseSpinner.fail('Failed to create GitHub Release')
+        if (stderr) log.error(`  ${stderr.split('\n')[0]}`)
       }
 
       // Cleanup temp file

@@ -7,6 +7,7 @@ import {
   generateBranchName as sdkGenerateBranchName,
   generateCommitMessage as sdkGenerateCommitMessage,
   generateReleaseNotes as sdkGenerateReleaseNotes,
+  generateText as sdkGenerateText,
   isAvailable as sdkIsAvailable,
 } from './openrouter-sdk.js'
 import { log } from '../utils/logging.js'
@@ -158,6 +159,20 @@ export const generateReleaseNotes = async (
     return await sdkGenerateReleaseNotes(commits, language, correction, model)
   } catch (error) {
     console.log('')
+    log.warn('OpenRouter Error: ' + String(error))
+    return null
+  }
+}
+
+export const generateText = async (
+  prompt: string,
+  model: OpenRouterModel = 'gemini-2.5-flash'
+): Promise<string | null> => {
+  try {
+    const ok = sdkIsAvailable()
+    if (!ok) return null
+    return await sdkGenerateText(prompt, model)
+  } catch (error) {
     log.warn('OpenRouter Error: ' + String(error))
     return null
   }
