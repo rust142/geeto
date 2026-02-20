@@ -1,12 +1,13 @@
-# Release v0.3.5
+# Release v0.3.6
 
 **Release date:** February 20, 2026
-**Previous version:** v0.3.4
+**Previous version:** v0.3.5
 
 ## What's New?
 
 ### New Features
 
+- add allowedBases config and branch base validation
 - add Homebrew formula and update CI/.gitignore
 - add build & publish binaries workflow and packaging
 - add progress bar for git push in release workflow
@@ -52,6 +53,7 @@
 
 ### Bug Fixes
 
+- improve push error messages and exit on fatal error
 - suppress Node.js experimental warnings from copilot subprocess
 - pass true to exec and silence push/branch logs
 - pass true flag to exec when deleting local branches
@@ -73,6 +75,9 @@
 
 ### Other Improvements
 
+- Merge branch 'main' of github.com:rust142/geeto
+- move Homebrew formula updates to tap repo
+- v0.3.5
 - add workflow_dispatch tag input and use RELEASE_TAG
 - v0.3.4
 - generate Homebrew formula using env vars and heredoc
