@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.5.0](https://github.com/rust142/geeto/compare/v0.4.4...v0.5.0) (2026-02-20)
+
+### Features
+
+* feat(cli): add interactive git workflows (abort, pull, fetch, prune, status) ([fd3c564](https://github.com/rust142/geeto/commit/fd3c564))
+
 ## [0.4.4](https://github.com/rust142/geeto/compare/v0.4.3...v0.4.4) (2026-02-20)
 
 ### Features

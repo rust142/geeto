@@ -1,5 +1,15 @@
 # Releases
 
+## v0.5.0 — February 21, 2026
+
+### What's New?
+
+#### New Features
+
+- Added interactive Git workflows to the CLI so you can abort operations, pull or fetch updates, clean up old branches, and check repository status.
+
+---
+
 ## v0.4.4 — February 21, 2026
 
 ### What's New?
