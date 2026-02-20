@@ -6,6 +6,20 @@
 
 * feat(release): add AI-generated release notes via providers ([41d3e0b](https://github.com/rust142/geeto/commit/41d3e0b))
 
+### Bug Fixes
+
+* fix(release): sort git tags by creation date in release workflow ([3ceb687](https://github.com/rust142/geeto/commit/3ceb687))
+
+### Other Changes
+
+* chore(cspell): add Bahasa to custom dictionary ([4d557b0](https://github.com/rust142/geeto/commit/4d557b0))
+
+## [0.3.8](https://github.com/rust142/geeto/compare/v0.3.7...v0.3.8) (2026-02-20)
+
+### Features
+
+* feat(release): add AI-generated release notes via providers ([41d3e0b](https://github.com/rust142/geeto/commit/41d3e0b))
+
 ### Other Changes
 
 * chore(release): v0.3.8 ([ad07150](https://github.com/rust142/geeto/commit/ad07150))
