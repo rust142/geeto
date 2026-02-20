@@ -12,6 +12,39 @@ import { getCurrentBranch, pushWithRetry } from '../utils/git.js'
 import { log } from '../utils/logging.js'
 import { saveState } from '../utils/state.js'
 
+/** Extract a user-friendly message from a push error. */
+function describePushError(error: unknown): string {
+  const stderr =
+    (error as { stderr?: string })?.stderr ?? (error as Error)?.message ?? String(error)
+  const lower = stderr.toLowerCase()
+
+  if (
+    lower.includes('non-fast-forward') ||
+    lower.includes('tip of your current branch is behind')
+  ) {
+    return (
+      'Your local branch is behind the remote. Run `git pull` (or `git pull --rebase`)' +
+      ' to integrate remote changes, then try again.'
+    )
+  }
+  if (lower.includes('permission denied') || lower.includes('403')) {
+    return 'Permission denied. Check that you have write access to this repository.'
+  }
+  if (
+    lower.includes('authentication failed') ||
+    lower.includes('http basic: access denied') ||
+    lower.includes('could not read from remote')
+  ) {
+    return 'Authentication failed. Verify your SSH key, credential helper, or personal access token.'
+  }
+  if (lower.includes('does not appear to be a git repository')) {
+    return "Remote 'origin' is not configured. Add a remote with `git remote add origin <url>`."
+  }
+  // Fallback: show first meaningful line of stderr
+  const firstLine = stderr.split('\n').find((l: string) => l.trim() && !l.startsWith('hint:'))
+  return firstLine?.trim() ?? 'Push failed. Run `git push` manually for details.'
+}
+
 export async function handlePush(
   state: GeetoState,
   opts?: { suppressStep?: boolean; suppressLogs?: boolean; force?: boolean }
@@ -76,7 +109,7 @@ export async function handlePush(
         } catch (error) {
           progressBar.complete()
           console.log('')
-          log.error('Push failed; see git output for details')
+          log.error(describePushError(error))
           throw error
         }
       } else {
@@ -126,7 +159,7 @@ export async function handlePush(
         } catch (error) {
           progressBar.complete()
           console.log('')
-          log.error('Push failed; see git output for details')
+          log.error(describePushError(error))
           throw error
         }
       }
@@ -356,7 +389,7 @@ export async function handleMerge(
         } catch (error) {
           progressBar.complete()
           console.log('')
-          log.error('Push failed; see git output for details')
+          log.error(describePushError(error))
           throw error
         }
       }

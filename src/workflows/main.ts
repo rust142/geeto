@@ -787,6 +787,6 @@ export const main = async (opts?: {
     } else {
       log.error('Unknown error occurred')
     }
-    throw new Error('Application error')
+    process.exit(1)
   }
 }
