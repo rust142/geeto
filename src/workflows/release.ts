@@ -338,11 +338,153 @@ const generateChangelogEntry = (
   )
 }
 
+// ─── Sync GitHub Releases for existing tags ───
+
+const getExistingGithubReleases = (): string[] => {
+  try {
+    const output = execSilent(
+      'gh release list --limit 100 --json tagName --jq ".[].tagName"'
+    ).trim()
+    return output ? output.split('\n').filter(Boolean) : []
+  } catch {
+    return []
+  }
+}
+
+const handleSyncReleases = async (): Promise<void> => {
+  const line = '─'.repeat(56)
+
+  // Check if gh CLI is available
+  try {
+    execSilent('gh --version')
+  } catch {
+    log.error('GitHub CLI (gh) is not installed. Install it: https://cli.github.com')
+    return
+  }
+
+  const spinner = log.spinner()
+  spinner.start('Checking GitHub releases...')
+
+  const localTags = getExistingTags()
+  const ghReleases = getExistingGithubReleases()
+  const missingTags = localTags.filter((t) => !ghReleases.includes(t))
+
+  spinner.succeed(`Found ${localTags.length} tags, ${ghReleases.length} GitHub releases`)
+
+  if (missingTags.length === 0) {
+    console.log('')
+    log.success('All tags have GitHub Releases! Nothing to sync.')
+    return
+  }
+
+  console.log('')
+  log.info(`${colors.bright}${missingTags.length}${colors.reset} tags missing GitHub Releases:`)
+  for (const tag of missingTags) {
+    console.log(`  ${colors.yellow}${tag}${colors.reset}`)
+  }
+
+  console.log('')
+  const action = await select('What do you want to do?', [
+    { label: 'Create releases for all missing tags', value: 'all' },
+    { label: 'Select which tags to release', value: 'select' },
+    { label: 'Cancel', value: 'cancel' },
+  ])
+
+  if (action === 'cancel') return
+
+  let tagsToRelease = missingTags
+
+  if (action === 'select') {
+    // Use multi-select imported from menu
+    const { multiSelect } = await import('../cli/menu.js')
+    const choices = missingTags.map((t) => ({ label: t, value: t }))
+    const selected = await multiSelect('Select tags to create releases for:', choices)
+    if (selected.length === 0) {
+      log.info('No tags selected.')
+      return
+    }
+    tagsToRelease = selected
+  }
+
+  // Preview and confirm
+  console.log('')
+  console.log(`${colors.cyan}┌${line}┐${colors.reset}`)
+  console.log(`${colors.cyan}│${colors.reset} ${colors.bright}Sync Plan${colors.reset}`)
+  console.log(`${colors.cyan}├${line}┤${colors.reset}`)
+  for (const tag of tagsToRelease) {
+    const ver = tag.replace(/^v/, '')
+    console.log(
+      `${colors.cyan}│${colors.reset}  ${colors.green}+${colors.reset} Create release for ${colors.yellow}${ver}${colors.reset}`
+    )
+  }
+  console.log(`${colors.cyan}└${line}┘${colors.reset}`)
+
+  console.log('')
+  const proceed = confirm(`Create ${tagsToRelease.length} GitHub Releases?`)
+  if (!proceed) return
+
+  // Create releases one by one
+  const allTags = getExistingTags()
+  let successCount = 0
+
+  for (const tag of tagsToRelease) {
+    const ver = tag.replace(/^v/, '')
+    const tagIdx = allTags.indexOf(tag)
+    const prevTag = allTags[tagIdx + 1]
+    const commits = getCommitsSinceTag(prevTag)
+    const releaseBody = generateReleaseMd(ver, commits, prevTag?.replace(/^v/, '') ?? '0.0.0')
+      .replace(/^## .*\n+/, '')
+      .replace(/\n---\n*$/, '')
+      .trim()
+
+    const releaseSpinner = log.spinner()
+    releaseSpinner.start(`Creating release ${colors.yellow}${tag}${colors.reset}...`)
+
+    const os = await import('node:os')
+    const tempFile = `${os.tmpdir()}/geeto-sync-${Date.now()}.md`
+    writeFileSync(tempFile, releaseBody, 'utf8')
+
+    try {
+      await execAsync(`gh release create ${tag} --title "${tag}" --notes-file "${tempFile}"`, true)
+      releaseSpinner.succeed(`Release ${tag} created`)
+      successCount++
+    } catch {
+      releaseSpinner.fail(`Failed to create release for ${tag}`)
+    }
+
+    // Cleanup temp file
+    try {
+      const { unlinkSync } = await import('node:fs')
+      unlinkSync(tempFile)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  console.log('')
+  if (successCount === tagsToRelease.length) {
+    log.success(`All ${successCount} GitHub Releases created!`)
+  } else {
+    log.warn(`${successCount}/${tagsToRelease.length} releases created`)
+  }
+}
+
 // ─── Main handler ───
 
 export const handleRelease = async (): Promise<void> => {
   log.banner()
   log.step(`${colors.cyan}Release / Tag Manager${colors.reset}\n`)
+
+  // Main menu: create new release OR sync existing tags
+  const mode = await select('What do you want to do?', [
+    { label: 'Create a new release', value: 'create' },
+    { label: 'Sync GitHub Releases for existing tags', value: 'sync' },
+  ])
+
+  if (mode === 'sync') {
+    await handleSyncReleases()
+    return
+  }
 
   const currentVersion = getCurrentVersion()
   const semver = parseSemver(currentVersion)
