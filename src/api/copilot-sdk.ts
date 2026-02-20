@@ -579,8 +579,27 @@ Formatting (follow EXACTLY — this is markdownlint-compliant):
   return result
 }
 
+/** Send a raw prompt to Copilot and return the text response. */
+export const generateText = async (prompt: string, model?: string): Promise<string | null> => {
+  const result = await withSession(model, async (session) => {
+    try {
+      const response = await session.sendAndWait({ prompt })
+      const content = response?.data?.content ?? ''
+      const cleaned = String(content)
+        .replaceAll(/```[\S\s]*?```/g, '')
+        .replaceAll(/^"+|"+$/g, '')
+        .trim()
+      return cleaned || null
+    } catch {
+      return null
+    }
+  })
+  return result
+}
+
 export default {
   generateBranchName,
   generateCommitMessage,
   generateReleaseNotes,
+  generateText,
 }

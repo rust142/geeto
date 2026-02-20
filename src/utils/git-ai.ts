@@ -125,6 +125,30 @@ export async function generateReleaseNotesWithProvider(
   }
 }
 
+/** Send a raw text prompt to the configured AI provider and return the response. */
+export async function generateTextWithProvider(
+  aiProvider: string,
+  prompt: string,
+  copilotModel?: CopilotModel,
+  openrouterModel?: OpenRouterModel,
+  geminiModel?: GeminiModel
+): Promise<string | null> {
+  switch (aiProvider) {
+    case 'gemini': {
+      const { generateText } = await import('../api/gemini.js')
+      return generateText(prompt, geminiModel as GeminiModel)
+    }
+    case 'copilot': {
+      const { generateText } = await import('../api/copilot.js')
+      return generateText(prompt, copilotModel)
+    }
+    default: {
+      const { generateText } = await import('../api/openrouter.js')
+      return generateText(prompt, openrouterModel)
+    }
+  }
+}
+
 /**
  * Interactive fallback menu when AI generation fails.
  */

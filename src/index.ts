@@ -31,6 +31,7 @@ let showAmend = false
 let showStats = false
 let showUndo = false
 let showRelease = false
+let showRepoSettings = false
 let showTrello = false
 let showTrelloLists = false
 let showTrelloGenerate = false
@@ -132,6 +133,9 @@ for (const arg of argv) {
   if (arg === '--tag' || arg === '-t') {
     showRelease = true
   }
+  if (arg === '--repo' || arg === '-rp') {
+    showRepoSettings = true
+  }
   if (arg === '--trello' || arg === '-tr') {
     showTrello = true
   }
@@ -181,6 +185,8 @@ const validFlags = new Set([
   '-u',
   '--tag',
   '-t',
+  '--repo',
+  '-rp',
   '-f',
   '--fresh',
   '-r',
@@ -266,6 +272,7 @@ for (const arg of argv) {
     console.log(`    ${C}-pr, --pr${R}                 Create a Pull Request`)
     console.log(`    ${C}-i,  --issue${R}              Create an Issue`)
     console.log(`    ${C}-t,  --tag${R}                Release & tag manager with semver`)
+    console.log(`    ${C}-rp, --repo${R}               Update GitHub repo settings`)
     console.log('')
 
     console.log(`  ${B}TRELLO${R}`)
@@ -457,6 +464,17 @@ for (const arg of argv) {
       process.exit(0)
     } catch (error) {
       console.error('Release error:', error)
+      process.exit(1)
+    }
+  }
+
+  if (showRepoSettings) {
+    try {
+      const { handleRepoSettings } = await import('./workflows/repo-settings.js')
+      await handleRepoSettings()
+      process.exit(0)
+    } catch (error) {
+      console.error('Repo settings error:', error)
       process.exit(1)
     }
   }
