@@ -73,20 +73,43 @@ sudo mv geeto /usr/local/bin/
 ### From Source
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rust142/geeto/main/tools/install.sh | bash -s -- --no-label
+curl -fsSL https://raw.githubusercontent.com/rust142/geeto/main/tools/install.sh | bash
 ```
 
-> **Requirements:** Git ≥ 2.0
+The installer shows step-by-step progress, detects existing installs, and verifies the installation.
+
+> **Requirements:** Bun ≥ 1.0, Git ≥ 2.0
 
 ### Uninstall
 
-```bash
-brew uninstall geeto && brew untap rust142/geeto   # Homebrew
-sudo dpkg -r geeto                                  # APT
-npm uninstall -g geeto                               # NPM / Bun
-sudo rm /usr/local/bin/geeto                         # Binary
-curl -fsSL https://raw.githubusercontent.com/rust142/geeto/main/tools/uninstall.sh | bash  # Source
-```
+Choose **one** method based on how you installed:
+
+| Method   | Command                                                                                      |
+| -------- | -------------------------------------------------------------------------------------------- |
+| Homebrew | `brew uninstall geeto && brew untap rust142/geeto`                                           |
+| APT      | `sudo dpkg -r geeto`                                                                         |
+| NPM/Bun  | `npm uninstall -g geeto`                                                                     |
+| Binary   | `sudo rm /usr/local/bin/geeto`                                                               |
+| Source   | `curl -fsSL https://raw.githubusercontent.com/rust142/geeto/main/tools/uninstall.sh \| bash` |
+
+The uninstall script supports flags:
+
+- `--force` — skip confirmation prompt
+- `--purge` — also remove config directory (`~/.geeto/`)
+
+### Update
+
+Choose **one** method based on how you installed:
+
+| Method   | Command                                                                                   |
+| -------- | ----------------------------------------------------------------------------------------- |
+| Homebrew | `brew update && brew upgrade geeto`                                                       |
+| APT      | Re-download the latest `.deb` from Releases and run `sudo dpkg -i geeto.deb`              |
+| NPM/Bun  | `npm update -g geeto`                                                                     |
+| Binary   | Download the latest binary from [Releases](https://github.com/rust142/geeto/releases)     |
+| Source   | `curl -fsSL https://raw.githubusercontent.com/rust142/geeto/main/tools/update.sh \| bash` |
+
+The update script auto-detects your install method and guides you to the right upgrade path.
 
 ---
 
