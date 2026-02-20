@@ -485,6 +485,7 @@ export const handleRelease = async (): Promise<void> => {
         `Using saved AI config: ${getAIProviderShortName(aiProvider)}` +
           (modelDisplay ? ` (${modelDisplay})` : '')
       )
+      console.log('')
     } else {
       // No saved config — ask user to pick provider + model
       let providerChosen = false
