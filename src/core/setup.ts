@@ -52,7 +52,7 @@ export const ensureOpenRouter = async (): Promise<boolean> => {
       'OpenRouter setup helper not available; please run setup manually or ensure openrouter-setup is present'
     )
   }
-  return true
+  return false
 }
 
 /**

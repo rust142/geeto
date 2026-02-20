@@ -6,7 +6,7 @@ import fs from 'node:fs'
 
 import { askQuestion, confirm } from '../cli/input.js'
 import { ensureGeetoIgnored, getGithubConfigPath } from '../utils/config.js'
-import { exec } from '../utils/exec.js'
+import { exec, openBrowser } from '../utils/exec.js'
 import { log } from '../utils/logging.js'
 
 /**
@@ -66,20 +66,11 @@ export const setupGithubConfigInteractive = (): boolean => {
     // Offer to open the URL
     const openNow = confirm('Open token creation page in your browser?')
     if (openNow) {
-      try {
-        const platform = process.platform
-        let openCmd = 'xdg-open'
-        if (platform === 'darwin') openCmd = 'open'
-        else if (platform === 'win32') openCmd = 'start ""'
-
-        try {
-          exec(`${openCmd} "https://github.com/settings/tokens/new?scopes=repo"`, true)
-          log.success('Opened browser')
-        } catch {
-          log.warn('Could not open browser—please open the URL above manually')
-        }
-      } catch {
-        // ignore
+      const opened = openBrowser('https://github.com/settings/tokens/new?scopes=repo')
+      if (opened) {
+        log.success('Opened browser')
+      } else {
+        log.warn('Could not open browser—please open the URL above manually')
       }
     }
 
@@ -87,6 +78,14 @@ export const setupGithubConfigInteractive = (): boolean => {
     if (!token) {
       log.error('Token is required')
       return false
+    }
+
+    // Soft validation: warn if token format looks unexpected
+    const validPrefixes = ['ghp_', 'gho_', 'ghs_', 'ghu_', 'github_pat_']
+    const looksValid = validPrefixes.some((p) => token.startsWith(p)) || token.length > 20
+    if (!looksValid) {
+      log.warn('Token format looks unusual (expected: ghp_/gho_/github_pat_ prefix, 20+ chars).')
+      log.info('Saving anyway—if authentication fails, re-run setup with a valid token.')
     }
   }
 

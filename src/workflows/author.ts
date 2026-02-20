@@ -1,7 +1,7 @@
 // no confirm prompt here; callers control return/exit behavior
 import { select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
-import { commandExists, exec } from '../utils/exec.js'
+import { openBrowser } from '../utils/exec.js'
 
 /** Simple author tools menu. Shows Geeto developer information. */
 export const showAuthorTools = async (): Promise<void> => {
@@ -43,24 +43,12 @@ export const showAuthorTools = async (): Promise<void> => {
     { label: 'Back to main menu', value: 'back' },
   ])
 
-  let opener: string | null = null
-  if (commandExists('open')) {
-    opener = 'open'
-  } else if (commandExists('xdg-open')) {
-    opener = 'xdg-open'
-  }
-
   const openUrl = (url: string) => {
-    if (opener) {
-      try {
-        exec(`${opener} ${url}`)
-      } catch {
-        console.log('Could not open browser.')
-      }
-      return
+    const opened = openBrowser(url)
+    if (!opened) {
+      console.log('No system opener available; copy the URL manually:')
+      console.log(url)
     }
-    console.log('No system opener available; copy the URL manually:')
-    console.log(url)
   }
 
   switch (choice) {

@@ -6,7 +6,7 @@ import fs from 'node:fs'
 
 import { askQuestion, confirm } from '../cli/input.js'
 import { ensureGeetoIgnored, getTrelloConfigPath, setSkipTrelloPrompt } from '../utils/config.js'
-import { exec } from '../utils/exec.js'
+import { openBrowser } from '../utils/exec.js'
 import { log } from '../utils/logging.js'
 
 /**
@@ -48,22 +48,11 @@ export const setupTrelloConfigInteractive = (): boolean => {
   // Offer to open the token URL in the user's default browser
   const openNow = confirm('Open authorization URL in your browser now?')
   if (openNow) {
-    try {
-      const platform = process.platform
-      let openCmd = 'xdg-open'
-      if (platform === 'darwin') openCmd = 'open'
-      else if (platform === 'win32') openCmd = 'start ""'
-
-      try {
-        // Try to open the URL; ignore output
-        exec(`${openCmd} "${tokenUrl}"`, true)
-        log.success('Opened authorization URL in your browser')
-      } catch {
-        // Best-effort: if opening fails, fall back to instructing the user to open manually
-        log.warn('Could not open browser automatically—please open the URL above manually')
-      }
-    } catch {
-      // ignore
+    const opened = openBrowser(tokenUrl)
+    if (opened) {
+      log.success('Opened authorization URL in your browser')
+    } else {
+      log.warn('Could not open browser automatically—please open the URL above manually')
     }
   }
 
