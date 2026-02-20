@@ -56,6 +56,57 @@ export const handleBranchCreationWorkflow = async (
   let wasCreated = false
 
   if (createNewBranch) {
+    // ─── Branch base validation ───
+    const cur = state.currentBranch.toLowerCase()
+    const devBranches = ['development', 'develop', 'dev']
+    const prodBranches = ['main', 'master']
+
+    if (prodBranches.includes(cur)) {
+      // Always warn on main/master — this is production!
+      log.warn(
+        `You're creating a branch from '${state.currentBranch}' (production).` +
+          ` Branch will use '${defaultPrefix}' prefix.` +
+          ` Consider branching from development instead.`
+      )
+      console.log('')
+      const proceed = confirm('Continue anyway?')
+      if (!proceed) {
+        return { branchName: state.currentBranch, created: false }
+      }
+    } else if (!devBranches.includes(cur)) {
+      // Not a known dev or prod branch — check allowedBases config
+      const allowedBases = branchConfig?.allowedBases ?? []
+      if (!allowedBases.includes(cur)) {
+        log.warn(
+          `You're creating a branch from '${state.currentBranch}'` +
+            ` which is not a standard development branch.` +
+            ` Branch will use '${defaultPrefix}' prefix.`
+        )
+        console.log('')
+        const choice = await select('How do you want to proceed?', [
+          { label: 'Continue (just this once)', value: 'once' },
+          {
+            label: `Always allow branching from '${state.currentBranch}'`,
+            value: 'allow',
+          },
+          { label: 'Cancel', value: 'cancel' },
+        ])
+
+        if (choice === 'cancel') {
+          return { branchName: state.currentBranch, created: false }
+        }
+
+        if (choice === 'allow') {
+          const updated = branchConfig ?? { separator: '-' }
+          const bases = [...(updated.allowedBases ?? []), cur]
+          updated.allowedBases = [...new Set(bases)]
+          saveBranchStrategyConfig(updated)
+          branchConfig = updated
+          log.success(`'${state.currentBranch}' added to allowed bases`)
+        }
+      }
+    }
+
     // Check if separator is configured, if not, prompt user to choose
     if (!branchConfig?.separator) {
       log.info('Please choose your preferred branch name separator:\n')
