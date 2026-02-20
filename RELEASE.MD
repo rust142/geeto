@@ -2,27 +2,36 @@
 
 ## v0.3.9 — February 20, 2026
 
-### New Features
+> Previous version: v0.3.8
+
+### What's New?
+
+#### New Features
+
 - Remember and automatically use your saved AI provider and model settings during releases.
 
-### Improvements
-- Add a blank line after the saved AI configuration message to make messages easier to read.
+#### Other Improvements
 
-### Documentation
-- Clean up the changelog and RELEASE.MD for clearer release notes and instructions.
+- Add a blank line after the saved AI configuration message for readability.
+- Clean up the changelog and RELEASE.MD for clearer release notes.
 
 ---
+
 ## v0.3.8 — February 20, 2026
 
-### New Features
+> Previous version: v0.3.7
+
+### What's New?
+
+#### New Features
 
 - Releases can now generate release notes automatically using supported AI providers.
 
-### Bug Fixes
+#### Bug Fixes
 
 - Release workflow now sorts Git tags by creation date so releases are produced in the correct chronological order.
 
-### Improvements
+#### Other Improvements
 
 - Spell checker now recognizes Bahasa (Indonesian) by adding it to the custom dictionary.
 
@@ -30,50 +39,170 @@
 
 ## v0.3.7 — February 20, 2026
 
-### Breaking Changes
+> Previous version: v0.3.6
 
-- Package renamed to "geeto"; update your install commands and any scripts that referenced the old package name.
-- Homebrew formula updates were moved to a separate tap repository, so Homebrew formula changes are no longer updated in this repo.
+### What's New?
 
-### New Features
+#### Other Improvements
 
-- Generate release notes automatically using AI providers.
-- Add an inline terminal editor for editing files and commit messages inside the CLI.
+- Add generated VERSION constant for compiled binary compatibility.
+- Update release workflow to sync version constant automatically.
+
+---
+
+## v0.3.6 — February 20, 2026
+
+> Previous version: v0.3.5
+
+### What's New?
+
+#### New Features
+
+- Add `allowedBases` config and branch base validation for stricter branch workflows.
+
+#### Bug Fixes
+
+- Improve push error messages and exit cleanly on fatal errors instead of showing stack traces.
+
+#### Other Improvements
+
+- Move Homebrew formula updates to a separate tap repository.
+
+---
+
+## v0.3.5 — February 20, 2026
+
+> Previous version: v0.3.4
+
+### What's New?
+
+#### New Features
+
+- Add Homebrew formula and update CI for easy `brew install geeto`.
+
+#### Bug Fixes
+
+- Suppress noisy Node.js experimental warnings from the Copilot subprocess.
+
+---
+
+## v0.3.4 — February 20, 2026
+
+> Previous version: v0.3.3
+
+### What's New?
+
+#### Other Improvements
+
+- Generate Homebrew formula using CI environment variables.
+- Remove old GitHub Actions release workflow in favor of the new tag-based flow.
+
+---
+
+## v0.3.3 — February 20, 2026
+
+> Previous version: v0.3.2
+
+### What's New?
+
+#### Other Improvements
+
+- Trim RELEASE.MD release history for cleaner output.
+- Normalize the geeto binary path in package.json.
+
+---
+
+## v0.3.2 — February 20, 2026
+
+> Previous version: v0.3.1
+
+### What's New?
+
+#### New Features
+
+- Add build and publish binaries workflow — geeto can now be installed as a standalone binary.
+
+---
+
+## v0.3.1 — February 19, 2026
+
+> Previous version: v0.3.0
+
+### What's New?
+
+#### New Features
+
+- Show a progress bar during `git push` in the release workflow.
+
+---
+
+## v0.3.0 — February 19, 2026
+
+> Previous version: v0.1.1
+
+### What's New?
+
+#### New Features
+
+- Add inline terminal editor for editing files and commit messages inside the CLI.
 - Add boxed UI, file status badges, and step progress indicators for a clearer interface.
-- Add interactive workflows: undo last action, commit amend, stash manager, commit history viewer, PR & Issue workflows, cherry-pick, branch compare, and branch cleanup.
-- Add a release/tag manager and a --tag CLI flag for releasing.
-- Add a repository statistics dashboard accessible via --stats.
-- Add Trello integration: menu, checklist support, multi-select card selection, and export of task instructions.
-- Add searchable and multi-select menus, range selection, clickable branch links, and short flag aliases for faster navigation.
-- Add an uninstall script and improved installer.
+- Add interactive workflows: undo last action, commit amend, stash manager, commit history viewer, cherry-pick, branch compare, and branch cleanup.
+- Add release/tag manager and `--tag` CLI flag for releasing.
+- Add repository statistics dashboard via `--stats`.
+- Add Trello integration: menu, checklist support, multi-select card selection, and task instruction export.
+- Add searchable and multi-select menus, range selection, clickable branch links, and short flag aliases.
+- Add uninstall script and improved installer.
+- Add Security & Quality Gate workflow.
+- Add `--stage-all` option to auto-stage changes.
+- Add push progress and remote URL display.
+- Add custom protected branches and sort branches by staleness.
 
-### Improvements
+#### Bug Fixes
 
-- Show push progress and remote URL, and improve push progress granularity and handling.
-- Add build and publish binaries workflow, packaging, and a generated VERSION constant for releases.
-- Add Homebrew formula generation via CI environment variables.
-- Improve UX and menu rendering, including better multiSelect rendering and commit selection in security gate.
-- Add custom protected branches and sort branches by age/staleness.
-- Offer to stage changes automatically and add a --stage-all option.
-- Improve AI-related flows: Copilot install flow, provider/model prompts, provider state persistence, English translation, and safety instructions.
-
-### Bug Fixes
-
-- Suppress noisy Node.js experimental warnings coming from the Copilot subprocess.
-- Improve git push/error handling and make fatal errors exit cleanly.
 - Fix spinner and progress bar output so logs and progress do not interleave.
 - Treat newly created branches as safe for checkout and improve branch cleanup messages.
 - Fix various workflow logging issues (avoid 'Unknown' step, remove hard-coded version in banner, preserve provider state after cleanup).
 - Ensure git commands run with correct flags so push/branch logs behave properly.
+- Improve git push robustness and avoid interleaved output.
 
-### Documentation & Packaging
+#### Other Improvements
 
-- Clean up RELEASE.MD history and remove outdated Homebrew/workflow notes.
-- Overhaul README and CONTRIBUTING, add a Demo section with images and an asciinema demo, and add install.sh.
-- Update package metadata and normalize the executable path; update install instructions to match the package rename.
-- Move Homebrew formula handling to the tap repo and update CI to generate formulas as needed.
+- Improve AI-related flows: Copilot install flow, provider/model prompts, provider state persistence, English translation, and safety instructions.
+- Improve UX and menu rendering, including better multiSelect rendering and commit selection.
+- Overhaul README and CONTRIBUTING, add Demo section with images and install.sh.
+- Add lint-staged, Husky pre-commit/pre-push hooks, and cspell spellcheck.
+- Migrate to flat ESLint config and upgrade dependencies.
+- Split monolithic CI into modular workflows and add Danger.
 
 ---
 
+## v0.1.1 — February 16, 2026
+
+> Previous version: v0.1.0
+
+### What's New?
+
+#### Bug Fixes
+
+- Remove hard-coded version from banner, now reads from package.json.
+
+#### Other Improvements
+
+- Add Demo section with asciinema demo and demo badge to README.
+
+---
+
+## v0.1.0 — February 16, 2026
+
+> Initial release
+
+### What's New?
+
+#### New Features
+
+- Print package.json version instead of hardcoded value.
+- Initial commit — first working version of geeto CLI.
+
+---
 
 *This document was automatically generated by [Geeto CLI](https://github.com/rust142/geeto)*
