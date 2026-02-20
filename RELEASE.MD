@@ -1,5 +1,19 @@
 # Releases
 
+## v0.4.3 — February 21, 2026
+
+### What's New?
+
+#### New Features
+
+- Added an update script to make keeping the app up to date easier.
+
+#### Other Improvements
+
+- Improved the installation and uninstallation documentation to make setup and removal clearer.
+
+---
+
 ## v0.4.2 — February 20, 2026
 
 ### What's New?

@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.4.3](https://github.com/rust142/geeto/compare/v0.4.2...v0.4.3) (2026-02-20)
+
+### Features
+
+* feat(updater): add update script and improve install/uninstall docs ([442518a](https://github.com/rust142/geeto/commit/442518a))
+
 ## [0.4.2](https://github.com/rust142/geeto/compare/v0.4.1...v0.4.2) (2026-02-20)
 
 ### Features
