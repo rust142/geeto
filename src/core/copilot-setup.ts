@@ -10,6 +10,7 @@ import { select } from '../cli/menu.js'
 import { ensureGeetoIgnored } from '../utils/config.js'
 import { commandExists, exec, execAsync } from '../utils/exec.js'
 import { log } from '../utils/logging.js'
+import { getGhCliInstallCommand, getLinuxDistro } from '../utils/platform.js'
 
 /**
  * Check Copilot CLI version and warn if outdated.
@@ -60,28 +61,42 @@ const setupGitHubCLI = (): boolean => {
     if (commandExists('brew')) {
       installCommand = 'brew install gh'
     } else {
-      installCommand = `curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg &&
-        sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg &&
-        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null &&
-        sudo apt update &&
-        sudo apt install gh -y`
+      log.warn('Homebrew not found. Please install GitHub CLI manually:')
+      log.info('  Option 1: Install Homebrew first → https://brew.sh')
+      log.info('  Option 2: Download .pkg installer → https://cli.github.com')
+      log.info('  Option 3: conda install gh --channel conda-forge')
+      return false
     }
   } else if (platform === 'win32') {
     if (commandExists('winget')) {
       installCommand = 'winget install --id GitHub.cli'
     } else if (commandExists('choco')) {
       installCommand = 'choco install gh'
+    } else if (commandExists('scoop')) {
+      installCommand = 'scoop install gh'
     } else {
-      installCommand = `powershell -Command "Invoke-WebRequest -Uri https://cli.github.com/packages/rpm/gh-cli.repo -OutFile /etc/yum.repos.d/gh-cli.repo &&
-        yum install gh -y"`
+      log.warn('No supported package manager found (winget, choco, scoop).')
+      log.info('Please install GitHub CLI manually from: https://cli.github.com')
+      log.info('Or install a package manager:')
+      log.info('  winget: Built into Windows 10/11 (update App Installer from Store)')
+      log.info('  scoop: https://scoop.sh')
+      log.info('  choco: https://chocolatey.org')
+      return false
     }
   } else {
-    // Linux
-    installCommand = `curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg &&
-      sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg &&
-      echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null &&
-      sudo apt update &&
-      sudo apt install gh -y`
+    // Linux — auto-detect distro for correct package manager
+    const autoCommand = getGhCliInstallCommand()
+    if (autoCommand) {
+      installCommand = autoCommand
+    } else {
+      const distro = getLinuxDistro()
+      log.warn(`Unsupported Linux distribution${distro === 'unknown' ? '' : ` (${distro})`}.`)
+      log.info('Please install GitHub CLI manually from: https://cli.github.com/packages')
+      log.info(
+        'Or try: curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg'
+      )
+      return false
+    }
   }
 
   if (installCommand) {

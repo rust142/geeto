@@ -21,6 +21,9 @@ export const askQuestion = (question: string, defaultValue?: string): string => 
     process.stdin.setRawMode(false)
   }
 
+  // Ensure cursor is visible (may have been hidden by a spinner)
+  process.stdout.write('\u001B[?25h')
+
   const platform = os.platform()
   const fullQuestion = defaultValue ? `${question} (${defaultValue}) ` : question
   process.stdout.write(fullQuestion)

@@ -102,3 +102,30 @@ export const commandExists = (command: string): boolean => {
     return false
   }
 }
+
+/**
+ * Open a URL in the user's default browser.
+ * Returns true if the browser was opened successfully, false otherwise.
+ * On Linux, checks for xdg-open availability first.
+ */
+export const openBrowser = (url: string): boolean => {
+  const platform = process.platform
+  try {
+    if (platform === 'darwin') {
+      exec(`open "${url}"`, true)
+      return true
+    }
+    if (platform === 'win32') {
+      exec(`start "" "${url}"`, true)
+      return true
+    }
+    // Linux / other
+    if (commandExists('xdg-open')) {
+      exec(`xdg-open "${url}"`, true)
+      return true
+    }
+    return false
+  } catch {
+    return false
+  }
+}
