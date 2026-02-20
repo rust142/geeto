@@ -1,12 +1,13 @@
-# Release v0.3.4
+# Release v0.3.5
 
 **Release date:** February 20, 2026
-**Previous version:** v0.3.3
+**Previous version:** v0.3.4
 
 ## What's New?
 
 ### New Features
 
+- add Homebrew formula and update CI/.gitignore
 - add build & publish binaries workflow and packaging
 - add progress bar for git push in release workflow
 - add inline terminal editor for editing files and commits
@@ -51,6 +52,7 @@
 
 ### Bug Fixes
 
+- suppress Node.js experimental warnings from copilot subprocess
 - pass true to exec and silence push/branch logs
 - pass true flag to exec when deleting local branches
 - avoid logging 'Unknown' step when resuming workflow
@@ -71,6 +73,8 @@
 
 ### Other Improvements
 
+- add workflow_dispatch tag input and use RELEASE_TAG
+- v0.3.4
 - generate Homebrew formula using env vars and heredoc
 - remove GitHub Actions release workflow
 - v0.3.3
