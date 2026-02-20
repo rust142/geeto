@@ -20,6 +20,7 @@ import {
   getModelValue,
 } from '../utils/git-ai.js'
 import { log } from '../utils/logging.js'
+import { loadState } from '../utils/state.js'
 
 // ─── Types ───
 
@@ -462,39 +463,62 @@ export const handleRelease = async (): Promise<void> => {
       { label: 'Indonesian (Bahasa Indonesia)', value: 'id' },
     ])) as 'en' | 'id'
 
-    // Choose AI provider
+    // Read saved AI config from state
+    const savedState = loadState()
     let aiProvider: 'gemini' | 'copilot' | 'openrouter' = 'copilot'
     let copilotModel: CopilotModel | undefined
     let openrouterModel: OpenRouterModel | undefined
     let geminiModel: GeminiModel | undefined
 
-    // Provider selection loop
-    let providerChosen = false
-    while (!providerChosen) {
-      aiProvider = (await select('Choose AI Provider:', [
-        { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
-        { label: 'Gemini', value: 'gemini' },
-        { label: 'OpenRouter', value: 'openrouter' },
-      ])) as 'gemini' | 'copilot' | 'openrouter'
+    // Use saved provider/model if available, otherwise ask user
+    if (
+      savedState?.aiProvider &&
+      savedState.aiProvider !== 'manual' &&
+      (savedState.copilotModel || savedState.openrouterModel || savedState.geminiModel)
+    ) {
+      aiProvider = savedState.aiProvider as 'gemini' | 'copilot' | 'openrouter'
+      copilotModel = savedState.copilotModel
+      openrouterModel = savedState.openrouterModel
+      geminiModel = savedState.geminiModel
+      const modelDisplay = getModelValue(copilotModel ?? openrouterModel ?? geminiModel ?? '')
+      log.info(
+        `Using saved AI config: ${getAIProviderShortName(aiProvider)}` +
+          (modelDisplay ? ` (${modelDisplay})` : '')
+      )
+      console.log('')
+    } else {
+      // No saved config — ask user to pick provider + model
+      let providerChosen = false
+      while (!providerChosen) {
+        aiProvider = (await select('Choose AI Provider:', [
+          { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
+          { label: 'Gemini', value: 'gemini' },
+          { label: 'OpenRouter', value: 'openrouter' },
+        ])) as 'gemini' | 'copilot' | 'openrouter'
 
-      const chosen = await chooseModelForProvider(aiProvider, undefined, 'Back to AI provider menu')
-      if (!chosen || chosen === 'back') continue
+        const chosen = await chooseModelForProvider(
+          aiProvider,
+          undefined,
+          'Back to AI provider menu'
+        )
+        if (!chosen || chosen === 'back') continue
 
-      switch (aiProvider) {
-        case 'gemini': {
-          geminiModel = chosen as GeminiModel
-          break
+        switch (aiProvider) {
+          case 'gemini': {
+            geminiModel = chosen as GeminiModel
+            break
+          }
+          case 'copilot': {
+            copilotModel = chosen as CopilotModel
+            break
+          }
+          case 'openrouter': {
+            openrouterModel = chosen as OpenRouterModel
+            break
+          }
         }
-        case 'copilot': {
-          copilotModel = chosen as CopilotModel
-          break
-        }
-        case 'openrouter': {
-          openrouterModel = chosen as OpenRouterModel
-          break
-        }
+        providerChosen = true
       }
-      providerChosen = true
     }
 
     // Generate/regenerate loop (similar to commit flow)
