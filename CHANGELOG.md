@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.10](https://github.com/rust142/geeto/compare/v0.3.9...v0.3.10) (2026-02-20)
+
+### Features
+
+* feat(release): normalize release notes and publish GitHub Release when available ([d205085](https://github.com/rust142/geeto/commit/d205085))
+
 ## [0.3.9](https://github.com/rust142/geeto/compare/v0.3.8...v0.3.9) (2026-02-20)
 
 ### Features

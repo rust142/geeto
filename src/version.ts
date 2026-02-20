@@ -1,2 +1,2 @@
 /** Auto-generated version constant. Updated by the release workflow. */
-export const VERSION = '0.3.9'
+export const VERSION = '0.3.10'
