@@ -189,6 +189,8 @@ const ensureClient = async (): Promise<boolean> => {
     return true
   }
   try {
+    // Suppress Node.js experimental warnings from copilot subprocess
+    process.env.NODE_NO_WARNINGS = '1'
     client = new CopilotClient({ autoStart: true })
     // Narrow client into a local const to satisfy strict no-non-null assertions
     const startedClient = client
