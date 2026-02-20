@@ -16,7 +16,6 @@ out/
 # State files
 .geeto/
 geeto*
-!Formula/geeto.rb
 
 # Environment
 .env
