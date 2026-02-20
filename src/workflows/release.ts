@@ -5,11 +5,20 @@
  */
 
 import { readFileSync, writeFileSync } from 'node:fs'
+import type { CopilotModel } from '../api/copilot.js'
+import type { GeminiModel } from '../api/gemini.js'
+import type { OpenRouterModel } from '../api/openrouter.js'
 
-import { askQuestion, confirm, ProgressBar } from '../cli/input.js'
+import { askQuestion, confirm, editInline, ProgressBar } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
 import { exec, execAsync, execSilent } from '../utils/exec.js'
+import {
+  chooseModelForProvider,
+  generateReleaseNotesWithProvider,
+  getAIProviderShortName,
+  getModelValue,
+} from '../utils/git-ai.js'
 import { log } from '../utils/logging.js'
 
 // ─── Types ───
@@ -432,6 +441,196 @@ export const handleRelease = async (): Promise<void> => {
     return
   }
 
+  // ─── AI Release Notes Generation ───
+  // Ask how to generate release notes for RELEASE.MD
+  const commitList = commits.map((c) => c.subject).join('\n')
+
+  console.log('')
+  const releaseNotesMode = await select('How do you want to generate RELEASE.MD?', [
+    { label: 'AI-generated (recommended)', value: 'ai' },
+    { label: 'Auto-generate (template-based)', value: 'auto' },
+  ])
+
+  let aiReleaseNotes: string | null = null
+
+  if (releaseNotesMode === 'ai' && commits.length > 0) {
+    // Choose language
+    const language = (await select('Release notes language:', [
+      { label: 'English', value: 'en' },
+      { label: 'Indonesian (Bahasa Indonesia)', value: 'id' },
+    ])) as 'en' | 'id'
+
+    // Choose AI provider
+    let aiProvider: 'gemini' | 'copilot' | 'openrouter' = 'copilot'
+    let copilotModel: CopilotModel | undefined
+    let openrouterModel: OpenRouterModel | undefined
+    let geminiModel: GeminiModel | undefined
+
+    // Provider selection loop
+    let providerChosen = false
+    while (!providerChosen) {
+      aiProvider = (await select('Choose AI Provider:', [
+        { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
+        { label: 'Gemini', value: 'gemini' },
+        { label: 'OpenRouter', value: 'openrouter' },
+      ])) as 'gemini' | 'copilot' | 'openrouter'
+
+      const chosen = await chooseModelForProvider(aiProvider, undefined, 'Back to AI provider menu')
+      if (!chosen || chosen === 'back') continue
+
+      switch (aiProvider) {
+        case 'gemini': {
+          geminiModel = chosen as GeminiModel
+          break
+        }
+        case 'copilot': {
+          copilotModel = chosen as CopilotModel
+          break
+        }
+        case 'openrouter': {
+          openrouterModel = chosen as OpenRouterModel
+          break
+        }
+      }
+      providerChosen = true
+    }
+
+    // Generate/regenerate loop (similar to commit flow)
+    let correction: string | undefined
+    let accepted = false
+
+    while (!accepted) {
+      const spinner = log.spinner()
+      const modelDisplay = getModelValue(copilotModel ?? openrouterModel ?? geminiModel ?? '')
+      spinner.start(
+        `Generating release notes with ${getAIProviderShortName(aiProvider)}` +
+          (modelDisplay ? ` (${modelDisplay})` : '') +
+          '...'
+      )
+
+      const result = await generateReleaseNotesWithProvider(
+        aiProvider,
+        commitList,
+        language,
+        correction,
+        copilotModel,
+        openrouterModel,
+        geminiModel
+      )
+
+      spinner.succeed('Release notes generated')
+      console.log('')
+
+      if (!result) {
+        log.warn('AI returned no result. Falling back to template-based generation.')
+        break
+      }
+
+      aiReleaseNotes = result
+
+      // Preview
+      console.log(`${colors.cyan}┌${'─'.repeat(56)}┐${colors.reset}`)
+      console.log(
+        `${colors.cyan}│${colors.reset} ${colors.bright}Release Notes Preview${colors.reset}`
+      )
+      console.log(`${colors.cyan}├${'─'.repeat(56)}┤${colors.reset}`)
+      for (const line of aiReleaseNotes.split('\n')) {
+        console.log(`${colors.cyan}│${colors.reset} ${line}`)
+      }
+      console.log(`${colors.cyan}└${'─'.repeat(56)}┘${colors.reset}`)
+      console.log('')
+
+      const action = await select('Accept these release notes?', [
+        { label: 'Yes, use it', value: 'accept' },
+        { label: 'Regenerate', value: 'regenerate' },
+        { label: 'Edit inline', value: 'edit' },
+        { label: 'Correct AI (give feedback)', value: 'correct' },
+        { label: 'Change model', value: 'change-model' },
+        { label: 'Change AI provider', value: 'change-provider' },
+        { label: 'Use template instead', value: 'template' },
+      ])
+
+      switch (action) {
+        case 'accept': {
+          accepted = true
+          break
+        }
+        case 'regenerate': {
+          correction = undefined
+          continue
+        }
+        case 'edit': {
+          const edited = await editInline(aiReleaseNotes, 'Release Notes', '.md')
+          aiReleaseNotes = edited
+          accepted = true
+          break
+        }
+        case 'correct': {
+          if (process.stdin.isTTY) process.stdin.setRawMode(false)
+          const feedback = askQuestion('Feedback for AI: ').trim()
+          if (feedback) correction = feedback
+          continue
+        }
+        case 'change-model': {
+          const newModel = await chooseModelForProvider(aiProvider, undefined, 'Back')
+          if (newModel && newModel !== 'back') {
+            switch (aiProvider) {
+              case 'gemini': {
+                geminiModel = newModel as GeminiModel
+                break
+              }
+              case 'copilot': {
+                copilotModel = newModel as CopilotModel
+                break
+              }
+              case 'openrouter': {
+                openrouterModel = newModel as OpenRouterModel
+                break
+              }
+            }
+          }
+          correction = undefined
+          continue
+        }
+        case 'change-provider': {
+          const prov = (await select('Choose AI provider:', [
+            { label: 'GitHub Copilot', value: 'copilot' },
+            { label: 'Gemini', value: 'gemini' },
+            { label: 'OpenRouter', value: 'openrouter' },
+          ])) as 'gemini' | 'copilot' | 'openrouter'
+          aiProvider = prov
+          copilotModel = undefined
+          openrouterModel = undefined
+          geminiModel = undefined
+          const newModel = await chooseModelForProvider(aiProvider, undefined, 'Back')
+          if (newModel && newModel !== 'back') {
+            switch (aiProvider) {
+              case 'gemini': {
+                geminiModel = newModel as GeminiModel
+                break
+              }
+              case 'copilot': {
+                copilotModel = newModel as CopilotModel
+                break
+              }
+              case 'openrouter': {
+                openrouterModel = newModel as OpenRouterModel
+                break
+              }
+            }
+          }
+          correction = undefined
+          continue
+        }
+        case 'template': {
+          aiReleaseNotes = null
+          accepted = true
+          break
+        }
+      }
+    }
+  }
+
   // Execute release steps
   const spinner = log.spinner()
 
@@ -448,7 +647,19 @@ export const handleRelease = async (): Promise<void> => {
   // 2. Update RELEASE.MD (prepend new version, keep old ones)
   spinner.start('Updating RELEASE.MD...')
   try {
-    const newEntry = generateReleaseMd(newVersion, commits, currentVersion)
+    // Use AI-generated notes if available, otherwise fallback to template
+    let newEntry: string
+    if (aiReleaseNotes) {
+      const now = new Date()
+      const date = now.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+      newEntry = [`## v${newVersion} — ${date}`, '', aiReleaseNotes, '', '---', ''].join('\n')
+    } else {
+      newEntry = generateReleaseMd(newVersion, commits, currentVersion)
+    }
     let existing = ''
     try {
       existing = readFileSync('RELEASE.MD', 'utf8')

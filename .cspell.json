@@ -83,7 +83,8 @@
     "regen",
     "lintstagedrc",
     "dpkg",
-    "untap"
+    "untap",
+    "Bahasa"
   ],
   "ignorePaths": [
     "node_modules/**",
