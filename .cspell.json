@@ -98,7 +98,8 @@
     "garuda",
     "artix",
     "pacman",
-    "noconfirm"
+    "noconfirm",
+    "worktrees"
   ],
   "ignorePaths": [
     "node_modules/**",

@@ -351,7 +351,7 @@ export const handleInteractiveCleanup = async (): Promise<void> => {
     )
   }
   if (remoteFailCount > 0) {
-    log.info('  Try prune with: git remote prune origin')
+    log.info('  Try prune with: gt --prune')
   }
   console.log('')
 
