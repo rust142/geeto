@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.3.9](https://github.com/rust142/geeto/compare/v0.3.8...v0.3.9) (2026-02-20)
+
+### Features
+
+* feat(release): use saved AI provider and model from state ([406c35c](https://github.com/rust142/geeto/commit/406c35c))
+
+### Other Changes
+
+* style(release): add blank line after saved AI config message ([8db8308](https://github.com/rust142/geeto/commit/8db8308))
+* docs(release): tidy CHANGELOG and RELEASE.MD ([b912c70](https://github.com/rust142/geeto/commit/b912c70))
+
 ## [0.3.8](https://github.com/rust142/geeto/compare/v0.3.7...v0.3.8) (2026-02-20)
 
 ### Features
