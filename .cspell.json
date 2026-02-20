@@ -85,7 +85,8 @@
     "dpkg",
     "untap",
     "Bahasa",
-    "creatordate"
+    "creatordate",
+    "oneline"
   ],
   "ignorePaths": [
     "node_modules/**",
