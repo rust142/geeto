@@ -341,8 +341,6 @@ export async function handleMerge(
       // Push the updated target branch back to remote
       const shouldPushTarget = confirm(`Push ${targetBranch} to origin?`)
       if (shouldPushTarget) {
-        // Provide visible push progress by allowing git to print progress to terminal
-        console.log('')
         // Get remote URL silently for a nicer message
         let remoteUrl = ''
         try {
