@@ -364,8 +364,8 @@ const handleSyncReleases = async (): Promise<void> => {
   }
 
   console.log('')
-  const spinner = log.spinner()
-  spinner.start('Checking GitHub releases...')
+  const spinner = new ScrambleProgress()
+  spinner.start(['connecting to github...', 'fetching releases...', 'comparing tags...'])
 
   const localTags = getExistingTags()
   const ghReleases = getExistingGithubReleases()
@@ -509,13 +509,13 @@ const handleSyncReleases = async (): Promise<void> => {
 
     if (useAI && commits.length > 0) {
       console.log('')
-      const aiSpinner = log.spinner()
+      const aiSpinner = new ScrambleProgress()
       const modelDisplay = getModelValue(copilotModel ?? openrouterModel ?? geminiModel ?? '')
-      aiSpinner.start(
-        `Generating notes for ${tag} with ${getAIProviderShortName(aiProvider)}` +
-          (modelDisplay ? ` (${modelDisplay})` : '') +
-          '...'
-      )
+      aiSpinner.start([
+        'preparing release context...',
+        `generating notes with ${getAIProviderShortName(aiProvider)}${modelDisplay ? ` (${modelDisplay})` : ''}...`,
+        'processing results...',
+      ])
 
       const aiResult = await generateReleaseNotesWithProvider(
         aiProvider,
@@ -566,10 +566,10 @@ const handleSyncReleases = async (): Promise<void> => {
     }
 
     console.log('')
-    const releaseSpinner = log.spinner()
+    const releaseSpinner = new ScrambleProgress()
 
     // Ensure tag exists on remote before creating GitHub Release
-    releaseSpinner.start(`Pushing tag ${colors.yellow}${tag}${colors.reset} to remote...`)
+    releaseSpinner.start(['connecting to remote...', 'pushing tag...', 'verifying remote refs...'])
     try {
       await execAsync(`git push origin ${tag} --no-verify`, true)
       releaseSpinner.succeed(`Tag ${tag} pushed to remote`)
@@ -578,8 +578,12 @@ const handleSyncReleases = async (): Promise<void> => {
     }
 
     console.log('')
-    const createSpinner = log.spinner()
-    createSpinner.start(`Creating release ${colors.yellow}${tag}${colors.reset}...`)
+    const createSpinner = new ScrambleProgress()
+    createSpinner.start([
+      'preparing release data...',
+      'creating github release...',
+      'confirming creation...',
+    ])
 
     const os = await import('node:os')
     const tempFile = `${os.tmpdir()}/geeto-sync-${Date.now()}.md`
@@ -624,8 +628,8 @@ const handleDeleteReleases = async (): Promise<void> => {
   }
 
   console.log('')
-  const spinner = log.spinner()
-  spinner.start('Fetching GitHub releases...')
+  const spinner = new ScrambleProgress()
+  spinner.start(['connecting to github...', 'fetching releases...', 'processing results...'])
 
   const ghReleases = getExistingGithubReleases()
 
@@ -660,8 +664,8 @@ const handleDeleteReleases = async (): Promise<void> => {
 
   for (const release of selected) {
     console.log('')
-    const releaseSpinner = log.spinner()
-    releaseSpinner.start(`Deleting release ${colors.yellow}${release}${colors.reset}...`)
+    const releaseSpinner = new ScrambleProgress()
+    releaseSpinner.start(['connecting to github...', 'deleting release...', 'cleaning up...'])
 
     try {
       await execAsync(`gh release delete ${release} --yes`, true)
@@ -822,8 +826,8 @@ const handleRecoverTags = async (): Promise<void> => {
     const pushTags = confirm('Push recovered tags to remote?')
     if (pushTags) {
       console.log('')
-      const pushSpinner = log.spinner()
-      pushSpinner.start('Pushing tags to remote...')
+      const pushSpinner = new ScrambleProgress()
+      pushSpinner.start(['connecting to remote...', 'pushing tags...', 'verifying remote refs...'])
       try {
         await execAsync('git push --tags --no-verify', true)
         pushSpinner.succeed('Tags pushed to remote')
@@ -1074,13 +1078,13 @@ export const handleRelease = async (): Promise<void> => {
     let accepted = false
 
     while (!accepted) {
-      const spinner = log.spinner()
+      const spinner = new ScrambleProgress()
       const modelDisplay = getModelValue(copilotModel ?? openrouterModel ?? geminiModel ?? '')
-      spinner.start(
-        `Generating release notes with ${getAIProviderShortName(aiProvider)}` +
-          (modelDisplay ? ` (${modelDisplay})` : '') +
-          '...'
-      )
+      spinner.start([
+        'preparing release context...',
+        `generating notes with ${getAIProviderShortName(aiProvider)}${modelDisplay ? ` (${modelDisplay})` : ''}...`,
+        'processing results...',
+      ])
 
       const result = await generateReleaseNotesWithProvider(
         aiProvider,
@@ -1373,8 +1377,12 @@ export const handleRelease = async (): Promise<void> => {
       const tempFile = `${os.tmpdir()}/geeto-release-${Date.now()}.md`
       writeFileSync(tempFile, releaseBody, 'utf8')
 
-      const releaseSpinner = log.spinner()
-      releaseSpinner.start('Creating GitHub Release...')
+      const releaseSpinner = new ScrambleProgress()
+      releaseSpinner.start([
+        'preparing release data...',
+        'creating github release...',
+        'confirming creation...',
+      ])
 
       try {
         await execAsync(
