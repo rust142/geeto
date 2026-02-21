@@ -9,7 +9,7 @@ import type { CopilotModel } from '../api/copilot.js'
 import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 
-import { askQuestion, confirm, editInline, ProgressBar } from '../cli/input.js'
+import { askQuestion, confirm, editInline } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
 import { exec, execAsync, execSilent } from '../utils/exec.js'
@@ -20,6 +20,7 @@ import {
   getModelValue,
 } from '../utils/git-ai.js'
 import { log } from '../utils/logging.js'
+import { ScrambleProgress } from '../utils/scramble.js'
 import { loadState } from '../utils/state.js'
 
 // ─── Types ───
@@ -1328,27 +1329,26 @@ export const handleRelease = async (): Promise<void> => {
   ])
 
   if (pushChoice === 'both' || pushChoice === 'commit') {
-    const progressBar = new ProgressBar(100, 'Pushing to remote')
-    let progress = 0
-    const interval = setInterval(() => {
-      progress = Math.min(95, progress + Math.max(1, Math.floor(Math.random() * 6)))
-      progressBar.update(progress)
-    }, 250)
+    console.log('')
+    const pushProgress = new ScrambleProgress()
+    pushProgress.start([
+      'initializing push...',
+      'collecting objects...',
+      { text: 'compressing deltas', countTo: 100, suffix: '%' },
+      'uploading to remote...',
+      'verifying remote refs...',
+    ])
 
     try {
       await execAsync(`git push`, true)
       if (pushChoice === 'both') {
         await execAsync(`git push origin v${newVersion} --no-verify`, true)
       }
-      clearInterval(interval)
-      progressBar.update(100)
-      progressBar.complete()
+      pushProgress.stop()
       console.log('')
       log.success(pushChoice === 'both' ? 'Pushed release + tag' : 'Pushed release')
     } catch {
-      clearInterval(interval)
-      progressBar.complete()
-      console.log('')
+      pushProgress.fail('Push failed')
       log.error('Failed to push')
     }
   }
