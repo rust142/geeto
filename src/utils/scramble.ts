@@ -226,7 +226,6 @@ export class ScrambleProgress {
     this.startTime = Date.now()
 
     process.stdout.write('\u001B[?25l') // Hide cursor
-    process.stdout.write('\u001B7') // Save cursor position (DEC)
 
     this.interval = setInterval(() => {
       if (this.currentStep >= this.stepInputs.length) return
@@ -334,9 +333,12 @@ export class ScrambleProgress {
       clearInterval(this.interval)
       this.interval = null
     }
-    // Restore cursor to saved position and erase everything below
-    process.stdout.write('\u001B8') // Restore cursor position (DEC)
-    process.stdout.write('\u001B[J') // Erase from cursor to end of screen
+    // Erase current animation line
+    process.stdout.write('\r\u001B[K')
+    // Move up and erase each previously finalised line
+    for (let i = 0; i < this.linesAbove; i++) {
+      process.stdout.write('\u001B[A\u001B[K')
+    }
     process.stdout.write('\u001B[?25h') // Show cursor
   }
 

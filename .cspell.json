@@ -107,7 +107,8 @@
     "gpro",
     "geepr",
     "Finalise",
-    "shortstat"
+    "shortstat",
+    "finalised"
   ],
   "ignorePaths": [
     "node_modules/**",
