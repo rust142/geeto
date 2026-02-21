@@ -307,6 +307,7 @@ export async function handleMerge(
           await safeCheckout(featureBranch)
           return featureBranch
         }
+        console.log('')
         log.success(
           `${colors.cyan}${featureBranch}${colors.reset} → merged into ${colors.cyan}${targetBranch}${colors.reset}`
         )
@@ -330,6 +331,7 @@ export async function handleMerge(
           await safeCheckout(featureBranch)
           return featureBranch
         }
+        console.log('')
         log.success(
           `${colors.cyan}${featureBranch}${colors.reset} → squashed & merged into ${colors.cyan}${targetBranch}${colors.reset}`
         )
@@ -441,7 +443,6 @@ export async function handleCleanup(featureBranch: string, state: GeetoState): P
       if (protectedBranches.has(featureBranch.toLowerCase())) {
         log.info(`Skipping deletion of protected branch '${featureBranch}'`)
       } else {
-        console.log('')
         const deleteAnswer = confirm(`Delete branch '${featureBranch}'?`)
         if (deleteAnswer) {
           try {
