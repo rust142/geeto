@@ -105,7 +105,8 @@
     "gepr",
     "gtopr",
     "gpro",
-    "geepr"
+    "geepr",
+    "Finalise"
   ],
   "ignorePaths": [
     "node_modules/**",

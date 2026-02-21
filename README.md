@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
-Geeto automates your entire Git workflow — from staging to cleanup — with AI-powered branch naming, commit messages, release management, and Trello integration. Supports Gemini, GitHub Copilot, and OpenRouter.
+Geeto automates your entire Git workflow — from staging to cleanup — with AI-powered branch naming, commit messages, release management, and Trello integration. Supports Gemini, Copilot, and OpenRouter.
 
 ---
 

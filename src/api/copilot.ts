@@ -1,5 +1,5 @@
 /**
- * GitHub Copilot integration for AI-powered branch naming and commit messages
+ * Copilot integration for AI-powered branch naming and commit messages
  */
 
 import path from 'node:path'
@@ -14,7 +14,7 @@ import {
 } from './copilot-sdk.js'
 import { log } from '../utils/logging.js'
 
-// Supported models on GitHub Copilot
+// Supported models on Copilot
 export type CopilotModel = string
 
 /**
@@ -42,7 +42,7 @@ export const getCopilotModels = async (): Promise<
 }
 
 /**
- * Generate branch name from title using GitHub Copilot SDK
+ * Generate branch name from title using Copilot SDK
  */
 export const generateBranchName = async (
   text: string,
@@ -90,7 +90,7 @@ export const generateBranchName = async (
 }
 
 /**
- * Generate commit message from git diff using GitHub Copilot SDK
+ * Generate commit message from git diff using Copilot SDK
  */
 export const generateCommitMessage = async (
   diff: string,

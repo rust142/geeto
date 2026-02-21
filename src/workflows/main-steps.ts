@@ -1,7 +1,7 @@
 import type { GeetoState } from '../types/index.js'
 
 import { handleCommitWorkflow } from './commit.js'
-import { confirm, ProgressBar } from '../cli/input.js'
+import { confirm } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { STEP } from '../core/constants.js'
 import { colors } from '../utils/colors.js'
@@ -10,6 +10,7 @@ import { exec, execAsync } from '../utils/exec.js'
 import { safeCheckout, safeMerge } from '../utils/git-errors.js'
 import { getCurrentBranch, pushWithRetry } from '../utils/git.js'
 import { log } from '../utils/logging.js'
+import { ScrambleProgress } from '../utils/scramble.js'
 import { saveState } from '../utils/state.js'
 
 /** Extract a user-friendly message from a push error. */
@@ -65,14 +66,15 @@ export async function handlePush(
     if (shouldPush) {
       if (opts?.suppressLogs) {
         console.log('')
-        const progressBar = new ProgressBar(100, 'Pushing to remote')
-
-        // Perform push silently to avoid interleaving git progress output
-        let progress = 0
-        const interval = setInterval(() => {
-          progress = Math.min(95, progress + Math.max(1, Math.floor(Math.random() * 6)))
-          progressBar.update(progress)
-        }, 250)
+        const branch = getCurrentBranch()
+        const pushProgress = new ScrambleProgress()
+        pushProgress.start([
+          'initializing push...',
+          'collecting objects...',
+          'compressing deltas...',
+          `uploading to origin/${branch}...`,
+          'verifying remote refs...',
+        ])
 
         try {
           // Check if remote branch exists; if not, treat as commits to push
@@ -98,31 +100,28 @@ export async function handlePush(
           }
 
           await execAsync(`git push -u origin "${getCurrentBranch()}"`, true)
-          clearInterval(interval)
-          progressBar.update(100)
-          progressBar.complete()
-          console.log('')
+          pushProgress.stop()
 
           if (hasCommitsToPush) {
-            log.success(`Pushed ${getCurrentBranch()} to remote`)
+            log.success(`Pushed ${branch} to remote`)
           }
         } catch (error) {
-          progressBar.complete()
-          console.log('')
+          pushProgress.fail('Push failed')
           log.error(describePushError(error))
           throw error
         }
       } else {
-        // Push without progress bar
+        // Push with scramble progress
 
-        const progressBar = new ProgressBar(100, 'Pushing to remote')
-
-        // Perform push while updating progress bar
-        let progress = 0
-        const interval = setInterval(() => {
-          progress = Math.min(95, progress + Math.max(1, Math.floor(Math.random() * 6)))
-          progressBar.update(progress)
-        }, 250)
+        const branch = getCurrentBranch()
+        const pushProgress = new ScrambleProgress()
+        pushProgress.start([
+          'initializing push...',
+          'collecting objects...',
+          'compressing deltas...',
+          `uploading to origin/${branch}...`,
+          'verifying remote refs...',
+        ])
 
         try {
           // Check if remote branch exists; if not, treat as commits to push
@@ -148,17 +147,13 @@ export async function handlePush(
           }
 
           await execAsync(`git push -u origin "${getCurrentBranch()}"`, true)
-          clearInterval(interval)
-          progressBar.update(100)
-          progressBar.complete()
-          console.log('')
+          pushProgress.stop()
 
           if (hasCommitsToPush) {
-            log.success(`Pushed ${getCurrentBranch()} to remote`)
+            log.success(`Pushed ${branch} to remote`)
           }
         } catch (error) {
-          progressBar.complete()
-          console.log('')
+          pushProgress.fail('Push failed')
           log.error(describePushError(error))
           throw error
         }
@@ -344,14 +339,14 @@ export async function handleMerge(
         }
 
         console.log('')
-        const progressBar = new ProgressBar(100, `Pushing ${targetBranch} to remote`)
-
-        // Perform push while updating progress bar
-        let progress = 0
-        const interval = setInterval(() => {
-          progress = Math.min(95, progress + Math.max(1, Math.floor(Math.random() * 6)))
-          progressBar.update(progress)
-        }, 250)
+        const pushProgress = new ScrambleProgress()
+        pushProgress.start([
+          'initializing push...',
+          'collecting objects...',
+          'compressing deltas...',
+          `uploading to origin/${targetBranch}...`,
+          'verifying remote refs...',
+        ])
         try {
           // Check if remote branch exists; if not, treat as commits to push
           let hasCommitsToPush = false
@@ -376,10 +371,7 @@ export async function handleMerge(
           }
 
           await execAsync(`git push -u origin "${getCurrentBranch()}"`, true)
-          clearInterval(interval)
-          progressBar.update(100)
-          progressBar.complete()
-          console.log('')
+          pushProgress.stop()
 
           if (hasCommitsToPush) {
             log.success(`Pushed ${getCurrentBranch()} to remote`)
@@ -387,8 +379,7 @@ export async function handleMerge(
             log.info(`Branch ${getCurrentBranch()} is already up to date with remote`)
           }
         } catch (error) {
-          progressBar.complete()
-          console.log('')
+          pushProgress.fail('Push failed')
           log.error(describePushError(error))
           throw error
         }

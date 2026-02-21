@@ -52,7 +52,7 @@ Homepage: https://github.com/rust142/geeto
 Description: AI-powered Git workflow automation CLI
  Streamline your Git workflow with intelligent branch naming,
  commit messages, and Trello integration — powered by AI
- (Gemini, GitHub Copilot, OpenRouter).
+ (Gemini, Copilot, OpenRouter).
 EOF
 
 # Build .deb

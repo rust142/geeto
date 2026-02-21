@@ -164,7 +164,7 @@ export async function handleTrelloCase(
     log.warn('No AI provider configured yet.')
     const providerChoice = await select('Choose AI provider:', [
       { label: 'Gemini', value: 'gemini' },
-      { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
+      { label: 'GitHub (Recommended)', value: 'copilot' },
       { label: 'OpenRouter', value: 'openrouter' },
       { label: 'Back to naming strategy', value: 'back' },
     ])
@@ -389,7 +389,7 @@ export async function handleTrelloCase(
         // let user pick another provider and optionally pick a model
         const prov = await select('Choose AI provider:', [
           { label: 'Gemini', value: 'gemini' },
-          { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
+          { label: 'GitHub (Recommended)', value: 'copilot' },
           { label: 'OpenRouter', value: 'openrouter' },
           { label: 'Back to suggested branch selection', value: 'cancel-prov' },
         ])

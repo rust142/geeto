@@ -26,6 +26,7 @@ import {
   isTransientAIFailure,
 } from '../utils/git-ai.js'
 import { log } from '../utils/logging.js'
+import { ScrambleProgress } from '../utils/scramble.js'
 import { saveState } from '../utils/state.js'
 
 export const getDefaultCommitTool = (
@@ -234,7 +235,7 @@ export const handleCommitWorkflow = async (
 
   const aiTools = [
     { label: 'Gemini', value: 'gemini' },
-    { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
+    { label: 'GitHub (Recommended)', value: 'copilot' },
     { label: 'OpenRouter', value: 'openrouter' },
     { label: 'Manual commit', value: 'manual' },
   ]
@@ -371,7 +372,8 @@ export const handleCommitWorkflow = async (
     // Try generating commit message via AI
     let initialAiResult: string | null = null
     let currentModel: string | undefined
-    const spinner = log.spinner()
+
+    const spinner = new ScrambleProgress()
     try {
       let currentProvider: 'gemini' | 'copilot' | 'openrouter' | undefined
       if (state.aiProvider && state.aiProvider !== 'manual') {
@@ -388,9 +390,12 @@ export const handleCommitWorkflow = async (
         currentModel = state.geminiModel ?? DEFAULT_GEMINI_MODEL
       }
 
-      spinner.start(
-        `Generating commit message with ${getAIProviderShortName(currentProvider)}${currentModel ? ` (${currentModel})` : ''}...`
-      )
+      spinner.start([
+        'reading staged changes...',
+        'analyzing diff...',
+        `generating commit message with ${getAIProviderShortName(currentProvider)}${currentModel ? ` (${currentModel})` : ''}...`,
+        'formatting conventional commit...',
+      ])
 
       if (currentProvider === 'copilot') {
         const { generateCommitMessage } = await import('../api/copilot.js')
@@ -465,12 +470,14 @@ export const handleCommitWorkflow = async (
           if (correction) {
             console.log('')
           }
-          const spinner = log.spinner()
-          spinner.start(
-            `Regenerating commit message with ${getAIProviderShortName(
+          const spinner = new ScrambleProgress()
+          spinner.start([
+            'reviewing feedback...',
+            `regenerating with ${getAIProviderShortName(
               state.aiProvider ?? 'gemini'
-            )}${directModelName ? ` (${directModelName})` : ''}...`
-          )
+            )}${directModelName ? ` (${directModelName})` : ''}...`,
+            'formatting conventional commit...',
+          ])
 
           try {
             switch (state.aiProvider) {
@@ -713,7 +720,7 @@ export const handleCommitWorkflow = async (
         case 'change-provider': {
           const prov = await select('Choose AI provider:', [
             { label: 'Gemini', value: 'gemini' },
-            { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
+            { label: 'GitHub (Recommended)', value: 'copilot' },
             { label: 'OpenRouter', value: 'openrouter' },
             { label: 'Back to suggested commit selection', value: 'back' },
           ])
