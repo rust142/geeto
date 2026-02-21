@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.1](https://github.com/rust142/geeto/compare/v0.6.0...v0.6.1) (2026-02-21)
+
+### Features
+
+* feat(cli): add new Git commands and update project info ([9bc9ff2](https://github.com/rust142/geeto/commit/9bc9ff2))
+
 ## [0.6.0](https://github.com/rust142/geeto/compare/v0.5.1...v0.6.0) (2026-02-21)
 
 ### Features
