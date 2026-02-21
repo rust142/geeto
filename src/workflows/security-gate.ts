@@ -14,6 +14,7 @@ import { colors } from '../utils/colors.js'
 import { exec } from '../utils/exec.js'
 import { getCurrentBranch, getStagedFiles } from '../utils/git.js'
 import { log } from '../utils/logging.js'
+import { ScrambleProgress } from '../utils/scramble.js'
 import { loadState } from '../utils/state.js'
 
 interface SecurityIssue {
@@ -351,12 +352,16 @@ async function runSecurityScan(
   model?: string
 ): Promise<string | null> {
   const prompt = buildSecurityPrompt(data)
-  const spinner = log.spinner()
+  const spinner = new ScrambleProgress()
 
   try {
     const modelInfo = model ? ` (${model})` : ''
     console.log('')
-    spinner.start(`Analyzing code security and quality with ${aiProvider}${modelInfo}...`)
+    spinner.start([
+      'preparing security analysis...',
+      `analyzing code with ${aiProvider}${modelInfo}...`,
+      'processing security results...',
+    ])
 
     let result: string | null = null
 

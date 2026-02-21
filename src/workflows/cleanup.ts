@@ -10,6 +10,7 @@ import { getProtectedBranches } from '../utils/config.js'
 import { exec, execAsync, execSilent } from '../utils/exec.js'
 import { getCurrentBranch } from '../utils/git.js'
 import { log } from '../utils/logging.js'
+import { ScrambleProgress } from '../utils/scramble.js'
 
 interface BranchInfo {
   name: string
@@ -318,8 +319,8 @@ export const handleInteractiveCleanup = async (): Promise<void> => {
     // Delete remote if exists
     if (branch.hasRemote) {
       try {
-        const spinner = log.spinner()
-        spinner.start(`Deleting remote: ${branch.name}`)
+        const spinner = new ScrambleProgress()
+        spinner.start([`Deleting remote: ${branch.name}`])
         try {
           await execAsync(`git push origin --delete "${branch.name}"`, true)
           spinner.succeed(`Deleted remote: ${branch.name}`)

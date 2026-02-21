@@ -11,6 +11,7 @@ import { colors } from '../utils/colors.js'
 import { getTrelloConfig, hasTrelloConfig } from '../utils/config.js'
 import { commandExists, exec } from '../utils/exec.js'
 import { log } from '../utils/logging.js'
+import { ScrambleProgress } from '../utils/scramble.js'
 
 /**
  * Display Trello lists with formatted output
@@ -29,8 +30,8 @@ export const handleGetTrelloLists = async (): Promise<void> => {
   log.info(`Board ID: ${colors.cyan}${config.boardId}${colors.reset}`)
 
   console.log('')
-  const spinner = log.spinner()
-  spinner.start('Fetching lists...')
+  const spinner = new ScrambleProgress()
+  spinner.start(['connecting to trello...', 'fetching board lists...', 'organizing list data...'])
 
   const lists = await fetchTrelloLists()
 
@@ -69,8 +70,8 @@ export const handleGenerateTaskInstructions = async (): Promise<void> => {
 
   // Fetch lists
   console.log('')
-  const spinner = log.spinner()
-  spinner.start('Fetching Trello lists...')
+  const spinner = new ScrambleProgress()
+  spinner.start(['connecting to trello...', 'fetching trello lists...', 'processing list data...'])
   const lists = await fetchTrelloLists()
 
   if (lists.length === 0) {
@@ -103,8 +104,12 @@ export const handleGenerateTaskInstructions = async (): Promise<void> => {
 
   // Fetch cards from selected list
   console.log('')
-  const spinner2 = log.spinner()
-  spinner2.start(`Fetching cards from "${selectedList.name}"...`)
+  const spinner2 = new ScrambleProgress()
+  spinner2.start([
+    'connecting to trello...',
+    `fetching cards from "${selectedList.name}"...`,
+    'processing card data...',
+  ])
   const allCards = await fetchTrelloCards(selectedListId)
 
   if (allCards.length === 0) {

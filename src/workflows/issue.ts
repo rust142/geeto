@@ -17,6 +17,7 @@ import { isDryRun, logDryRun } from '../utils/dry-run.js'
 import { execSilent } from '../utils/exec.js'
 import { getAIProviderShortName } from '../utils/git-ai.js'
 import { log } from '../utils/logging.js'
+import { ScrambleProgress } from '../utils/scramble.js'
 import { loadState, saveState } from '../utils/state.js'
 
 /**
@@ -71,8 +72,12 @@ const callAIForIssue = async (
   const providerName = getAIProviderShortName(provider)
   const modelDisplay = model ? ` (${model})` : ''
 
-  const spinner = log.spinner()
-  spinner.start(`Generating issue with ${providerName}${modelDisplay}...`)
+  const spinner = new ScrambleProgress()
+  spinner.start([
+    'analyzing issue context...',
+    `generating issue with ${providerName}${modelDisplay}...`,
+    'formatting title & body...',
+  ])
 
   let result: string | null = null
   try {
@@ -395,8 +400,12 @@ export const handleCreateIssue = async (): Promise<void> => {
 
   // Labels
   console.log('')
-  const spinner = log.spinner()
-  spinner.start('Fetching labels...')
+  const spinner = new ScrambleProgress()
+  spinner.start([
+    'connecting to github...',
+    'fetching repository labels...',
+    'loading label data...',
+  ])
   const labels = await listLabels(repoInfo.owner, repoInfo.repo)
   spinner.stop()
 
@@ -476,8 +485,12 @@ export const handleCreateIssue = async (): Promise<void> => {
     return
   }
 
-  const issueSpinner = log.spinner()
-  issueSpinner.start('Creating issue...')
+  const issueSpinner = new ScrambleProgress()
+  issueSpinner.start([
+    'preparing issue data...',
+    'creating issue on github...',
+    'finalizing issue...',
+  ])
 
   const issue = await createIssue({
     owner: repoInfo.owner,

@@ -364,14 +364,15 @@ const handleSyncReleases = async (): Promise<void> => {
   }
 
   console.log('')
-  const spinner = log.spinner()
-  spinner.start('Checking GitHub releases...')
+  const spinner = new ScrambleProgress()
+  spinner.start(['Checking GitHub releases...'])
 
   const localTags = getExistingTags()
   const ghReleases = getExistingGithubReleases()
   const missingTags = localTags.filter((t) => !ghReleases.includes(t))
 
-  spinner.succeed(`Found ${localTags.length} tags, ${ghReleases.length} GitHub releases`)
+  spinner.stop()
+  log.success(`Found ${localTags.length} tags, ${ghReleases.length} GitHub releases`)
 
   if (missingTags.length === 0) {
     console.log('')
@@ -509,13 +510,15 @@ const handleSyncReleases = async (): Promise<void> => {
 
     if (useAI && commits.length > 0) {
       console.log('')
-      const aiSpinner = log.spinner()
+      const aiSpinner = new ScrambleProgress()
       const modelDisplay = getModelValue(copilotModel ?? openrouterModel ?? geminiModel ?? '')
-      aiSpinner.start(
-        `Generating notes for ${tag} with ${getAIProviderShortName(aiProvider)}` +
+      aiSpinner.start([
+        'analyzing release changes...',
+        `generating notes for ${tag} with ${getAIProviderShortName(aiProvider)}` +
           (modelDisplay ? ` (${modelDisplay})` : '') +
-          '...'
-      )
+          '...',
+        'formatting changelog...',
+      ])
 
       const aiResult = await generateReleaseNotesWithProvider(
         aiProvider,
@@ -528,7 +531,8 @@ const handleSyncReleases = async (): Promise<void> => {
       )
 
       if (aiResult) {
-        aiSpinner.succeed(`Notes generated for ${tag}`)
+        aiSpinner.stop()
+        log.success(`Notes generated for ${tag}`)
         releaseBody = normalizeReleaseMarkdown(aiResult)
 
         // Preview notes for user review
@@ -566,20 +570,22 @@ const handleSyncReleases = async (): Promise<void> => {
     }
 
     console.log('')
-    const releaseSpinner = log.spinner()
+    const releaseSpinner = new ScrambleProgress()
 
     // Ensure tag exists on remote before creating GitHub Release
-    releaseSpinner.start(`Pushing tag ${colors.yellow}${tag}${colors.reset} to remote...`)
+    releaseSpinner.start([`Pushing tag ${colors.yellow}${tag}${colors.reset} to remote...`])
     try {
       await execAsync(`git push origin ${tag} --no-verify`, true)
-      releaseSpinner.succeed(`Tag ${tag} pushed to remote`)
+      releaseSpinner.stop()
+      log.success(`Tag ${tag} pushed to remote`)
     } catch {
+      releaseSpinner.stop()
       // Tag might already exist on remote — that's fine, continue
     }
 
     console.log('')
-    const createSpinner = log.spinner()
-    createSpinner.start(`Creating release ${colors.yellow}${tag}${colors.reset}...`)
+    const createSpinner = new ScrambleProgress()
+    createSpinner.start([`Creating release ${colors.yellow}${tag}${colors.reset}...`])
 
     const os = await import('node:os')
     const tempFile = `${os.tmpdir()}/geeto-sync-${Date.now()}.md`
@@ -587,7 +593,8 @@ const handleSyncReleases = async (): Promise<void> => {
 
     try {
       await execAsync(`gh release create ${tag} --title "${tag}" --notes-file "${tempFile}"`, true)
-      createSpinner.succeed(`Release ${tag} created`)
+      createSpinner.stop()
+      log.success(`Release ${tag} created`)
       successCount++
     } catch (error) {
       const stderr = (error as { stderr?: string }).stderr?.trim()
@@ -624,12 +631,13 @@ const handleDeleteReleases = async (): Promise<void> => {
   }
 
   console.log('')
-  const spinner = log.spinner()
-  spinner.start('Fetching GitHub releases...')
+  const spinner = new ScrambleProgress()
+  spinner.start(['Fetching GitHub releases...'])
 
   const ghReleases = getExistingGithubReleases()
 
-  spinner.succeed(`Found ${ghReleases.length} GitHub releases`)
+  spinner.stop()
+  log.success(`Found ${ghReleases.length} GitHub releases`)
 
   if (ghReleases.length === 0) {
     console.log('')
@@ -660,8 +668,8 @@ const handleDeleteReleases = async (): Promise<void> => {
 
   for (const release of selected) {
     console.log('')
-    const releaseSpinner = log.spinner()
-    releaseSpinner.start(`Deleting release ${colors.yellow}${release}${colors.reset}...`)
+    const releaseSpinner = new ScrambleProgress()
+    releaseSpinner.start([`Deleting release ${colors.yellow}${release}${colors.reset}...`])
 
     try {
       await execAsync(`gh release delete ${release} --yes`, true)
@@ -673,7 +681,8 @@ const handleDeleteReleases = async (): Promise<void> => {
           /* Tag deletion is best-effort */
         }
       }
-      releaseSpinner.succeed(`Release ${release} deleted${alsoDeleteTag ? ' + tag' : ''}`)
+      releaseSpinner.stop()
+      log.success(`Release ${release} deleted${alsoDeleteTag ? ' + tag' : ''}`)
       successCount++
     } catch (error) {
       const stderr = (error as { stderr?: string }).stderr?.trim()
@@ -696,8 +705,8 @@ const handleRecoverTags = async (): Promise<void> => {
   const line = '─'.repeat(56)
 
   console.log('')
-  const spinner = log.spinner()
-  spinner.start('Scanning release commits...')
+  const spinner = new ScrambleProgress()
+  spinner.start(['Scanning release commits...'])
 
   // Find all release commits: "chore(release): vX.Y.Z"
   let gitLog: string
@@ -731,7 +740,8 @@ const handleRecoverTags = async (): Promise<void> => {
   const existingTags = new Set(getExistingTags())
   const missingTags = releaseCommits.filter((rc) => !existingTags.has(rc.tag))
 
-  spinner.succeed(`Found ${releaseCommits.length} release commits, ${existingTags.size} tags`)
+  spinner.stop()
+  log.success(`Found ${releaseCommits.length} release commits, ${existingTags.size} tags`)
 
   if (missingTags.length === 0) {
     console.log('')
@@ -795,12 +805,13 @@ const handleRecoverTags = async (): Promise<void> => {
 
   for (const mt of tagsToRecover) {
     console.log('')
-    const tagSpinner = log.spinner()
-    tagSpinner.start(`Creating tag ${colors.yellow}${mt.tag}${colors.reset}...`)
+    const tagSpinner = new ScrambleProgress()
+    tagSpinner.start([`Creating tag ${colors.yellow}${mt.tag}${colors.reset}...`])
 
     try {
       exec(`git tag -a ${mt.tag} ${mt.hash} -m "Release ${mt.tag}"`, true)
-      tagSpinner.succeed(`Tag ${mt.tag} created`)
+      tagSpinner.stop()
+      log.success(`Tag ${mt.tag} created`)
       successCount++
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error)
@@ -822,11 +833,12 @@ const handleRecoverTags = async (): Promise<void> => {
     const pushTags = confirm('Push recovered tags to remote?')
     if (pushTags) {
       console.log('')
-      const pushSpinner = log.spinner()
-      pushSpinner.start('Pushing tags to remote...')
+      const pushSpinner = new ScrambleProgress()
+      pushSpinner.start(['Pushing tags to remote...'])
       try {
         await execAsync('git push --tags --no-verify', true)
-        pushSpinner.succeed('Tags pushed to remote')
+        pushSpinner.stop()
+        log.success('Tags pushed to remote')
       } catch (error) {
         const stderr = (error as { stderr?: string }).stderr?.trim()
         pushSpinner.fail('Failed to push tags')
@@ -1074,13 +1086,15 @@ export const handleRelease = async (): Promise<void> => {
     let accepted = false
 
     while (!accepted) {
-      const spinner = log.spinner()
+      const spinner = new ScrambleProgress()
       const modelDisplay = getModelValue(copilotModel ?? openrouterModel ?? geminiModel ?? '')
-      spinner.start(
-        `Generating release notes with ${getAIProviderShortName(aiProvider)}` +
+      spinner.start([
+        'analyzing release changes...',
+        `generating release notes with ${getAIProviderShortName(aiProvider)}` +
           (modelDisplay ? ` (${modelDisplay})` : '') +
-          '...'
-      )
+          '...',
+        'formatting changelog...',
+      ])
 
       const result = await generateReleaseNotesWithProvider(
         aiProvider,
@@ -1092,7 +1106,8 @@ export const handleRelease = async (): Promise<void> => {
         geminiModel
       )
 
-      spinner.succeed('Release notes generated')
+      spinner.stop()
+      log.success('Release notes generated')
       console.log('')
 
       if (!result) {
@@ -1206,20 +1221,22 @@ export const handleRelease = async (): Promise<void> => {
   }
 
   // Execute release steps
-  const spinner = log.spinner()
+  const pkgSpinner = new ScrambleProgress()
 
   // 1. Update package.json
-  spinner.start('Updating package.json...')
+  pkgSpinner.start(['Updating package.json...'])
   try {
     updatePackageVersion(newVersion)
-    spinner.succeed(`package.json → v${newVersion}`)
+    pkgSpinner.stop()
+    log.success(`package.json → v${newVersion}`)
   } catch {
-    spinner.fail('Failed to update package.json')
+    pkgSpinner.fail('Failed to update package.json')
     return
   }
 
   // 2. Update RELEASE.MD (prepend new version, keep old ones)
-  spinner.start('Updating RELEASE.MD...')
+  const releaseFileSpinner = new ScrambleProgress()
+  releaseFileSpinner.start(['Updating RELEASE.MD...'])
   try {
     // Use AI-generated notes if available, otherwise fallback to template
     let newEntry: string
@@ -1268,13 +1285,15 @@ export const handleRelease = async (): Promise<void> => {
     }
 
     writeFileSync('RELEASE.MD', releaseMd, 'utf8')
-    spinner.succeed('RELEASE.MD updated')
+    releaseFileSpinner.stop()
+    log.success('RELEASE.MD updated')
   } catch {
-    spinner.fail('Failed to update RELEASE.MD')
+    releaseFileSpinner.fail('Failed to update RELEASE.MD')
   }
 
   // 3. Update CHANGELOG.md
-  spinner.start('Updating CHANGELOG.md...')
+  const changelogSpinner = new ScrambleProgress()
+  changelogSpinner.start(['Updating CHANGELOG.md...'])
   try {
     const newEntry = generateChangelogEntry(newVersion, commits, currentVersion)
     let existing = ''
@@ -1295,28 +1314,33 @@ export const handleRelease = async (): Promise<void> => {
     }
 
     writeFileSync('CHANGELOG.md', changelog, 'utf8')
-    spinner.succeed('CHANGELOG.md updated')
+    changelogSpinner.stop()
+    log.success('CHANGELOG.md updated')
   } catch {
-    spinner.fail('Failed to update CHANGELOG.md')
+    changelogSpinner.fail('Failed to update CHANGELOG.md')
   }
 
   // 4. Stage, commit, tag
-  spinner.start('Creating release commit...')
+  const commitSpinner = new ScrambleProgress()
+  commitSpinner.start(['Creating release commit...'])
   try {
     exec('git add package.json src/version.ts RELEASE.MD CHANGELOG.md', true)
     exec(`git commit --no-verify -m "chore(release): v${newVersion}"`, true)
-    spinner.succeed('Release commit created')
+    commitSpinner.stop()
+    log.success('Release commit created')
   } catch {
-    spinner.fail('Failed to create release commit')
+    commitSpinner.fail('Failed to create release commit')
     return
   }
 
-  spinner.start(`Creating tag v${newVersion}...`)
+  const tagSpinner = new ScrambleProgress()
+  tagSpinner.start([`Creating tag v${newVersion}...`])
   try {
     exec(`git tag -a v${newVersion} -m "Release v${newVersion}"`, true)
-    spinner.succeed(`Tag v${newVersion} created`)
+    tagSpinner.stop()
+    log.success(`Tag v${newVersion} created`)
   } catch {
-    spinner.fail('Failed to create tag')
+    tagSpinner.fail('Failed to create tag')
     return
   }
 
@@ -1373,15 +1397,18 @@ export const handleRelease = async (): Promise<void> => {
       const tempFile = `${os.tmpdir()}/geeto-release-${Date.now()}.md`
       writeFileSync(tempFile, releaseBody, 'utf8')
 
-      const releaseSpinner = log.spinner()
-      releaseSpinner.start('Creating GitHub Release...')
+      const releaseSpinner = new ScrambleProgress()
+      releaseSpinner.start(['Creating GitHub Release...'])
 
       try {
         await execAsync(
-          `gh release create v${newVersion} --title "v${newVersion}" --notes-file "${tempFile}"`,
+          `gh release create v${newVersion}` +
+            ` --title "v${newVersion}"` +
+            ` --notes-file "${tempFile}"`,
           true
         )
-        releaseSpinner.succeed('GitHub Release created')
+        releaseSpinner.stop()
+        log.success('GitHub Release created')
         ghReleaseCreated = true
       } catch (error) {
         const stderr = (error as { stderr?: string }).stderr?.trim()

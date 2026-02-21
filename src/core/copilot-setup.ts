@@ -11,6 +11,7 @@ import { ensureGeetoIgnored } from '../utils/config.js'
 import { commandExists, exec, execAsync } from '../utils/exec.js'
 import { log } from '../utils/logging.js'
 import { getGhCliInstallCommand, getLinuxDistro } from '../utils/platform.js'
+import { ScrambleProgress } from '../utils/scramble.js'
 
 /**
  * Check Copilot CLI version and warn if outdated.
@@ -100,8 +101,12 @@ const setupGitHubCLI = (): boolean => {
   }
 
   if (installCommand) {
-    const spinner = log.spinner()
-    spinner.start('Installing GitHub CLI...')
+    const spinner = new ScrambleProgress()
+    spinner.start([
+      'preparing installation...',
+      'installing github cli...',
+      'verifying installation...',
+    ])
     try {
       exec(installCommand, true)
       spinner.stop()
@@ -357,8 +362,12 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
   if (installCommand) {
     console.log('')
 
-    const spinner = log.spinner()
-    spinner.start(`Installing Copilot via ${choice}...`)
+    const spinner = new ScrambleProgress()
+    spinner.start([
+      'preparing package manager...',
+      `installing copilot via ${choice}...`,
+      'finalizing installation...',
+    ])
 
     try {
       // Use async exec to allow spinner to animate during installation
@@ -373,8 +382,12 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
         console.log('')
         log.warn('Directory conflict detected. Retrying with force reinstall...')
 
-        const retrySpinner = log.spinner()
-        retrySpinner.start('Cleaning up and reinstalling...')
+        const retrySpinner = new ScrambleProgress()
+        retrySpinner.start([
+          'cleaning up previous install...',
+          'reinstalling copilot cli...',
+          'verifying package...',
+        ])
 
         try {
           // First uninstall, then reinstall

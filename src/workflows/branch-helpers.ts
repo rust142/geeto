@@ -29,6 +29,7 @@ import {
   isTransientAIFailure,
 } from '../utils/git.js'
 import { log } from '../utils/logging.js'
+import { ScrambleProgress } from '../utils/scramble.js'
 import { saveState } from '../utils/state.js'
 
 export interface TrelloCaseResult {
@@ -58,8 +59,8 @@ export async function handleTrelloCase(
     log.success('Trello integration configured!')
   }
 
-  const spinner = log.spinner()
-  spinner.start('Checking Trello for tasks...')
+  const spinner = new ScrambleProgress()
+  spinner.start(['connecting to trello...', 'fetching task lists...', 'organizing results...'])
 
   const trelloLists = await fetchTrelloLists()
   spinner.stop()
@@ -94,8 +95,12 @@ export async function handleTrelloCase(
   }
 
   const filterListId = selectedListId === 'all' ? undefined : selectedListId
-  const cardSpinner = log.spinner()
-  cardSpinner.start('Loading Trello cards...')
+  const cardSpinner = new ScrambleProgress()
+  cardSpinner.start([
+    'connecting to trello...',
+    'loading trello cards...',
+    'processing card data...',
+  ])
   const trelloCards = await fetchTrelloCards(filterListId)
   cardSpinner.stop()
 
@@ -223,17 +228,17 @@ export async function handleTrelloCase(
       model = (state.geminiModel as unknown as string) ?? DEFAULT_GEMINI_MODEL
     }
     const modelDisplay = getModelDisplayName(aiProvider, model)
-    const spinner = log.spinner()
+    const spinner = new ScrambleProgress()
 
     let titleToProcess = cardData.title
 
     // Step 1: Translate to English if requested
     if (shouldTranslateToEnglish && !skipRegenerate) {
-      spinner.start(
-        `Translating to English using ${getAIProviderShortName(aiProvider)}${
-          modelDisplay ? ` (${modelDisplay})` : ''
-        }...`
-      )
+      spinner.start([
+        'preparing translation request...',
+        `translating with ${getAIProviderShortName(aiProvider)}${modelDisplay ? ` (${modelDisplay})` : ''}...`,
+        'processing translation...',
+      ])
 
       const translatedTitle = await generateBranchNameWithProvider(
         aiProvider,
@@ -264,16 +269,20 @@ export async function handleTrelloCase(
     }
 
     // Step 2: Generate short branch name
-    spinner.start(
-      `Generating short branch name using ${getAIProviderShortName(aiProvider)}${
-        modelDisplay ? ` (${modelDisplay})` : ''
-      }...`
-    )
+    const genSpinner = new ScrambleProgress()
+    genSpinner.start([
+      'analyzing task context...',
+      'generating branch name with ' +
+        `${getAIProviderShortName(aiProvider)}` +
+        (modelDisplay ? ` (${modelDisplay})` : '') +
+        '...',
+      'validating naming convention...',
+    ])
 
     if (skipRegenerate) {
       // consume skip once and reuse previous aiSuffix
       skipRegenerate = false
-      spinner.stop()
+      genSpinner.stop()
     } else {
       aiSuffix = await generateBranchNameWithProvider(
         aiProvider,
@@ -283,7 +292,7 @@ export async function handleTrelloCase(
         state.openrouterModel,
         state.geminiModel
       )
-      spinner.stop()
+      genSpinner.stop()
     }
 
     if (!aiSuffix || isTransientAIFailure(aiSuffix) || isContextLimitFailure(aiSuffix)) {

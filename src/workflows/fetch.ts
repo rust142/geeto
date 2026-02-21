@@ -8,6 +8,7 @@ import { colors } from '../utils/colors.js'
 import { execAsync, execSilent } from '../utils/exec.js'
 import { getCurrentBranch } from '../utils/git.js'
 import { log } from '../utils/logging.js'
+import { ScrambleProgress } from '../utils/scramble.js'
 
 /**
  * Get configured remotes
@@ -80,8 +81,12 @@ export const handleFetch = async (): Promise<void> => {
   }
 
   console.log('')
-  const spinner = log.spinner()
-  spinner.start('Fetching from remote...')
+  const spinner = new ScrambleProgress()
+  spinner.start([
+    'connecting to remote...',
+    'fetching latest changes...',
+    'updating local references...',
+  ])
 
   try {
     await execAsync(fetchCmd, true)

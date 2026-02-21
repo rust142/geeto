@@ -19,6 +19,7 @@ import {
   getModelValue,
 } from '../utils/git-ai.js'
 import { log } from '../utils/logging.js'
+import { ScrambleProgress } from '../utils/scramble.js'
 import { loadState } from '../utils/state.js'
 
 /** Read README.md content. */
@@ -115,8 +116,8 @@ export const handleRepoSettings = async (): Promise<void> => {
   }
 
   console.log('')
-  const spinner = log.spinner()
-  spinner.start('Fetching repo info...')
+  const spinner = new ScrambleProgress()
+  spinner.start(['connecting to github...', 'fetching repository info...', 'loading settings...'])
 
   const repoInfo = getCurrentRepoInfo()
   if (!repoInfo) {
@@ -226,12 +227,15 @@ export const handleRepoSettings = async (): Promise<void> => {
         console.log('')
         const currentModel = copilotModel ?? openrouterModel ?? geminiModel ?? ''
         const modelDisplay = getModelValue(currentModel)
-        const aiSpinner = log.spinner()
-        aiSpinner.start(
-          `Generating description with ${getAIProviderShortName(aiProvider)}` +
+        const aiSpinner = new ScrambleProgress()
+        aiSpinner.start([
+          'analyzing README...',
+          `generating description with ` +
+            `${getAIProviderShortName(aiProvider)}` +
             (modelDisplay ? ` (${modelDisplay})` : '') +
-            '...'
-        )
+            '...',
+          'optimizing for GitHub...',
+        ])
 
         const aiResult = await generateTextWithProvider(
           aiProvider,
@@ -250,7 +254,8 @@ export const handleRepoSettings = async (): Promise<void> => {
           continue
         }
 
-        aiSpinner.succeed('Description generated')
+        aiSpinner.stop()
+        log.success('Description generated')
         console.log('')
         log.info(`AI suggestion: ${colors.bright}${aiResult}${colors.reset}`)
 
@@ -426,8 +431,12 @@ export const handleRepoSettings = async (): Promise<void> => {
 
   // Apply changes
   console.log('')
-  const applySpinner = log.spinner()
-  applySpinner.start('Updating GitHub repo settings...')
+  const applySpinner = new ScrambleProgress()
+  applySpinner.start([
+    'preparing changes...',
+    'updating github repo settings...',
+    'applying topic changes...',
+  ])
 
   try {
     // Apply description + homepage
@@ -465,8 +474,12 @@ export const handleRepoSettings = async (): Promise<void> => {
 
     // Show final state
     console.log('')
-    const verifySpinner = log.spinner()
-    verifySpinner.start('Verifying changes...')
+    const verifySpinner = new ScrambleProgress()
+    verifySpinner.start([
+      'connecting to github...',
+      'verifying applied changes...',
+      'loading updated settings...',
+    ])
 
     const updated = getCurrentRepoInfo()
     if (updated) {

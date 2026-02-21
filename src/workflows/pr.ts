@@ -23,6 +23,7 @@ import { execAsync, execSilent } from '../utils/exec.js'
 import { getAIProviderShortName } from '../utils/git-ai.js'
 import { getCurrentBranch } from '../utils/git.js'
 import { log } from '../utils/logging.js'
+import { ScrambleProgress } from '../utils/scramble.js'
 import { loadState, saveState } from '../utils/state.js'
 
 /**
@@ -168,8 +169,12 @@ const callAIForPR = async (
   const providerName = getAIProviderShortName(provider)
   const modelDisplay = model ? ` (${model})` : ''
 
-  const spinner = log.spinner()
-  spinner.start(`Generating PR with ${providerName}${modelDisplay}...`)
+  const spinner = new ScrambleProgress()
+  spinner.start([
+    'analyzing branch diff...',
+    `generating PR with ${providerName}${modelDisplay}...`,
+    'formatting title & body...',
+  ])
 
   let result: string | null = null
   try {
@@ -297,8 +302,12 @@ export const handleCreatePR = async (): Promise<void> => {
   log.info(`Branch: ${colors.green}${current}${colors.reset}\n`)
 
   // Check for existing PR
-  const spinner = log.spinner()
-  spinner.start('Checking for existing PRs...')
+  const spinner = new ScrambleProgress()
+  spinner.start([
+    'connecting to github...',
+    'checking existing pull requests...',
+    'processing results...',
+  ])
   const existingPRs = await listPullRequests(repoInfo.owner, repoInfo.repo, current)
   spinner.stop()
 
@@ -316,7 +325,7 @@ export const handleCreatePR = async (): Promise<void> => {
   }
 
   // Get default branch for base
-  spinner.start('Fetching repo info...')
+  spinner.start(['connecting to github...', 'fetching repo info...', 'loading branch data...'])
   const defaultBranch = await getDefaultBranch(repoInfo.owner, repoInfo.repo)
   spinner.stop()
 
@@ -567,8 +576,12 @@ export const handleCreatePR = async (): Promise<void> => {
   // Push if needed
   const pushed = isBranchPushed(current)
   if (!pushed || hasUnpushedCommits(current)) {
-    const pushSpinner = log.spinner()
-    pushSpinner.start(`Pushing ${current} to origin...`)
+    const pushSpinner = new ScrambleProgress()
+    pushSpinner.start([
+      'preparing push...',
+      `pushing ${current} to origin...`,
+      'confirming remote state...',
+    ])
     try {
       await execAsync(`git push -u origin ${current}`, true)
       pushSpinner.succeed(`Pushed ${current} to origin`)
@@ -587,8 +600,12 @@ export const handleCreatePR = async (): Promise<void> => {
     return
   }
 
-  const prSpinner = log.spinner()
-  prSpinner.start('Creating pull request...')
+  const prSpinner = new ScrambleProgress()
+  prSpinner.start([
+    'preparing pull request data...',
+    'creating pull request on github...',
+    'finalizing pr...',
+  ])
 
   const pr = await createPullRequest({
     owner: repoInfo.owner,
