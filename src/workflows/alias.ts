@@ -11,6 +11,7 @@ import path from 'node:path'
 import { confirm } from '../cli/input.js'
 import { multiSelect } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
+import { isDryRun, logDryRun } from '../utils/dry-run.js'
 import { log } from '../utils/logging.js'
 import { isWindows } from '../utils/platform.js'
 
@@ -46,6 +47,8 @@ const ALIASES: AliasEntry[] = [
   { alias: 'gcp', command: 'geeto -cp', desc: 'Cherry-pick' },
   { alias: 'gdr', command: 'geeto -dr', desc: 'Dry-run' },
   { alias: 'gtr', command: 'geeto -tr', desc: 'Trello' },
+  { alias: 'grw', command: 'geeto -rw', desc: 'Reword commits' },
+  { alias: 'gal', command: 'geeto -al', desc: 'Manage aliases' },
 ]
 
 const MARKER_START = '# >>> geeto aliases >>>'
@@ -374,6 +377,10 @@ export const handleAlias = async (): Promise<void> => {
       console.log('')
       const remove = confirm('Remove all geeto aliases?', false)
       if (remove) {
+        if (isDryRun()) {
+          logDryRun(`Remove geeto alias block from ${shell.rcFile}`)
+          return
+        }
         const removed = removeAliasBlock(shell.rcFile)
         if (removed) {
           log.success('All geeto aliases removed.')
@@ -455,6 +462,17 @@ export const handleAlias = async (): Promise<void> => {
     )
   }
   console.log('')
+
+  // Dry-run: show what would happen and exit
+  if (isDryRun()) {
+    logDryRun(`Write ${safeEntries.length} alias(es) to ${shell.rcFile}`)
+    for (const entry of safeEntries) {
+      console.log(
+        `  ${colors.green}+${colors.reset} ${colors.cyan}${entry.alias}${colors.reset} → ${entry.command}`
+      )
+    }
+    return
+  }
 
   const doInstall = confirm('Write to ' + shell.rcFile + '?')
   if (!doInstall) {

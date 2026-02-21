@@ -42,6 +42,7 @@ let showFetch = false
 let showStatus = false
 let showRevert = false
 let showAlias = false
+let showReword = false
 let dryRunMode = false
 let settingsAction:
   | 'separator'
@@ -174,6 +175,9 @@ for (const arg of argv) {
   if (arg === '--alias' || arg === '-al') {
     showAlias = true
   }
+  if (arg === '--reword' || arg === '-rw') {
+    showReword = true
+  }
   if (arg === '--dry-run' || arg === '-dr') {
     dryRunMode = true
   }
@@ -252,6 +256,8 @@ const validFlags = new Set([
   '-rv',
   '--alias',
   '-al',
+  '--reword',
+  '-rw',
   '--dry-run',
   '-dr',
 ])
@@ -313,6 +319,7 @@ for (const arg of argv) {
     console.log(`    ${C}-u,  --undo${R}               Undo the last git action safely`)
     console.log(`    ${C}-rv, --revert${R}             Revert the last commit (soft reset)`)
     console.log(`    ${C}-al, --alias${R}              Install shell aliases for geeto`)
+    console.log(`    ${C}-rw, --reword${R}             Edit past commit messages`)
     console.log(`    ${C}-sts, --stats${R}             Repository statistics dashboard`)
     console.log(`    ${C}     --abort${R}              Abort in-progress operation`)
     console.log(`    ${C}-pl, --pull${R}               Pull from remote interactively`)
@@ -387,6 +394,7 @@ for (const arg of argv) {
       showStatus ||
       showRevert ||
       showAlias ||
+      showReword ||
       settingsAction !== undefined
 
     if (!hasOtherCommand) {
@@ -518,6 +526,17 @@ for (const arg of argv) {
       process.exit(0)
     } catch (error) {
       console.error('Alias error:', error)
+      process.exit(1)
+    }
+  }
+
+  if (showReword) {
+    try {
+      const { handleReword } = await import('./workflows/reword.js')
+      await handleReword()
+      process.exit(0)
+    } catch (error) {
+      console.error('Reword error:', error)
       process.exit(1)
     }
   }

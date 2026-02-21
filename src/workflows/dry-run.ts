@@ -22,6 +22,8 @@ const DRY_RUN_COMMANDS = [
   { label: 'Create Issue', value: 'issue' },
   { label: 'Repo settings', value: 'repo' },
   { label: 'Prune stale branches', value: 'prune' },
+  { label: 'Manage shell aliases', value: 'alias' },
+  { label: 'Edit commit messages', value: 'reword' },
 ]
 
 export const handleDryRunMenu = async (): Promise<void> => {
@@ -109,6 +111,16 @@ export const handleDryRunMenu = async (): Promise<void> => {
       case 'prune': {
         const m = await import('./prune.js')
         await m.handlePrune()
+        break
+      }
+      case 'alias': {
+        const m = await import('./alias.js')
+        await m.handleAlias()
+        break
+      }
+      case 'reword': {
+        const m = await import('./reword.js')
+        await m.handleReword()
         break
       }
     }
