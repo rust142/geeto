@@ -64,6 +64,7 @@ export async function handlePush(
 
     if (shouldPush) {
       if (opts?.suppressLogs) {
+        console.log('')
         const progressBar = new ProgressBar(100, 'Pushing to remote')
 
         // Perform push silently to avoid interleaving git progress output
