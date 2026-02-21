@@ -78,7 +78,11 @@ curl -fsSL https://raw.githubusercontent.com/rust142/geeto/main/tools/install.sh
 
 The installer shows step-by-step progress, detects existing installs, and verifies the installation.
 
-> **Requirements:** Bun ≥ 1.0, Git ≥ 2.0
+> **Prerequisites (depends on install method):**
+>
+> - **Homebrew / APT / Binary** — just Git ≥ 2.0 (runtime is bundled)
+> - **NPM** — Node.js ≥ 18 + Git ≥ 2.0
+> - **Bun / From Source** — Bun ≥ 1.0 + Git ≥ 2.0
 
 ### Uninstall
 
@@ -173,8 +177,16 @@ Each step can also be run individually.
 | `geeto -lg, --log`         | View commit history with timeline   |
 | `geeto -sh, --stash`       | Manage stashes interactively        |
 | `geeto -am, --amend`       | Amend the last commit               |
+| `geeto -rw, --reword`      | Edit past commit messages           |
 | `geeto -u, --undo`         | Undo the last git action safely     |
-| `geeto -st, --stats`       | Repository statistics dashboard     |
+| `geeto -rv, --revert`      | Revert the last commit (soft reset) |
+| `geeto -al, --alias`       | Install shell aliases for geeto     |
+| `geeto -sts, --stats`      | Repository statistics dashboard     |
+| `geeto -st, --status`      | Pretty git status overview          |
+| `geeto -pl, --pull`        | Pull from remote interactively      |
+| `geeto -ft, --fetch`       | Fetch latest from remote            |
+| `geeto --abort`            | Abort in-progress operation         |
+| `geeto --prune`            | Remove stale remote branches        |
 
 ### GitHub
 
@@ -207,13 +219,14 @@ Each step can also be run individually.
 
 ### Editor & Options
 
-| Command               | Description                                         |
-| --------------------- | --------------------------------------------------- |
-| `geeto <file>`        | Open file in inline editor with syntax highlighting |
-| `geeto -f, --fresh`   | Start fresh (ignore checkpoint)                     |
-| `geeto -r, --resume`  | Resume from last checkpoint                         |
-| `geeto -v, --version` | Show version                                        |
-| `geeto -h, --help`    | Show help                                           |
+| Command                | Description                                         |
+| ---------------------- | --------------------------------------------------- |
+| `geeto <file>`         | Open file in inline editor with syntax highlighting |
+| `geeto -f, --fresh`    | Start fresh (ignore checkpoint)                     |
+| `geeto -r, --resume`   | Resume from last checkpoint                         |
+| `geeto -dr, --dry-run` | Simulate commands without executing                 |
+| `geeto -v, --version`  | Show version                                        |
+| `geeto -h, --help`     | Show help                                           |
 
 ---
 
