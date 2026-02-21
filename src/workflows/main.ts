@@ -272,23 +272,21 @@ export const main = async (opts?: {
           const { ensureAIProvider } = await import('../core/setup.js')
           const aiReady = await ensureAIProvider(aiProvider)
           if (!aiReady) {
-            log.warn(
-              `${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup is no longer valid.`
-            )
+            log.warn(`${aiProvider === 'gemini' ? 'Gemini' : 'Copilot'} setup is no longer valid.`)
             const fixSetup = confirm(
-              `Fix ${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup now?`
+              `Fix ${aiProvider === 'gemini' ? 'Gemini' : 'Copilot'} setup now?`
             )
             if (fixSetup) {
               const setupSuccess = await ensureAIProvider(aiProvider)
               if (!setupSuccess) {
                 log.warn(
-                  `Could not fix ${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup. Switching to manual mode.`
+                  `Could not fix ${aiProvider === 'gemini' ? 'Gemini' : 'Copilot'} setup. Switching to manual mode.`
                 )
                 aiProvider = 'gemini' // Keep gemini but will use manual fallback
               }
             } else {
               log.warn(
-                `${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup invalid. Will use manual mode for AI features.`
+                `${aiProvider === 'gemini' ? 'Gemini' : 'Copilot'} setup invalid. Will use manual mode for AI features.`
               )
             }
           }

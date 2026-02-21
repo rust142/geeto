@@ -9,6 +9,7 @@ import { colors } from '../utils/colors.js'
 import { exec, execAsync, execSilent } from '../utils/exec.js'
 import { getCurrentBranch } from '../utils/git.js'
 import { log } from '../utils/logging.js'
+import { ScrambleProgress } from '../utils/scramble.js'
 
 /**
  * Get list of configured remotes
@@ -199,17 +200,23 @@ export const handlePull = async (): Promise<void> => {
 
   // Execute pull
   console.log('')
-  const pullSpinner = log.spinner()
-  pullSpinner.start(`Pulling from ${remote}...`)
+  const pullProgress = new ScrambleProgress()
+  pullProgress.start([
+    `fetching remote refs from ${remote}...`,
+    'downloading objects...',
+    'resolving deltas...',
+    `merging ${remote}/${currentBranch}...`,
+  ])
 
   try {
     const result = await execAsync(pullCmd, true)
-    pullSpinner.succeed('Pull completed successfully')
+    pullProgress.succeed('Pull completed successfully')
+
     if (result.stdout.trim()) {
       console.log(result.stdout)
     }
   } catch (error) {
-    pullSpinner.fail('Pull failed')
+    pullProgress.fail('Pull failed')
     const msg = error instanceof Error ? error.message : String(error)
 
     if (msg.includes('CONFLICT') || msg.includes('conflict')) {

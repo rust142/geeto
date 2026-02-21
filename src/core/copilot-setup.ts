@@ -1,5 +1,5 @@
 /**
- * GitHub Copilot CLI setup helper (moved from `setup.ts`)
+ * Copilot CLI setup helper (moved from `setup.ts`)
  */
 
 import os from 'node:os'
@@ -236,7 +236,7 @@ const authenticateGitHub = async (): Promise<boolean> => {
 }
 
 /**
- * Interactive installer and authenticator for GitHub Copilot CLI
+ * Interactive installer and authenticator for Copilot CLI
  */
 export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
   const platform = os.platform()
@@ -270,7 +270,7 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
 
   if (copilotAvailable) {
     // Note about premium models that may require enablement.
-    log.success('GitHub Copilot ready to use')
+    log.success('Copilot ready to use')
 
     checkCopilotVersion()
 
@@ -279,10 +279,10 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
   }
 
   // Show informational text only if we reach installer flow
-  log.info('GitHub Copilot CLI allows local AI workflows via the copilot command-line tool.')
+  log.info('Copilot CLI allows local AI workflows via the copilot command-line tool.')
   log.info('This helper will attempt to install and/or authenticate the Copilot CLI for you.')
 
-  const shouldSetup = confirm('Setup GitHub Copilot CLI now?')
+  const shouldSetup = confirm('Setup Copilot CLI now?')
   if (!shouldSetup) {
     return false
   }
@@ -312,11 +312,11 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
   }
 
   console.log('')
-  const choice = await select('Choose GitHub Copilot CLI installation method:', installOptions)
+  const choice = await select('Choose Copilot CLI installation method:', installOptions)
 
   switch (choice) {
     case 'download': {
-      log.info('Please download and install GitHub Copilot CLI from:')
+      log.info('Please download and install Copilot CLI from:')
       log.info('  https://github.com/github/copilot-cli/releases')
       log.info('Then restart this setup.\n')
       return false
@@ -364,7 +364,7 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
       // Use async exec to allow spinner to animate during installation
       await execAsync(installCommand, true)
       spinner.stop()
-      log.success('GitHub Copilot CLI installed successfully!')
+      log.success('Copilot CLI installed successfully!')
     } catch (error) {
       spinner.stop()
       // Special handling for npm ENOTEMPTY error
@@ -382,11 +382,11 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
           await execAsync('npm install -g @github/copilot --force', true)
           retrySpinner.stop()
           console.log('')
-          log.success('GitHub Copilot CLI installed successfully!')
+          log.success('Copilot CLI installed successfully!')
         } catch (retryError) {
           retrySpinner.stop()
           console.log('')
-          log.error(`Failed to install GitHub Copilot CLI: ${retryError}`)
+          log.error(`Failed to install Copilot CLI: ${retryError}`)
           log.info('Manual fix: Run these commands in your terminal:')
           log.info('  npm uninstall -g @github/copilot')
           log.info('  npm cache clean --force')
@@ -397,7 +397,7 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
       } else {
         // Other errors
         console.log('')
-        log.error(`Failed to install GitHub Copilot CLI: ${error}`)
+        log.error(`Failed to install Copilot CLI: ${error}`)
         log.info('You can try installing manually:')
         if (choice === 'npm') {
           log.info('  npm install -g @github/copilot --force')
@@ -463,12 +463,12 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
     }
 
     if (!copilotNowAvailable) {
-      log.error('GitHub Copilot CLI command not found after installation')
+      log.error('Copilot CLI command not found after installation')
       log.info('You may need to restart your terminal for PATH changes to take effect.')
       return false
     }
 
-    log.info('GitHub Copilot CLI is ready to use!')
+    log.info('Copilot CLI is ready to use!')
 
     checkCopilotVersion()
 
@@ -480,7 +480,7 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
   // Check if Copilot CLI is working after installation
   try {
     exec('copilot --version', true)
-    log.success('GitHub Copilot CLI configured and ready to use')
+    log.success('Copilot CLI configured and ready to use')
 
     checkCopilotVersion()
     ensureGeetoIgnored()

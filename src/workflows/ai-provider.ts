@@ -26,7 +26,7 @@ export const handleAIProviderSelection = async (): Promise<{
   while (true) {
     aiProvider = (await select('Choose AI Provider for branch naming and commit messages:', [
       { label: 'Gemini', value: 'gemini' },
-      { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
+      { label: 'GitHub (Recommended)', value: 'copilot' },
       { label: 'OpenRouter', value: 'openrouter' },
       { label: 'Manual', value: 'manual' },
     ])) as 'gemini' | 'copilot' | 'openrouter' | 'manual'

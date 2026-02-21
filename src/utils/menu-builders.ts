@@ -21,7 +21,7 @@ export function withBack<T extends string>(
 export function buildAIProviderMenu() {
   return [
     { label: 'Gemini', value: 'gemini' as const },
-    { label: 'GitHub Copilot (Recommended)', value: 'copilot' as const },
+    { label: 'GitHub (Recommended)', value: 'copilot' as const },
     { label: 'OpenRouter', value: 'openrouter' as const },
   ]
 }

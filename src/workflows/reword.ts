@@ -36,6 +36,7 @@ import {
 } from '../utils/git-ai.js'
 import { getCurrentBranch } from '../utils/git.js'
 import { log } from '../utils/logging.js'
+import { ScrambleProgress } from '../utils/scramble.js'
 import { loadState, saveState } from '../utils/state.js'
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -342,12 +343,13 @@ export const handleReword = async (): Promise<void> => {
     let correction = ''
     let initialAiResult: string | null = null
 
-    const spinner = log.spinner()
+    const spinner = new ScrambleProgress()
     try {
-      spinner.start(
-        `Generating commit message with ${getAIProviderShortName(currentProvider)}` +
-          `${currentModel ? ` (${currentModel})` : ''}...`
-      )
+      spinner.start([
+        'analyzing commit diff...',
+        `generating commit message with ${getAIProviderShortName(currentProvider)}${currentModel ? ` (${currentModel})` : ''}...`,
+        'formatting conventional commit...',
+      ])
 
       if (currentProvider === 'copilot') {
         const { generateCommitMessage } = await import('../api/copilot.js')
@@ -418,12 +420,12 @@ export const handleReword = async (): Promise<void> => {
           }
 
           if (correction) console.log('')
-          const sp = log.spinner()
-          sp.start(
-            `Regenerating with ${getAIProviderShortName(
-              state.aiProvider ?? 'gemini'
-            )}${directModelName ? ` (${directModelName})` : ''}...`
-          )
+          const sp = new ScrambleProgress()
+          sp.start([
+            'reviewing feedback...',
+            `regenerating with ${getAIProviderShortName(state.aiProvider ?? 'gemini')}${directModelName ? ` (${directModelName})` : ''}...`,
+            'formatting conventional commit...',
+          ])
 
           try {
             switch (state.aiProvider) {
@@ -607,7 +609,7 @@ export const handleReword = async (): Promise<void> => {
           const prov = await select('Choose AI provider:', [
             { label: 'Gemini', value: 'gemini' },
             {
-              label: 'GitHub Copilot (Recommended)',
+              label: 'GitHub (Recommended)',
               value: 'copilot',
             },
             { label: 'OpenRouter', value: 'openrouter' },
