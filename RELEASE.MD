@@ -2,6 +2,16 @@
 
 ## v0.6.1 — February 22, 2026
 
+### What's New?
+
+#### New Features
+
+- Added new Git commands and updated project information.
+
+---
+
+## v0.6.1 — February 22, 2026
+
 > Previous version: v0.6.0
 
 ### What's New?
