@@ -173,6 +173,10 @@ export const checkCopilotCliVersion = (): boolean => {
 let client: _CopilotClient | null = null
 let versionChecked = false
 let versionCompatible = false
+let startupFailed = false
+
+/** Returns true if a previous start() attempt failed (e.g. subprocess crashed). */
+export const hadStartupFailure = (): boolean => startupFailed
 
 const ensureClient = async (): Promise<boolean> => {
   // Check CLI version once before attempting to start client
@@ -188,6 +192,24 @@ const ensureClient = async (): Promise<boolean> => {
   if (client) {
     return true
   }
+
+  // Temporarily capture [CLI subprocess] stderr lines written by @github/copilot-sdk so that
+  // raw Node.js error output is not shown to the user during startup. If startup fails we log
+  // a clean, actionable message instead.
+  const capturedStderrLines: string[] = []
+  const origStderrWrite = process.stderr.write.bind(process.stderr)
+  const stderrStream = process.stderr as any
+  stderrStream.write = (data: Uint8Array | string, ...rest: unknown[]): boolean => {
+    const text = data.toString()
+    if (text.startsWith('[CLI subprocess]')) {
+      capturedStderrLines.push(text.trimEnd())
+      const cb = rest.find((a): a is (e?: Error | null) => void => typeof a === 'function')
+      cb?.()
+      return true
+    }
+    return (origStderrWrite as any)(data, ...rest) as boolean
+  }
+
   try {
     // Suppress Node.js experimental warnings from copilot subprocess
     process.env.NODE_NO_WARNINGS = '1'
@@ -200,11 +222,29 @@ const ensureClient = async (): Promise<boolean> => {
     await startedClient.start()
     return true
   } catch (error: unknown) {
-    // SDK optional: log info and fall back
     const msg = error instanceof Error && error.message ? error.message : String(error)
-    log.info(msg)
+    const isSubprocessFailure =
+      msg.includes('CLI server exited') || msg.includes('Failed to start CLI server')
+    if (isSubprocessFailure) {
+      log.warn('Copilot CLI subprocess failed to start.')
+      const hasEsmError = capturedStderrLines.some(
+        (l) => l.includes('ERR_UNKNOWN_BUILTIN_MODULE') || l.includes('ERR_REQUIRE_ESM')
+      )
+      if (hasEsmError) {
+        log.warn('Node.js ESM module compatibility issue detected in Copilot CLI subprocess.')
+        log.info('Try updating the Copilot CLI extension: gh extension upgrade copilot')
+      }
+    } else {
+      log.info(msg)
+    }
     client = null
+    // Prevent retrying on every subsequent call — the subprocess environment is not going to
+    // change within this process lifetime, so there is no point in restarting it.
+    versionCompatible = false
+    startupFailed = true
     return false
+  } finally {
+    stderrStream.write = origStderrWrite
   }
 }
 

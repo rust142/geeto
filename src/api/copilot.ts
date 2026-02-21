@@ -10,6 +10,7 @@ import {
   generateReleaseNotes as sdkGenerateReleaseNotes,
   generateText as sdkGenerateText,
   getAvailableModelChoices as sdkGetAvailableModels,
+  hadStartupFailure as sdkHadStartupFailure,
   isAvailable as sdkIsAvailable,
 } from './copilot-sdk.js'
 import { log } from '../utils/logging.js'
@@ -52,7 +53,9 @@ export const generateBranchName = async (
   try {
     const ok = await sdkIsAvailable()
     if (!ok) {
-      log.warn('Copilot SDK not available; install @github/copilot-sdk to enable Copilot features.')
+      if (!sdkHadStartupFailure()) {
+        log.warn('Copilot CLI not available. Run `geeto setup` to install and configure it.')
+      }
       return null
     }
 
@@ -100,7 +103,9 @@ export const generateCommitMessage = async (
   try {
     const ok = await sdkIsAvailable()
     if (!ok) {
-      log.warn('Copilot SDK not available; install @github/copilot-sdk to enable Copilot features.')
+      if (!sdkHadStartupFailure()) {
+        log.warn('Copilot CLI not available. Run `geeto setup` to install and configure it.')
+      }
       return null
     }
     const sdkRes = await sdkGenerateCommitMessage(diff, correction, model)
@@ -121,7 +126,9 @@ export const generateReleaseNotes = async (
   try {
     const ok = await sdkIsAvailable()
     if (!ok) {
-      log.warn('Copilot SDK not available; install @github/copilot-sdk to enable Copilot features.')
+      if (!sdkHadStartupFailure()) {
+        log.warn('Copilot CLI not available. Run `geeto setup` to install and configure it.')
+      }
       return null
     }
     return await sdkGenerateReleaseNotes(commits, language, correction, model)
