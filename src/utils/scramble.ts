@@ -120,8 +120,18 @@ export const scrambleSequence = async (
   }
 }
 
-/** Step input: plain string or an object with a count-up animation. */
-export type StepInput = string | { text: string; countTo: number; suffix?: string }
+/** Single counter definition for multi-counter steps. */
+export interface CounterDef {
+  to: number
+  prefix?: string
+  suffix?: string
+}
+
+/** Step input: plain string, single counter, or multi-counter. */
+export type StepInput =
+  | string
+  | { text: string; countTo: number; suffix?: string }
+  | { text: string; counts: CounterDef[] }
 
 /**
  * Multi-step scramble progress indicator.
@@ -145,7 +155,6 @@ export class ScrambleProgress {
   private scrambleCount = 0
   private startTime = 0
   private pauseCount = 0
-  private countValue = 0
   private countFrames = 0
   private phase: 'scramble' | 'reveal' | 'count' | 'pause' | 'idle' = 'scramble'
   /** Number of step lines printed with \\n (above the current animated line). */
@@ -157,6 +166,18 @@ export class ScrambleProgress {
   private readonly pauseFrames = 5
   private readonly countTotalFrames = 10
 
+  /** Check if a step input is a single-counter step. */
+  private isSingleCount(
+    input: StepInput
+  ): input is { text: string; countTo: number; suffix?: string } {
+    return typeof input !== 'string' && 'countTo' in input
+  }
+
+  /** Check if a step input is a multi-counter step. */
+  private isMultiCount(input: StepInput): input is { text: string; counts: CounterDef[] } {
+    return typeof input !== 'string' && 'counts' in input
+  }
+
   /** Get the base display text for a step (without count). */
   private getBaseText(idx: number): string {
     const input = this.stepInputs[idx]
@@ -164,27 +185,33 @@ export class ScrambleProgress {
     return typeof input === 'string' ? input : `${input.text}...`
   }
 
-  /** Get the full display text for a step (with count if applicable). */
-  private getFullText(idx: number, count?: number): string {
+  /** Get the full display text for a step (with count at given progress 0–1). */
+  private getFullText(idx: number, progress = 1): string {
     const input = this.stepInputs[idx]
     if (!input) return ''
     if (typeof input === 'string') return input
-    const suffix = input.suffix ?? ''
-    const value = count ?? input.countTo
-    return `${input.text} (${value}${suffix})...`
+    if (this.isSingleCount(input)) {
+      const suffix = input.suffix ?? ''
+      const value = Math.ceil(input.countTo * progress)
+      return `${input.text} (${value}${suffix})...`
+    }
+    if (this.isMultiCount(input)) {
+      const parts = input.counts.map((c) => {
+        const val = Math.ceil(c.to * progress)
+        return `${c.prefix ?? ''}${val}${c.suffix ?? ''}`
+      })
+      return `${input.text} (${parts.join(', ')})...`
+    }
+    return `${(input as { text: string }).text}...`
   }
 
   /** Check if a step has a count-up animation. */
   private hasCount(idx: number): boolean {
     const input = this.stepInputs[idx]
-    return typeof input !== 'string' && input?.countTo !== undefined && input.countTo > 0
-  }
-
-  /** Get the target count for a step. */
-  private getCountTarget(idx: number): number {
-    const input = this.stepInputs[idx]
-    if (typeof input === 'string' || !input?.countTo) return 0
-    return input.countTo
+    if (!input || typeof input === 'string') return false
+    if (this.isSingleCount(input)) return input.countTo > 0
+    if (this.isMultiCount(input)) return input.counts.length > 0
+    return false
   }
 
   start(steps: StepInput[]): void {
@@ -193,7 +220,6 @@ export class ScrambleProgress {
     this.revealed = 0
     this.scrambleCount = 0
     this.pauseCount = 0
-    this.countValue = 0
     this.countFrames = 0
     this.phase = 'scramble'
     this.linesAbove = 0
@@ -232,7 +258,6 @@ export class ScrambleProgress {
             // If step has count, enter count phase; otherwise pause/idle
             if (this.hasCount(this.currentStep)) {
               this.phase = 'count'
-              this.countValue = 0
               this.countFrames = 0
             } else {
               this.phase = isLastStep ? 'idle' : 'pause'
@@ -243,18 +268,16 @@ export class ScrambleProgress {
         }
 
         case 'count': {
-          const target = this.getCountTarget(this.currentStep)
           this.countFrames++
-          // Ease-in: accelerate count increments
+          // Linear progress from 0 to 1
           const progress = Math.min(this.countFrames / this.countTotalFrames, 1)
-          this.countValue = Math.min(Math.ceil(target * progress), target)
 
-          const displayText = this.getFullText(this.currentStep, this.countValue)
+          const displayText = this.getFullText(this.currentStep, progress)
           process.stdout.write(
             `\r  ${colors.cyan}${colors.bright}${displayText}${colors.reset}\u001B[K`
           )
 
-          if (this.countValue >= target) {
+          if (progress >= 1) {
             this.phase = isLastStep ? 'idle' : 'pause'
             this.pauseCount = 0
           }
@@ -275,7 +298,6 @@ export class ScrambleProgress {
             this.currentStep++
             this.revealed = 0
             this.scrambleCount = 0
-            this.countValue = 0
             this.countFrames = 0
             this.phase = 'scramble'
           }
@@ -316,6 +338,35 @@ export class ScrambleProgress {
     process.stdout.write('\u001B8') // Restore cursor position (DEC)
     process.stdout.write('\u001B[J') // Erase from cursor to end of screen
     process.stdout.write('\u001B[?25h') // Show cursor
+  }
+
+  /**
+   * Append more steps to a running animation.
+   *
+   * If the animation is currently in `idle` (last step glitching),
+   * it will finalise that line and start animating the new steps.
+   */
+  addSteps(steps: StepInput[]): void {
+    if (steps.length === 0) return
+    const wasLastStep = this.currentStep >= this.stepInputs.length - 1
+
+    this.stepInputs.push(...steps)
+
+    // If we were idling on the last step, transition to pause→next
+    if (wasLastStep && this.phase === 'idle') {
+      const currentText = this.hasCount(this.currentStep)
+        ? this.getFullText(this.currentStep)
+        : this.getBaseText(this.currentStep)
+      process.stdout.write(
+        `\r  ${colors.cyan}${colors.bright}${currentText}${colors.reset}\u001B[K\n`
+      )
+      this.linesAbove++
+      this.currentStep++
+      this.revealed = 0
+      this.scrambleCount = 0
+      this.countFrames = 0
+      this.phase = 'scramble'
+    }
   }
 
   /** Stop the animation silently (clear current line). */

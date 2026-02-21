@@ -279,20 +279,22 @@ export const handleCommitWorkflow = async (
     return false
   }
 
-  // Parse diff stats for display
-  let diffStatsLabel = ''
+  // Parse diff stats for count-up animation
+  let diffStatsStep: import('../utils/scramble.js').StepInput = 'analyzing diff...'
   try {
     const shortstat = execGit('git diff --cached --shortstat', true).trim()
     const filesMatch = shortstat.match(/(\d+)\s+file/)
     const insMatch = shortstat.match(/(\d+)\s+insertion/)
     const delMatch = shortstat.match(/(\d+)\s+deletion/)
-    const parts: string[] = []
-    if (filesMatch) parts.push(`${filesMatch[1]} files`)
-    if (insMatch) parts.push(`+${insMatch[1]}`)
-    if (delMatch) parts.push(`-${delMatch[1]}`)
-    if (parts.length > 0) diffStatsLabel = ` (${parts.join(', ')})`
+    const counters: import('../utils/scramble.js').CounterDef[] = []
+    if (filesMatch) counters.push({ to: Number(filesMatch[1]), suffix: ' files' })
+    if (insMatch) counters.push({ to: Number(insMatch[1]), prefix: '+' })
+    if (delMatch) counters.push({ to: Number(delMatch[1]), prefix: '-' })
+    if (counters.length > 0) {
+      diffStatsStep = { text: 'analyzing diff', counts: counters }
+    }
   } catch {
-    // ignore — diffStatsLabel stays empty
+    // ignore — diffStatsStep stays as plain string
   }
 
   log.info(`Git diff size: ${diff.length} chars`)
@@ -409,7 +411,7 @@ export const handleCommitWorkflow = async (
 
       spinner.start([
         'reading staged changes...',
-        `analyzing diff${diffStatsLabel}...`,
+        diffStatsStep,
         `generating commit message with ${getAIProviderShortName(currentProvider)}${currentModel ? ` (${currentModel})` : ''}...`,
         'formatting conventional commit...',
       ])
