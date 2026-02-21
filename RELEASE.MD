@@ -1,5 +1,32 @@
 # Releases
 
+## v0.6.0 — February 22, 2026
+
+### What's New?
+
+#### New Features
+
+- An interactive reword workflow to make editing commit messages easier.
+- A new scramble progress indicator that shows multi-step progress more clearly.
+- Support for steps that count up and for multi-counter or progress-based step inputs.
+- Workflows can include added steps and run git checks without blocking the process.
+- A new --alias option and a workflow to create shell aliases for quick access.
+- A dry-run mode to preview actions, a revert command to undo changes, and AI-assisted flows for creating PRs and issues.
+- Workflows now run git commands asynchronously and use smoother spinners for a better experience.
+
+#### Bug Fixes
+
+- Fixed terminal display so lines are restored correctly and local branches are not deleted accidentally.
+- Ensured a blank line appears before the progress bar when logs are suppressed to keep output readable.
+
+#### Other Improvements
+
+- Replaced older spinners and progress bars with the ScrambleProgress indicator for clearer multi-step feedback.
+- Removed redundant or empty console output and adjusted console spacing for cleaner logs.
+- Small workflow and spacing tweaks to improve the overall user experience
+
+---
+
 ## v0.5.0 — February 21, 2026
 
 ### What's New?

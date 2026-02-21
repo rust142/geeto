@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.6.0](https://github.com/rust142/geeto/compare/v0.5.1...v0.6.0) (2026-02-21)
+
+### Features
+
+* feat(scramble): add addSteps and make git checks non-blocking ([ff3ef3e](https://github.com/rust142/geeto/commit/ff3ef3e))
+* feat(scramble): support multi-counter step inputs and progress-based counting ([60e9e40](https://github.com/rust142/geeto/commit/60e9e40))
+* feat(scramble): add count-up step inputs and integrate into workflows ([386b6e6](https://github.com/rust142/geeto/commit/386b6e6))
+* feat(progress): add scramble progress indicator and replace spinners ([01071c7](https://github.com/rust142/geeto/commit/01071c7))
+* feat(reword): add interactive reword workflow ([59736ab](https://github.com/rust142/geeto/commit/59736ab))
+* feat(cli): add --alias flag and shell alias workflow ([42e6604](https://github.com/rust142/geeto/commit/42e6604))
+* feat(cli): add dry-run mode, revert command, and AI-assisted PR/issue flows ([b623722](https://github.com/rust142/geeto/commit/b623722))
+* feat(workflows): use async git execs and add spinners ([cabf38e](https://github.com/rust142/geeto/commit/cabf38e))
+
+### Bug Fixes
+
+* fix(progress): restore terminal lines correctly and avoid deleting local branch ([8304e7d](https://github.com/rust142/geeto/commit/8304e7d))
+* fix(workflows): insert blank line before progress bar when suppressing logs ([5e4cfe9](https://github.com/rust142/geeto/commit/5e4cfe9))
+
+### Other Changes
+
+* refactor(release): replace log.spinner with ScrambleProgress for multi-step spinners ([7c0eaa3](https://github.com/rust142/geeto/commit/7c0eaa3))
+* refactor(progress): replace log.spinner with ScrambleProgress ([edb3b91](https://github.com/rust142/geeto/commit/edb3b91))
+* refactor(release): replace ProgressBar with ScrambleProgress ([2651ccf](https://github.com/rust142/geeto/commit/2651ccf))
+* chore(workflows): remove redundant empty console.log before push ([23f8ec6](https://github.com/rust142/geeto/commit/23f8ec6))
+* style(workflows): adjust console spacing in main-steps ([25eb938](https://github.com/rust142/geeto/commit/25eb938))
+* chore(workflows): remove empty console.log in push progress flow ([6d82c1a](https://github.com/rust142/geeto/commit/6d82c1a))
+
 ## [0.5.0](https://github.com/rust142/geeto/compare/v0.4.4...v0.5.0) (2026-02-20)
 
 ### Features
