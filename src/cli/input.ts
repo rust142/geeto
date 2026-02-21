@@ -44,50 +44,6 @@ export const askQuestion = (question: string, defaultValue?: string): string => 
 }
 
 /**
- * Progress bar utility for long operations
- */
-export class ProgressBar {
-  private total: number
-  private current: number
-  private width: number
-  private title: string
-
-  constructor(total: number, title: string = 'Progress', width: number = 40) {
-    this.total = total
-    this.current = 0
-    this.width = width
-    this.title = title
-  }
-
-  update(current: number): void {
-    this.current = Math.min(current, this.total)
-    this.render()
-  }
-
-  increment(amount: number = 1): void {
-    this.current = Math.min(this.current + amount, this.total)
-    this.render()
-  }
-
-  complete(): void {
-    this.current = this.total
-    this.render()
-    console.log('') // New line after completion
-  }
-
-  private render(): void {
-    const percentage = this.total > 0 ? Math.round((this.current / this.total) * 100) : 0
-    const filled = Math.round((this.current / this.total) * this.width)
-    const empty = this.width - filled
-
-    const bar = '█'.repeat(filled) + '░'.repeat(empty)
-    const status = `${this.current}/${this.total} (${percentage}%)`
-
-    process.stdout.write(`\r${this.title}: [${bar}] ${status}`)
-  }
-}
-
-/**
  * Syntax highlighting for git diff output
  */
 export const highlightDiff = (diff: string): string => {
