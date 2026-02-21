@@ -282,7 +282,14 @@ export const handleReword = async (): Promise<void> => {
   log.step(`${colors.cyan}Edit Commit Messages${colors.reset}\n`)
 
   const branch = getCurrentBranch()
+  const isProtected = ['main', 'master', 'develop', 'production', 'staging'].includes(branch)
   console.log(`  ${colors.gray}Branch: ${branch}${colors.reset}`)
+
+  if (isProtected) {
+    console.log(
+      `  ${colors.red}⚠${colors.reset} ${colors.bright}Protected branch${colors.reset} — rewriting history here affects all collaborators.`
+    )
+  }
 
   // Check working tree
   if (!isWorkingTreeClean()) {
@@ -298,14 +305,18 @@ export const handleReword = async (): Promise<void> => {
     return
   }
 
-  // Detect commit format consistency
-  const formats = commits.map((c) => detectCommitFormat(c.subject))
+  // Detect commit format consistency (skip merge commits)
+  const isMerge = (subject: string): boolean => /^Merge\s/.test(subject)
+  const formats = commits.map((c) => (isMerge(c.subject) ? null : detectCommitFormat(c.subject)))
+
+  // Count non-merge formats
   const formatCounts = new Map<CommitFormat, number>()
   for (const f of formats) {
-    formatCounts.set(f, (formatCounts.get(f) ?? 0) + 1)
+    if (f !== null) formatCounts.set(f, (formatCounts.get(f) ?? 0) + 1)
   }
+  const totalNonMerge = [...formatCounts.values()].reduce((a, b) => a + b, 0)
 
-  // Find majority format
+  // Find majority format among non-merge commits
   let majorityFormat: CommitFormat = 'conventional'
   let majorityCount = 0
   for (const [fmt, count] of formatCounts) {
@@ -314,16 +325,45 @@ export const handleReword = async (): Promise<void> => {
       majorityCount = count
     }
   }
-  const inconsistentCount = formats.filter((f) => f !== majorityFormat).length
+
+  // Priority-based inconsistency detection:
+  // conventional (1st) > bracket-tag (2nd) > no-prefix / other (3rd)
+  // - conventional: NEVER gets ⚠ (gold standard)
+  // - bracket-tag: ⚠ only when conventional is the majority
+  // - no-prefix/other: ⚠ when ANY conventional or bracket-tag exists
+  const hasConventional = (formatCounts.get('conventional') ?? 0) > 0
+  const hasBracketTag = (formatCounts.get('bracket-tag') ?? 0) > 0
+  const hasStructured = hasConventional || hasBracketTag
+
+  const isInconsistent = (fmt: CommitFormat | null): boolean => {
+    if (fmt === null) return false // merge commits — always skip
+    if (fmt === 'conventional') return false // gold standard — never flag
+    if (fmt === 'bracket-tag') return majorityFormat === 'conventional' // only flag if conventional is majority
+    // no-prefix / other: flag if any structured format exists
+    return hasStructured
+  }
+
+  const inconsistentCount = formats.filter((f) => isInconsistent(f)).length
 
   // Show consistency summary if issues found
   if (inconsistentCount > 0) {
-    const majorCount = formatCounts.get(majorityFormat) ?? 0
     console.log(
       `  ${colors.yellow}⚠${colors.reset} ${inconsistentCount} inconsistent commit(s) detected`
     )
     console.log(
-      `  ${colors.gray}Team pattern: ${formatLabel(majorityFormat)} (${majorCount}/${commits.length})${colors.reset}`
+      `  ${colors.gray}Team pattern: ${formatLabel(majorityFormat)} (${majorityCount}/${totalNonMerge})${colors.reset}`
+    )
+    // If bracket-tag is majority, gently suggest conventional commits
+    if (majorityFormat === 'bracket-tag' && !hasConventional) {
+      console.log(
+        `  ${colors.gray}💡 Tip: conventional commits is the recommended project standard${colors.reset}`
+      )
+    }
+    console.log('')
+  } else if (majorityFormat !== 'conventional' && totalNonMerge > 0) {
+    // No inconsistencies but not using conventional — soft tip
+    console.log(
+      `  ${colors.gray}💡 Tip: conventional commits is the recommended project standard${colors.reset}`
     )
     console.log('')
   }
@@ -339,11 +379,14 @@ export const handleReword = async (): Promise<void> => {
     const subj = c.subject.length > 60 ? c.subject.slice(0, 57) + '...' : c.subject
 
     // Show indicator only when inconsistencies exist
+    const fmt = formats[i] ?? null
     const indicator =
       inconsistentCount > 0
-        ? formats[i] === majorityFormat
-          ? `${colors.green}✓${colors.reset} `
-          : `${colors.red}⚠${colors.reset} `
+        ? isInconsistent(fmt)
+          ? `${colors.red}⚠${colors.reset} `
+          : fmt === null
+            ? '  ' // merge commit — no indicator
+            : `${colors.green}✓${colors.reset} `
         : ''
 
     // Wrap hash in OSC 8 hyperlink when repo URL is available
@@ -948,7 +991,6 @@ export const handleReword = async (): Promise<void> => {
   }
 
   // Pre-rebase warnings
-  const isProtected = ['main', 'master', 'develop', 'production', 'staging'].includes(branch)
   if (isProtected) {
     console.log(
       `  ${colors.red}⚠ WARNING:${colors.reset} You are about to rewrite history on ${colors.cyan}${branch}${colors.reset} — a shared/protected branch.`
