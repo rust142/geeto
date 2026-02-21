@@ -25,7 +25,7 @@ import {
 } from '../utils/commit-helpers.js'
 import { DEFAULT_GEMINI_MODEL } from '../utils/config.js'
 import { isDryRun, logDryRun } from '../utils/dry-run.js'
-import { execSilent } from '../utils/exec.js'
+import { execAsync, execSilent } from '../utils/exec.js'
 import {
   chooseModelForProvider,
   getAIProviderShortName,
@@ -207,6 +207,74 @@ fs.writeFileSync(file, newMsg + '\n\n' + comments + '\n', 'utf8');
   return scriptPath
 }
 
+// ── Commit format detection ────────────────────────────────────────
+
+type CommitFormat = 'conventional' | 'bracket-tag' | 'no-prefix' | 'other'
+
+const CONVENTIONAL_TYPES = new Set([
+  'feat',
+  'fix',
+  'chore',
+  'docs',
+  'style',
+  'refactor',
+  'test',
+  'ci',
+  'perf',
+  'build',
+  'revert',
+])
+
+const detectCommitFormat = (subject: string): CommitFormat => {
+  const colonIdx = subject.indexOf(':')
+  if (colonIdx > 0) {
+    let typeStr = subject.slice(0, colonIdx).trim()
+    // Remove scope: feat(auth) → feat
+    const parenIdx = typeStr.indexOf('(')
+    if (parenIdx > 0) typeStr = typeStr.slice(0, parenIdx)
+    // Remove breaking change marker: feat! → feat
+    typeStr = typeStr.replace(/!$/, '')
+    if (CONVENTIONAL_TYPES.has(typeStr.toLowerCase())) return 'conventional'
+    // Other prefix like "Update:" or "ADD:"
+    if (/^[A-Z]/.test(typeStr)) return 'other'
+  }
+  if (/^\[.+\]\s/.test(subject)) return 'bracket-tag'
+  return 'no-prefix'
+}
+
+const formatLabel = (format: CommitFormat): string => {
+  switch (format) {
+    case 'conventional': {
+      return 'conventional commits'
+    }
+    case 'bracket-tag': {
+      return '[TAG] style'
+    }
+    case 'no-prefix': {
+      return 'no prefix'
+    }
+    case 'other': {
+      return 'non-standard prefix'
+    }
+  }
+}
+
+/** Get GitHub repo URL from remote origin (for clickable links). */
+const getRepoUrl = (): string => {
+  try {
+    return execSilent('git config --get remote.origin.url')
+      .trim()
+      .replace(/\.git$/, '')
+      .replace(/^git@github\.com:/, 'https://github.com/')
+  } catch {
+    return ''
+  }
+}
+
+/** Wrap text in OSC 8 hyperlink (clickable in supported terminals). */
+const hyperlink = (url: string, text: string): string =>
+  `\u001B]8;;${url}\u0007${text}\u001B]8;;\u0007`
+
 // ── Main handler ───────────────────────────────────────────────────
 
 export const handleReword = async (): Promise<void> => {
@@ -214,7 +282,14 @@ export const handleReword = async (): Promise<void> => {
   log.step(`${colors.cyan}Edit Commit Messages${colors.reset}\n`)
 
   const branch = getCurrentBranch()
+  const isProtected = ['main', 'master', 'develop', 'production', 'staging'].includes(branch)
   console.log(`  ${colors.gray}Branch: ${branch}${colors.reset}`)
+
+  if (isProtected) {
+    console.log(
+      `  ${colors.red}⚠${colors.reset} ${colors.bright}Protected branch${colors.reset} — rewriting history here affects all collaborators.`
+    )
+  }
 
   // Check working tree
   if (!isWorkingTreeClean()) {
@@ -230,19 +305,98 @@ export const handleReword = async (): Promise<void> => {
     return
   }
 
+  // Detect commit format consistency (skip merge commits)
+  const isMerge = (subject: string): boolean => /^Merge\s/.test(subject)
+  const formats = commits.map((c) => (isMerge(c.subject) ? null : detectCommitFormat(c.subject)))
+
+  // Count non-merge formats
+  const formatCounts = new Map<CommitFormat, number>()
+  for (const f of formats) {
+    if (f !== null) formatCounts.set(f, (formatCounts.get(f) ?? 0) + 1)
+  }
+  const totalNonMerge = [...formatCounts.values()].reduce((a, b) => a + b, 0)
+
+  // Find majority format among non-merge commits
+  let majorityFormat: CommitFormat = 'conventional'
+  let majorityCount = 0
+  for (const [fmt, count] of formatCounts) {
+    if (count > majorityCount) {
+      majorityFormat = fmt
+      majorityCount = count
+    }
+  }
+
+  // Priority-based inconsistency detection:
+  // conventional (1st) > bracket-tag (2nd) > no-prefix / other (3rd)
+  // - conventional: NEVER gets ⚠ (gold standard)
+  // - bracket-tag: ⚠ only when conventional is the majority
+  // - no-prefix/other: ⚠ when ANY conventional or bracket-tag exists
+  const hasConventional = (formatCounts.get('conventional') ?? 0) > 0
+  const hasBracketTag = (formatCounts.get('bracket-tag') ?? 0) > 0
+  const hasStructured = hasConventional || hasBracketTag
+
+  const isInconsistent = (fmt: CommitFormat | null): boolean => {
+    if (fmt === null) return false // merge commits — always skip
+    if (fmt === 'conventional') return false // gold standard — never flag
+    if (fmt === 'bracket-tag') return majorityFormat === 'conventional' // only flag if conventional is majority
+    // no-prefix / other: flag if any structured format exists
+    return hasStructured
+  }
+
+  const inconsistentCount = formats.filter((f) => isInconsistent(f)).length
+
+  // Show consistency summary if issues found
+  if (inconsistentCount > 0) {
+    console.log(
+      `  ${colors.yellow}⚠${colors.reset} ${inconsistentCount} inconsistent commit(s) detected`
+    )
+    console.log(
+      `  ${colors.gray}Team pattern: ${formatLabel(majorityFormat)} (${majorityCount}/${totalNonMerge})${colors.reset}`
+    )
+    // If bracket-tag is majority, gently suggest conventional commits
+    if (majorityFormat === 'bracket-tag' && !hasConventional) {
+      console.log(
+        `  ${colors.gray}💡 Tip: conventional commits is the recommended project standard${colors.reset}`
+      )
+    }
+    console.log('')
+  } else if (majorityFormat !== 'conventional' && totalNonMerge > 0) {
+    // No inconsistencies but not using conventional — soft tip
+    console.log(
+      `  ${colors.gray}💡 Tip: conventional commits is the recommended project standard${colors.reset}`
+    )
+    console.log('')
+  }
+
   // Compute column widths
   const maxHash = Math.max(...commits.map((c) => c.shortHash.length))
-  const maxDate = Math.max(...commits.map((c) => c.relativeDate.length))
+  const repoUrl = getRepoUrl()
 
   // Build multi-select options
-  const options = commits.map((c) => {
+  const options = commits.map((c, i) => {
     const hashCol = c.shortHash.padEnd(maxHash)
-    const dateCol = c.relativeDate.padEnd(maxDate)
     const refs = formatRefs(c.refs)
     const subj = c.subject.length > 60 ? c.subject.slice(0, 57) + '...' : c.subject
+
+    // Show indicator only when inconsistencies exist
+    const fmt = formats[i] ?? null
+    const indicator =
+      inconsistentCount > 0
+        ? isInconsistent(fmt)
+          ? `${colors.red}⚠${colors.reset} `
+          : fmt === null
+            ? '  ' // merge commit — no indicator
+            : `${colors.green}✓${colors.reset} `
+        : ''
+
+    // Wrap hash in OSC 8 hyperlink when repo URL is available
+    const hashDisplay = repoUrl
+      ? hyperlink(`${repoUrl}/commit/${c.hash}`, `${colors.yellow}${hashCol}${colors.reset}`)
+      : `${colors.yellow}${hashCol}${colors.reset}`
+
     const label =
-      `${colors.yellow}${hashCol}${colors.reset}` +
-      `  ${colors.gray}${dateCol}${colors.reset}` +
+      `${indicator}${hashDisplay}` +
+      `  ${colors.gray}${c.relativeDate}${colors.reset}` +
       `${refs}  ${colors.bright}${subj}${colors.reset}`
     return { label, value: c.hash }
   })
@@ -281,11 +435,19 @@ export const handleReword = async (): Promise<void> => {
 
   for (const commit of selectedCommits) {
     const currentMsg = getCommitMessage(commit.hash)
+    const hashDisp = repoUrl
+      ? hyperlink(
+          `${repoUrl}/commit/${commit.hash}`,
+          `${colors.yellow}${commit.shortHash}${colors.reset}`
+        )
+      : `${colors.yellow}${commit.shortHash}${colors.reset}`
     console.log(
-      `  ${colors.yellow}${commit.shortHash}${colors.reset}` +
+      `  ${hashDisp}` +
         `  ${colors.gray}${commit.relativeDate}${colors.reset}` +
         `  ${colors.bright}${commit.subject}${colors.reset}`
     )
+
+    console.log('')
 
     // Per-commit method menu
     const method = await select('How to edit this commit message?', [
@@ -316,6 +478,16 @@ export const handleReword = async (): Promise<void> => {
 
     // ── AI generation flow ───────────────────────────────────
 
+    // Show full current commit message before AI generation
+    console.log(`  ${colors.bright}Current message:${colors.reset}`)
+    for (const line of currentMsg.split('\n')) {
+      console.log(`  ${colors.gray}${line}${colors.reset}`)
+    }
+    console.log('')
+
+    // Ask what user wants to change before generating
+    const editGuidance = askQuestion('What would you like to change? (empty = auto-generate): ')
+
     const diff = getCommitDiff(commit.hash)
     if (!diff) {
       log.warn(`No diff found for ${commit.shortHash}, falling back to manual edit`)
@@ -340,7 +512,7 @@ export const handleReword = async (): Promise<void> => {
     }
 
     // Initial AI generation
-    let correction = ''
+    let correction = editGuidance.trim()
     let initialAiResult: string | null = null
 
     const spinner = new ScrambleProgress()
@@ -748,26 +920,99 @@ export const handleReword = async (): Promise<void> => {
     return
   }
 
-  // Preview changes
+  // Preview changes — complete before/after summary
+  const line = '─'.repeat(56)
   console.log('')
-  console.log(`  ${colors.bright}Changes to apply:${colors.reset}`)
+  console.log(`  ${colors.cyan}┌${line}┐${colors.reset}`)
+  console.log(
+    `  ${colors.cyan}│${colors.reset} ${colors.bright}Changes to apply (${newMessages.size} commit${newMessages.size > 1 ? 's' : ''})${colors.reset}`
+  )
+  console.log(`  ${colors.cyan}├${line}┤${colors.reset}`)
+
+  let isFirst = true
   for (const [hash, msg] of newMessages) {
     const commit = commits.find((c) => c.hash === hash)
     const short = commit?.shortHash ?? hash.slice(0, 7)
-    const oldSubj = commit?.subject ?? ''
-    const newSubj = msg.split('\n')[0] ?? msg
+    const oldMsg = commit ? getCommitMessage(commit.hash) : ''
+    const oldTitle = oldMsg.split('\n')[0] ?? ''
+    const oldBody = oldMsg.split('\n').slice(1).join('\n').trim()
+    const newTitle = msg.split('\n')[0] ?? msg
+    const newBody = msg.split('\n').slice(1).join('\n').trim()
+
+    if (!isFirst) {
+      console.log(`  ${colors.cyan}│${colors.reset}`)
+    }
+    const summaryHash =
+      repoUrl && commit
+        ? hyperlink(`${repoUrl}/commit/${commit.hash}`, `${colors.yellow}${short}${colors.reset}`)
+        : `${colors.yellow}${short}${colors.reset}`
     console.log(
-      `  ${colors.yellow}${short}${colors.reset}` +
-        `  ${colors.red}${oldSubj}${colors.reset}` +
-        `  →  ${colors.green}${newSubj}${colors.reset}`
+      `  ${colors.cyan}│${colors.reset}  ${summaryHash}  ${colors.gray}${commit?.relativeDate ?? ''}${colors.reset}`
     )
+    console.log(`  ${colors.cyan}│${colors.reset}  ${colors.red}− ${oldTitle}${colors.reset}`)
+    console.log(`  ${colors.cyan}│${colors.reset}  ${colors.green}+ ${newTitle}${colors.reset}`)
+
+    // Show body diff if changed
+    if (oldBody !== newBody) {
+      if (oldBody) {
+        for (const bodyLine of oldBody.split('\n').slice(0, 3)) {
+          console.log(
+            `  ${colors.cyan}│${colors.reset}    ${colors.red}− ${bodyLine}${colors.reset}`
+          )
+        }
+        if (oldBody.split('\n').length > 3) {
+          console.log(
+            `  ${colors.cyan}│${colors.reset}    ${colors.gray}  ... (${oldBody.split('\n').length - 3} more lines)${colors.reset}`
+          )
+        }
+      }
+      if (newBody) {
+        for (const bodyLine of newBody.split('\n').slice(0, 3)) {
+          console.log(
+            `  ${colors.cyan}│${colors.reset}    ${colors.green}+ ${bodyLine}${colors.reset}`
+          )
+        }
+        if (newBody.split('\n').length > 3) {
+          console.log(
+            `  ${colors.cyan}│${colors.reset}    ${colors.gray}  ... (${newBody.split('\n').length - 3} more lines)${colors.reset}`
+          )
+        }
+      }
+    }
+    isFirst = false
   }
+
+  console.log(`  ${colors.cyan}└${line}┘${colors.reset}`)
   console.log('')
 
   if (isDryRun()) {
     logDryRun(`git rebase -i (reword ${newMessages.size} commits)`)
     return
   }
+
+  // Pre-rebase warnings
+  if (isProtected) {
+    console.log(
+      `  ${colors.red}⚠ WARNING:${colors.reset} You are about to rewrite history on ${colors.cyan}${branch}${colors.reset} — a shared/protected branch.`
+    )
+    console.log(
+      `  ${colors.gray}Rewriting ${branch} can break other team members' local repos.${colors.reset}`
+    )
+    console.log(`  ${colors.gray}Consider rewording on a feature branch instead.${colors.reset}`)
+    console.log('')
+  }
+
+  console.log(`  ${colors.gray}Before proceeding, make sure:${colors.reset}`)
+  console.log(
+    `    ${colors.gray}1. Create a backup branch:${colors.reset} ${colors.cyan}git branch backup/${branch}${colors.reset}`
+  )
+  console.log(
+    `    ${colors.gray}2. No uncommitted changes:${colors.reset} ${colors.cyan}git stash${colors.reset} ${colors.gray}(if needed)${colors.reset}`
+  )
+  console.log(
+    `    ${colors.gray}3. Inform your team before rewriting shared branches${colors.reset}`
+  )
+  console.log('')
 
   const proceed = confirm(`Reword ${newMessages.size} commit(s)?`)
   if (!proceed) {
@@ -829,6 +1074,48 @@ export const handleReword = async (): Promise<void> => {
           )
         }
       }
+
+      // Offer force push (reword requires force push to update remote)
+      console.log('')
+      const shouldPush = confirm('Force push to update remote? (recommended)')
+      if (shouldPush) {
+        if (isDryRun()) {
+          logDryRun(`git push --force-with-lease origin ${branch}`)
+        } else {
+          console.log('')
+          const pushProgress = new ScrambleProgress()
+          pushProgress.start([
+            'preparing force push...',
+            'pushing to remote...',
+            'confirming remote state...',
+          ])
+          try {
+            await execAsync(`git push --force-with-lease origin "${branch}"`, true)
+            pushProgress.succeed(`Force pushed ${branch} to remote`)
+          } catch (pushError) {
+            pushProgress.fail('Force push failed')
+            const stderr = (pushError as { stderr?: string }).stderr?.trim()
+            if (stderr) log.error(`  ${stderr.split('\n')[0]}`)
+          }
+        }
+      }
+
+      // Team warning — history has been rewritten
+      console.log('')
+      console.log(
+        `  ${colors.yellow}⚠${colors.reset} ${colors.bright}History rewritten!${colors.reset} All commit hashes on ${colors.cyan}${branch}${colors.reset} have changed.`
+      )
+      console.log(
+        `  ${colors.gray}If this branch is shared, inform your team to run:${colors.reset}`
+      )
+      console.log('')
+      console.log(`    ${colors.cyan}git fetch origin${colors.reset}`)
+      console.log(`    ${colors.cyan}git reset --hard origin/${branch}${colors.reset}`)
+      console.log('')
+      console.log(`  ${colors.gray}Or if they have local changes:${colors.reset}`)
+      console.log('')
+      console.log(`    ${colors.cyan}git fetch origin${colors.reset}`)
+      console.log(`    ${colors.cyan}git rebase origin/${branch}${colors.reset}`)
     } else {
       log.error('Rebase failed. You may need to resolve conflicts.')
       log.info('Run: git rebase --abort  to undo')
