@@ -445,6 +445,7 @@ export async function handleCleanup(featureBranch: string, state: GeetoState): P
         const deleteAnswer = confirm(`Delete branch '${featureBranch}'?`)
         if (deleteAnswer) {
           try {
+            console.log('')
             try {
               const deleteProgress = new ScrambleProgress()
               deleteProgress.start([
@@ -455,10 +456,6 @@ export async function handleCleanup(featureBranch: string, state: GeetoState): P
               await execAsync(`git push origin --delete ${featureBranch}`, true)
               deleteProgress.stop()
               log.success(`Remote branch '${featureBranch}' deleted`)
-
-              // Also delete local branch if it exists
-              exec(`git branch -d ${featureBranch}`, true)
-              log.success(`Local branch '${featureBranch}' deleted`)
             } catch {
               // Remote branch might not exist, ignore error
             }
