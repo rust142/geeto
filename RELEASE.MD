@@ -1,5 +1,14 @@
 # Releases
 
+## v0.6.1 — February 22, 2026
+
+> Previous version: v0.6.0
+
+### What's New?
+
+No significant changes in this version.
+
+---
 ## v0.6.0 — February 22, 2026
 
 ### What's New?

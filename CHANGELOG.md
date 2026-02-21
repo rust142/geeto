@@ -1,5 +1,7 @@
 # Changelog
 
+## [0.6.1](https://github.com/rust142/geeto/compare/v0.6.0...v0.6.1) (2026-02-21)
+
 ## [0.6.0](https://github.com/rust142/geeto/compare/v0.5.1...v0.6.0) (2026-02-21)
 
 ### Features
