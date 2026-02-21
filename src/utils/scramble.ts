@@ -340,6 +340,35 @@ export class ScrambleProgress {
     process.stdout.write('\u001B[?25h') // Show cursor
   }
 
+  /**
+   * Append more steps to a running animation.
+   *
+   * If the animation is currently in `idle` (last step glitching),
+   * it will finalise that line and start animating the new steps.
+   */
+  addSteps(steps: StepInput[]): void {
+    if (steps.length === 0) return
+    const wasLastStep = this.currentStep >= this.stepInputs.length - 1
+
+    this.stepInputs.push(...steps)
+
+    // If we were idling on the last step, transition to pause→next
+    if (wasLastStep && this.phase === 'idle') {
+      const currentText = this.hasCount(this.currentStep)
+        ? this.getFullText(this.currentStep)
+        : this.getBaseText(this.currentStep)
+      process.stdout.write(
+        `\r  ${colors.cyan}${colors.bright}${currentText}${colors.reset}\u001B[K\n`
+      )
+      this.linesAbove++
+      this.currentStep++
+      this.revealed = 0
+      this.scrambleCount = 0
+      this.countFrames = 0
+      this.phase = 'scramble'
+    }
+  }
+
   /** Stop the animation silently (clear current line). */
   stop(): void {
     this.cleanup()
