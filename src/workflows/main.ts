@@ -683,8 +683,6 @@ export const main = async (opts?: {
       } else if (opts.startAt === 'merge') {
         // intentionally skip push prompt here; merge step will validate push status
       } else {
-        // Provide visible push progress by allowing git to print progress to terminal
-        console.log('')
         // Get remote URL silently for a nicer message
         let remoteUrl = ''
         try {
