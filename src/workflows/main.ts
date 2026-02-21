@@ -28,6 +28,7 @@ import {
   getStepName,
   getStepProgress,
 } from '../utils/display.js'
+import { isDryRun } from '../utils/dry-run.js'
 import { exec } from '../utils/exec.js'
 import {
   getChangedFiles,
@@ -635,6 +636,9 @@ export const main = async (opts?: {
       }
     }
 
+    // Dry-run: exit after branch step
+    if (isDryRun() && opts?.startAt === 'branch') return
+
     // STEP 3: Commit
     if (state.step < STEP.COMMITTED) {
       // Refresh staged files from git in real-time. The staging step is
@@ -667,6 +671,9 @@ export const main = async (opts?: {
         log.success('Commit already done')
       }
     }
+
+    // Dry-run: exit after commit step
+    if (isDryRun() && opts?.startAt === 'commit') return
 
     // STEP 4: Push — ask user before pushing in interactive mode
     if (opts?.startAt) {
@@ -713,6 +720,9 @@ export const main = async (opts?: {
         log.info('Skipping push as per user request')
       }
     }
+
+    // Dry-run: exit after push step
+    if (isDryRun() && opts?.startAt === 'push') return
 
     // STEP 5: Merge (simplified)
     // If the current branch has commits that are not pushed, ask the user to push

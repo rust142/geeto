@@ -3,20 +3,27 @@
  * Push current branch & create a PR on GitHub
  */
 
+import type { CopilotModel } from '../api/copilot.js'
+import type { GeminiModel } from '../api/gemini.js'
+import type { OpenRouterModel } from '../api/openrouter.js'
+
 import {
   createPullRequest,
   getDefaultBranch,
   listPullRequests,
   parseRepoFromUrl,
 } from '../api/github.js'
-import { askQuestion, confirm } from '../cli/input.js'
+import { askQuestion, confirm, editInline } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { setupGithubConfigInteractive } from '../core/github-setup.js'
 import { colors } from '../utils/colors.js'
-import { hasGithubConfig } from '../utils/config.js'
+import { DEFAULT_GEMINI_MODEL, hasGithubConfig } from '../utils/config.js'
+import { isDryRun, logDryRun } from '../utils/dry-run.js'
 import { execAsync, execSilent } from '../utils/exec.js'
+import { getAIProviderShortName } from '../utils/git-ai.js'
 import { getCurrentBranch } from '../utils/git.js'
 import { log } from '../utils/logging.js'
+import { loadState, saveState } from '../utils/state.js'
 
 /**
  * Get recent commit messages on current branch (for PR body)
@@ -82,6 +89,173 @@ const getFirstCommitSubject = (base: string): string => {
   } catch {
     return ''
   }
+}
+
+/**
+ * Format a markdown line for terminal preview display
+ */
+const formatMdLine = (line: string): string => {
+  const trimmed = line.trimStart()
+  // Headings — strip markdown markers for cleaner display
+  if (trimmed.startsWith('### ')) {
+    return `  ${colors.bright}${trimmed.slice(4)}${colors.reset}`
+  }
+  if (trimmed.startsWith('## ')) {
+    return `  ${colors.cyan}${colors.bright}${trimmed.slice(3)}${colors.reset}`
+  }
+  // Bullet points
+  if (trimmed.startsWith('- ')) {
+    return `    ${trimmed}`
+  }
+  // Empty line
+  if (!trimmed) return ''
+  // Normal text
+  return `  ${colors.gray}${trimmed}${colors.reset}`
+}
+
+/**
+ * Get the diff between base branch and HEAD for AI generation
+ */
+const getDiffForAI = (base: string, maxChars = 12000): string => {
+  try {
+    const diff = execSilent(`git diff ${base}...HEAD`).trim()
+    if (!diff) return ''
+    // Truncate if too large to avoid token limits
+    if (diff.length > maxChars) {
+      return diff.slice(0, maxChars) + '\n\n[diff truncated]'
+    }
+    return diff
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Generate PR title and body using a specific AI provider & model
+ */
+const callAIForPR = async (
+  diff: string,
+  commits: string[],
+  branchName: string,
+  baseBranch: string,
+  provider: 'copilot' | 'gemini' | 'openrouter',
+  model: string | undefined,
+  correction?: string
+): Promise<{ title: string; body: string } | null> => {
+  const commitList = commits.length > 0 ? `\nRecent commits:\n${commits.join('\n')}` : ''
+
+  const promptBase = [
+    'Generate a Pull Request title and body from this git diff.',
+    'Output ONLY in this exact format (no extra markers):',
+    '',
+    'TITLE: <concise PR title, max 72 chars, imperative mood>',
+    '',
+    'BODY:',
+    '## Summary',
+    '<1-2 sentence summary of what this PR does>',
+    '',
+    '## Changes',
+    '<bullet list of key changes>',
+    '',
+    `Branch: ${branchName} → ${baseBranch}`,
+    commitList,
+    '',
+    `Diff:\n${diff}`,
+  ].join('\n')
+
+  const prompt = correction ? `${promptBase}\n\nAdjustment: ${correction}` : promptBase
+
+  const providerName = getAIProviderShortName(provider)
+  const modelDisplay = model ? ` (${model})` : ''
+
+  const spinner = log.spinner()
+  spinner.start(`Generating PR with ${providerName}${modelDisplay}...`)
+
+  let result: string | null = null
+  try {
+    if (provider === 'copilot') {
+      const { generateText } = await import('../api/copilot.js')
+      result = await generateText(prompt, model as CopilotModel)
+    } else if (provider === 'openrouter') {
+      const { generateText } = await import('../api/openrouter.js')
+      result = await generateText(prompt, model as OpenRouterModel)
+    } else {
+      const { generateText } = await import('../api/gemini.js')
+      result = await generateText(prompt, (model as GeminiModel) ?? 'gemini-2.5-flash')
+    }
+    spinner.stop()
+  } catch {
+    spinner.stop()
+    log.warn('AI generation failed')
+    return null
+  }
+
+  if (!result) {
+    log.warn('AI returned empty response')
+    return null
+  }
+
+  // Parse TITLE: and BODY: from response
+  const titleMatch = result.match(/TITLE:\s*(.+)/i)
+  const bodyMatch = result.match(/BODY:\s*([\s\S]+)/i)
+
+  const title = titleMatch?.[1]?.trim() ?? ''
+  const body = bodyMatch?.[1]?.trim() ?? result.trim()
+
+  return {
+    title: title || branchName,
+    body,
+  }
+}
+
+/**
+ * Show AI PR preview in terminal
+ */
+const showAIPRPreview = (title: string, body: string): void => {
+  log.ai('Suggested PR:\n')
+  console.log(`  ${colors.cyan}${colors.bright}${title}${colors.reset}\n`)
+  for (const line of body.split('\n')) {
+    console.log(formatMdLine(line))
+  }
+  console.log('')
+}
+
+/**
+ * Get current model string for a given provider from state
+ */
+const getModelForProvider = (
+  provider: 'copilot' | 'gemini' | 'openrouter',
+  state: ReturnType<typeof loadState>
+): string | undefined => {
+  if (provider === 'copilot') return state?.copilotModel
+  if (provider === 'openrouter') return state?.openrouterModel
+  return state?.geminiModel ?? DEFAULT_GEMINI_MODEL
+}
+
+/**
+ * Update model in state for a given provider and save
+ */
+const updateModelInState = (
+  state: ReturnType<typeof loadState>,
+  provider: 'copilot' | 'gemini' | 'openrouter',
+  model: string
+): void => {
+  if (!state) return
+  switch (provider) {
+    case 'copilot': {
+      state.copilotModel = model as CopilotModel
+      break
+    }
+    case 'openrouter': {
+      state.openrouterModel = model as OpenRouterModel
+      break
+    }
+    default: {
+      state.geminiModel = model as GeminiModel
+      break
+    }
+  }
+  saveState(state)
 }
 
 /**
@@ -174,54 +348,181 @@ export const handleCreatePR = async (): Promise<void> => {
 
   const baseBranch = await select('Base branch (merge into):', baseOptions)
   if (!baseBranch) return
-  console.log('')
 
-  // PR Title
-  const firstCommit = getFirstCommitSubject(baseBranch)
-  const defaultTitle = firstCommit || current
+  // PR content generation
+  const commits = getRecentCommits(baseBranch)
+  let prTitle = ''
+  let prBody = ''
+  let aiUsed = false
 
-  if (process.stdin.isTTY) {
-    process.stdin.setRawMode(false)
+  // Try AI generation if provider is configured
+  aiBlock: {
+    const diff = getDiffForAI(baseBranch)
+    if (!diff) break aiBlock
+
+    const state = loadState()
+    let aiProvider =
+      state?.aiProvider && state.aiProvider !== 'manual'
+        ? state.aiProvider
+        : (null as 'copilot' | 'gemini' | 'openrouter' | null)
+
+    if (!aiProvider) break aiBlock
+
+    let currentModel = getModelForProvider(aiProvider, state)
+    const providerLabel = getAIProviderShortName(aiProvider)
+    const modelLabel = currentModel ? ` (${currentModel})` : ''
+
+    const useAI = confirm(`Use ${providerLabel}${modelLabel} for PR? (recommended)`)
+    if (!useAI) break aiBlock
+
+    aiUsed = true
+    log.info(`Git diff size: ${diff.length} chars`)
+    console.log('')
+
+    let correction = ''
+    let aiDone = false
+
+    while (!aiDone) {
+      const aiResult = await callAIForPR(
+        diff,
+        commits,
+        current,
+        baseBranch,
+        aiProvider,
+        currentModel,
+        correction
+      )
+
+      if (!aiResult) {
+        log.warn('AI failed. Falling back to manual.')
+        aiUsed = false
+        break
+      }
+
+      prTitle = aiResult.title
+      prBody = aiResult.body
+      showAIPRPreview(prTitle, prBody)
+      log.info('Incorrect? check .geeto/last-ai-suggestion.json (possible AI/context limit).')
+
+      const action = await select('Accept this PR content?', [
+        { label: 'Yes, use it', value: 'accept' },
+        { label: 'Regenerate', value: 'regenerate' },
+        { label: 'Correct AI (give feedback)', value: 'correct' },
+        { label: 'Edit inline', value: 'edit' },
+        { label: 'Change model', value: 'change-model' },
+        { label: 'Change AI provider', value: 'change-provider' },
+        { label: 'Discard & enter manually', value: 'discard' },
+      ])
+
+      switch (action) {
+        case 'accept': {
+          aiDone = true
+          break
+        }
+        case 'regenerate': {
+          correction = ''
+          continue
+        }
+        case 'correct': {
+          if (process.stdin.isTTY) process.stdin.setRawMode(false)
+          correction = askQuestion('Corrections for AI: ')
+          continue
+        }
+        case 'edit': {
+          const editedBody = await editInline(prBody, 'Edit PR Body', '.md')
+          if (editedBody !== null) prBody = editedBody
+          if (process.stdin.isTTY) process.stdin.setRawMode(false)
+          const editedTitle = askQuestion('Edit title (Enter to keep): ').trim()
+          if (editedTitle) prTitle = editedTitle
+          aiDone = true
+          break
+        }
+        case 'change-model': {
+          const { chooseModelForProvider } = await import('../utils/git-ai.js')
+          const chosen = await chooseModelForProvider(aiProvider, 'Choose model:', 'Back')
+          if (chosen && chosen !== 'back') {
+            currentModel = chosen
+            updateModelInState(state, aiProvider, chosen)
+          }
+          correction = ''
+          continue
+        }
+        case 'change-provider': {
+          const prov = await select('Choose AI provider:', [
+            { label: 'Gemini', value: 'gemini' },
+            { label: 'GitHub Copilot', value: 'copilot' },
+            { label: 'OpenRouter', value: 'openrouter' },
+            { label: 'Back', value: 'back' },
+          ])
+          if (prov !== 'back') {
+            const { chooseModelForProvider } = await import('../utils/git-ai.js')
+            const chosen = await chooseModelForProvider(
+              prov as 'gemini' | 'copilot' | 'openrouter',
+              'Choose model:',
+              'Back'
+            )
+            if (chosen && chosen !== 'back') {
+              aiProvider = prov as 'copilot' | 'gemini' | 'openrouter'
+              currentModel = chosen
+              if (state) {
+                state.aiProvider = aiProvider
+                updateModelInState(state, aiProvider, chosen)
+              }
+            }
+          }
+          correction = ''
+          continue
+        }
+        default: {
+          prTitle = ''
+          prBody = ''
+          aiUsed = false
+          aiDone = true
+          break
+        }
+      }
+    }
   }
 
-  log.info(`Suggested title: ${colors.cyan}${defaultTitle}${colors.reset}`)
-  const customTitle = askQuestion('PR title (Enter to use suggested): ').trim()
-  const prTitle = customTitle || defaultTitle
+  // Manual fallback (or if AI was discarded/failed)
+  if (!prTitle) {
+    const firstCommit = getFirstCommitSubject(baseBranch)
+    const defaultTitle = firstCommit || current
 
-  // PR Body
-  console.log('')
-  const commits = getRecentCommits(baseBranch)
-  let prBody = ''
+    if (process.stdin.isTTY) process.stdin.setRawMode(false)
+    log.info(`Suggested title: ${colors.cyan}${defaultTitle}${colors.reset}`)
+    const customTitle = askQuestion('PR title (Enter to use suggested): ').trim()
+    prTitle = customTitle || defaultTitle
+  }
 
-  if (commits.length > 0) {
-    const bodyChoice = await select('PR description:', [
-      { label: 'Auto-generate from commits', value: 'commits' },
-      { label: 'Write custom description', value: 'custom' },
-      { label: 'Empty (no description)', value: 'empty' },
-    ])
+  if (!prBody && !aiUsed) {
+    console.log('')
+    if (commits.length > 0) {
+      const bodyChoice = await select('PR description:', [
+        { label: 'Auto-generate from commits', value: 'commits' },
+        { label: 'Write custom description', value: 'custom' },
+        { label: 'Empty (no description)', value: 'empty' },
+      ])
 
-    switch (bodyChoice) {
-      case 'commits': {
-        prBody = `## Changes\n\n${commits.join('\n')}`
-        break
-      }
-      case 'custom': {
-        if (process.stdin.isTTY) {
-          process.stdin.setRawMode(false)
+      switch (bodyChoice) {
+        case 'commits': {
+          prBody = `## Changes\n\n${commits.join('\n')}`
+          break
         }
-        prBody = askQuestion('Description: ').trim()
-        break
+        case 'custom': {
+          const edited = await editInline('', 'PR Description', '.md')
+          prBody = edited?.trim() ?? ''
+          break
+        }
+        default: {
+          prBody = ''
+          break
+        }
       }
-      default: {
-        prBody = ''
-        break
-      }
+    } else {
+      const edited = await editInline('', 'PR Description', '.md')
+      prBody = edited?.trim() ?? ''
     }
-  } else {
-    if (process.stdin.isTTY) {
-      process.stdin.setRawMode(false)
-    }
-    prBody = askQuestion('Description (optional): ').trim()
   }
 
   // Draft?
@@ -247,8 +548,11 @@ export const handleCreatePR = async (): Promise<void> => {
       `${isDraft === 'draft' ? `${colors.yellow}Draft${colors.reset}` : `${colors.green}Ready${colors.reset}`}`
   )
   if (prBody) {
-    const bodyPreview = prBody.length > 60 ? prBody.slice(0, 60) + '...' : prBody
-    console.log(`${colors.cyan}│${colors.reset} Body: ${colors.gray}${bodyPreview}${colors.reset}`)
+    const bodyLines = prBody.split('\n')
+    console.log(`${colors.cyan}│${colors.reset} Body:`)
+    for (const line of bodyLines) {
+      console.log(`${colors.cyan}│${colors.reset}   ${colors.gray}${line}${colors.reset}`)
+    }
   }
   console.log(`${colors.cyan}└──────────────────────────────────────────────┘${colors.reset}`)
 
@@ -277,6 +581,12 @@ export const handleCreatePR = async (): Promise<void> => {
   }
 
   // Create PR
+  if (isDryRun()) {
+    logDryRun(`GitHub API: Create PR "${prTitle}" (${current} → ${baseBranch})`)
+    log.success('PR would be created (dry-run)')
+    return
+  }
+
   const prSpinner = log.spinner()
   prSpinner.start('Creating pull request...')
 

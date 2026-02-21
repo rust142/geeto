@@ -2,10 +2,16 @@
 
 import { execSync, spawn } from 'node:child_process'
 
+import { isDryRun, isMutatingCommand, logDryRun } from './dry-run.js'
 import { log } from './logging.js'
 
 /** Run a command and return its stdout with trailing whitespace removed. */
 export const exec = (command: string, silent = false): string => {
+  if (isDryRun() && isMutatingCommand(command)) {
+    logDryRun(command)
+    return ''
+  }
+
   try {
     const result = execSync(command, { encoding: 'utf8', stdio: silent ? 'pipe' : 'inherit' })
     return result?.trimEnd() || ''
@@ -25,6 +31,11 @@ export const execAsync = (
   command: string,
   silent: boolean = false
 ): Promise<{ code: number; stdout: string; stderr: string }> => {
+  if (isDryRun() && isMutatingCommand(command)) {
+    logDryRun(command)
+    return Promise.resolve({ code: 0, stdout: '', stderr: '' })
+  }
+
   return new Promise((resolve, reject) => {
     try {
       const child = spawn(command, { shell: true })
@@ -69,6 +80,11 @@ export const execAsync = (
 
 /** Run git commands and handle common non-zero exit codes gracefully. */
 export const execGit = (command: string, silent = false): string => {
+  if (isDryRun() && isMutatingCommand(command)) {
+    logDryRun(command)
+    return ''
+  }
+
   try {
     const result = execSync(command, { encoding: 'utf8', stdio: silent ? 'pipe' : 'inherit' })
     return result?.trim() || ''

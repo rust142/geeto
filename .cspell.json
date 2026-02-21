@@ -99,7 +99,9 @@
     "artix",
     "pacman",
     "noconfirm",
-    "worktrees"
+    "worktrees",
+    "arvl",
+    "AIPR"
   ],
   "ignorePaths": [
     "node_modules/**",
