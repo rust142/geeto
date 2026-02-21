@@ -88,6 +88,13 @@ export const select = async (question: string, options: SelectOption[]): Promise
 
       let linesRendered = 0
 
+      // Scroll indicator: items above
+      const above = start
+      if (above > 0) {
+        console.log(`${colors.gray}  ↑ ${above} more above${colors.reset}`)
+        linesRendered++
+      }
+
       console.log('') // Blank line
       linesRendered++
 
@@ -95,6 +102,15 @@ export const select = async (question: string, options: SelectOption[]): Promise
         const opt = filteredOptions[idx]
         if (!opt) continue
         console.log(renderItem(opt, idx))
+        linesRendered++
+      }
+
+      // Scroll indicator: items below
+      const below = filteredOptions.length - end
+      if (below > 0) {
+        console.log('')
+        linesRendered++
+        console.log(`${colors.gray}  ↓ ${below} more below${colors.reset}`)
         linesRendered++
       }
 
@@ -118,14 +134,32 @@ export const select = async (question: string, options: SelectOption[]): Promise
     console.log(`${colors.cyan}?${colors.reset} ${question}`)
     {
       let initLines = 0
+
+      const { start, end } = getVisibleRange()
+
+      // Scroll indicator: items above
+      const above = start
+      if (above > 0) {
+        console.log(`${colors.gray}  ↑ ${above} more above${colors.reset}`)
+        initLines++
+      }
+
       console.log('') // Blank line
       initLines++
 
-      const { start, end } = getVisibleRange()
       for (let idx = start; idx < end; idx++) {
         const opt = filteredOptions[idx]
         if (!opt) continue
         console.log(renderItem(opt, idx))
+        initLines++
+      }
+
+      // Scroll indicator: items below
+      const below = filteredOptions.length - end
+      if (below > 0) {
+        console.log('')
+        initLines++
+        console.log(`${colors.gray}  ↓ ${below} more below${colors.reset}`)
         initLines++
       }
 
@@ -254,16 +288,33 @@ export const select = async (question: string, options: SelectOption[]): Promise
           console.clear()
           console.log(`${colors.cyan}?${colors.reset} ${question}`)
           let clearLines = 0
+
+          const { start, end } = getVisibleRange()
+
+          const aboveC = start
+          if (aboveC > 0) {
+            console.log(`${colors.gray}  ↑ ${aboveC} more above${colors.reset}`)
+            clearLines++
+          }
+
           console.log('')
           clearLines++
 
-          const { start, end } = getVisibleRange()
           for (let idx = start; idx < end; idx++) {
             const opt = filteredOptions[idx]
             if (!opt) continue
             console.log(renderItem(opt, idx))
             clearLines++
           }
+
+          const belowC = filteredOptions.length - end
+          if (belowC > 0) {
+            console.log('')
+            clearLines++
+            console.log(`${colors.gray}  ↓ ${belowC} more below${colors.reset}`)
+            clearLines++
+          }
+
           console.log('')
           clearLines++
           console.log(
@@ -378,6 +429,13 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
       )
       linesRendered++
 
+      // Scroll indicator: items above
+      const above = start
+      if (above > 0) {
+        console.log(`${colors.gray}  ↑ ${above} more above${colors.reset}`)
+        linesRendered++
+      }
+
       console.log('') // Blank line
       linesRendered++
 
@@ -385,6 +443,15 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
         const opt = filteredOptions[idx]
         if (!opt) continue
         console.log(renderItem(opt, idx))
+        linesRendered++
+      }
+
+      // Scroll indicator: items below
+      const below = filteredOptions.length - end
+      if (below > 0) {
+        console.log('')
+        linesRendered++
+        console.log(`${colors.gray}  ↓ ${below} more below${colors.reset}`)
         linesRendered++
       }
 
@@ -416,14 +483,31 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
         `${colors.gray}  Selected: ${colors.cyan}${checked.size}${colors.gray}/${options.length}${colors.reset}`
       )
       initLines++
+
+      const { start, end } = getVisibleRange()
+
+      const above = start
+      if (above > 0) {
+        console.log(`${colors.gray}  ↑ ${above} more above${colors.reset}`)
+        initLines++
+      }
+
       console.log('')
       initLines++
 
-      const { start, end } = getVisibleRange()
       for (let idx = start; idx < end; idx++) {
         const opt = filteredOptions[idx]
         if (!opt) continue
         console.log(renderItem(opt, idx))
+        initLines++
+      }
+
+      // Scroll indicator: items below
+      const below = filteredOptions.length - end
+      if (below > 0) {
+        console.log('')
+        initLines++
+        console.log(`${colors.gray}  ↓ ${below} more below${colors.reset}`)
         initLines++
       }
 
@@ -673,16 +757,33 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
             `${colors.gray}  Selected: ${colors.cyan}${checked.size}${colors.gray}/${options.length}${colors.reset}`
           )
           clearLines++
+
+          const { start, end } = getVisibleRange()
+
+          const aboveC = start
+          if (aboveC > 0) {
+            console.log(`${colors.gray}  ↑ ${aboveC} more above${colors.reset}`)
+            clearLines++
+          }
+
           console.log('')
           clearLines++
 
-          const { start, end } = getVisibleRange()
           for (let idx = start; idx < end; idx++) {
             const opt = filteredOptions[idx]
             if (!opt) continue
             console.log(renderItem(opt, idx))
             clearLines++
           }
+
+          const belowC = filteredOptions.length - end
+          if (belowC > 0) {
+            console.log('')
+            clearLines++
+            console.log(`${colors.gray}  ↓ ${belowC} more below${colors.reset}`)
+            clearLines++
+          }
+
           console.log('')
           clearLines++
           console.log(
