@@ -67,38 +67,53 @@ export async function handlePush(
       if (opts?.suppressLogs) {
         console.log('')
         const branch = getCurrentBranch()
+
+        // Check if remote branch exists BEFORE animation (sync calls block event loop)
+        let hasCommitsToPush = false
+        let objectCount = 0
+        try {
+          const remoteRef = exec(
+            `git ls-remote --heads origin "${getCurrentBranch()}"`,
+            true
+          ).trim()
+          if (remoteRef) {
+            const commitsAhead = exec(
+              `git rev-list HEAD...origin/"${getCurrentBranch()}" --count`,
+              true
+            ).trim()
+            hasCommitsToPush = commitsAhead !== '0' && commitsAhead !== ''
+            if (hasCommitsToPush) {
+              try {
+                objectCount =
+                  Number(
+                    exec(
+                      `git rev-list --objects HEAD ^origin/"${getCurrentBranch()}" | wc -l`,
+                      true
+                    ).trim()
+                  ) || 0
+              } catch {
+                /* ignore */
+              }
+            }
+          } else {
+            hasCommitsToPush = true
+          }
+        } catch {
+          hasCommitsToPush = true
+        }
+
         const pushProgress = new ScrambleProgress()
         pushProgress.start([
           'initializing push...',
-          'collecting objects...',
-          'compressing deltas...',
+          objectCount > 0
+            ? { text: 'collecting objects', countTo: objectCount }
+            : 'collecting objects...',
+          { text: 'compressing deltas', countTo: 100, suffix: '%' },
           `uploading to origin/${branch}...`,
           'verifying remote refs...',
         ])
 
         try {
-          // Check if remote branch exists; if not, treat as commits to push
-          let hasCommitsToPush = false
-          try {
-            const remoteRef = exec(
-              `git ls-remote --heads origin "${getCurrentBranch()}"`,
-              true
-            ).trim()
-            if (remoteRef) {
-              const commitsAhead = exec(
-                `git rev-list HEAD...origin/"${getCurrentBranch()}" --count`,
-                true
-              ).trim()
-              hasCommitsToPush = commitsAhead !== '0' && commitsAhead !== ''
-            } else {
-              // remote branch doesn't exist yet
-              hasCommitsToPush = true
-            }
-          } catch {
-            // If any of the checks fail, assume there are commits to push
-            hasCommitsToPush = true
-          }
-
           await execAsync(`git push -u origin "${getCurrentBranch()}"`, true)
           pushProgress.stop()
 
@@ -114,38 +129,53 @@ export async function handlePush(
         // Push with scramble progress
 
         const branch = getCurrentBranch()
+
+        // Check if remote branch exists BEFORE animation (sync calls block event loop)
+        let hasCommitsToPush = false
+        let objectCount = 0
+        try {
+          const remoteRef = exec(
+            `git ls-remote --heads origin "${getCurrentBranch()}"`,
+            true
+          ).trim()
+          if (remoteRef) {
+            const commitsAhead = exec(
+              `git rev-list HEAD...origin/"${getCurrentBranch()}" --count`,
+              true
+            ).trim()
+            hasCommitsToPush = commitsAhead !== '0' && commitsAhead !== ''
+            if (hasCommitsToPush) {
+              try {
+                objectCount =
+                  Number(
+                    exec(
+                      `git rev-list --objects HEAD ^origin/"${getCurrentBranch()}" | wc -l`,
+                      true
+                    ).trim()
+                  ) || 0
+              } catch {
+                /* ignore */
+              }
+            }
+          } else {
+            hasCommitsToPush = true
+          }
+        } catch {
+          hasCommitsToPush = true
+        }
+
         const pushProgress = new ScrambleProgress()
         pushProgress.start([
           'initializing push...',
-          'collecting objects...',
-          'compressing deltas...',
+          objectCount > 0
+            ? { text: 'collecting objects', countTo: objectCount }
+            : 'collecting objects...',
+          { text: 'compressing deltas', countTo: 100, suffix: '%' },
           `uploading to origin/${branch}...`,
           'verifying remote refs...',
         ])
 
         try {
-          // Check if remote branch exists; if not, treat as commits to push
-          let hasCommitsToPush = false
-          try {
-            const remoteRef = exec(
-              `git ls-remote --heads origin "${getCurrentBranch()}"`,
-              true
-            ).trim()
-            if (remoteRef) {
-              const commitsAhead = exec(
-                `git rev-list HEAD...origin/"${getCurrentBranch()}" --count`,
-                true
-              ).trim()
-              hasCommitsToPush = commitsAhead !== '0' && commitsAhead !== ''
-            } else {
-              // remote branch doesn't exist yet
-              hasCommitsToPush = true
-            }
-          } catch {
-            // If any of the checks fail, assume there are commits to push
-            hasCommitsToPush = true
-          }
-
           await execAsync(`git push -u origin "${getCurrentBranch()}"`, true)
           pushProgress.stop()
 
@@ -339,37 +369,51 @@ export async function handleMerge(
         }
 
         console.log('')
+        // Check if remote branch exists BEFORE animation (sync calls block event loop)
+        let hasCommitsToPush = false
+        let objectCount = 0
+        try {
+          const remoteRef = exec(
+            `git ls-remote --heads origin "${getCurrentBranch()}"`,
+            true
+          ).trim()
+          if (remoteRef) {
+            const commitsAhead = exec(
+              `git rev-list HEAD...origin/"${getCurrentBranch()}" --count`,
+              true
+            ).trim()
+            hasCommitsToPush = commitsAhead !== '0' && commitsAhead !== ''
+            if (hasCommitsToPush) {
+              try {
+                objectCount =
+                  Number(
+                    exec(
+                      `git rev-list --objects HEAD ^origin/"${getCurrentBranch()}" | wc -l`,
+                      true
+                    ).trim()
+                  ) || 0
+              } catch {
+                /* ignore */
+              }
+            }
+          } else {
+            hasCommitsToPush = true
+          }
+        } catch {
+          hasCommitsToPush = true
+        }
+
         const pushProgress = new ScrambleProgress()
         pushProgress.start([
           'initializing push...',
-          'collecting objects...',
-          'compressing deltas...',
+          objectCount > 0
+            ? { text: 'collecting objects', countTo: objectCount }
+            : 'collecting objects...',
+          { text: 'compressing deltas', countTo: 100, suffix: '%' },
           `uploading to origin/${targetBranch}...`,
           'verifying remote refs...',
         ])
         try {
-          // Check if remote branch exists; if not, treat as commits to push
-          let hasCommitsToPush = false
-          try {
-            const remoteRef = exec(
-              `git ls-remote --heads origin "${getCurrentBranch()}"`,
-              true
-            ).trim()
-            if (remoteRef) {
-              const commitsAhead = exec(
-                `git rev-list HEAD...origin/"${getCurrentBranch()}" --count`,
-                true
-              ).trim()
-              hasCommitsToPush = commitsAhead !== '0' && commitsAhead !== ''
-            } else {
-              // remote branch doesn't exist yet
-              hasCommitsToPush = true
-            }
-          } catch {
-            // If any of the checks fail, assume there are commits to push
-            hasCommitsToPush = true
-          }
-
           await execAsync(`git push -u origin "${getCurrentBranch()}"`, true)
           pushProgress.stop()
 

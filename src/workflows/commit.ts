@@ -278,6 +278,23 @@ export const handleCommitWorkflow = async (
     log.warn('No staged changes found. Cannot generate a commit message from empty diff. Aborting.')
     return false
   }
+
+  // Parse diff stats for display
+  let diffStatsLabel = ''
+  try {
+    const shortstat = execGit('git diff --cached --shortstat', true).trim()
+    const filesMatch = shortstat.match(/(\d+)\s+file/)
+    const insMatch = shortstat.match(/(\d+)\s+insertion/)
+    const delMatch = shortstat.match(/(\d+)\s+deletion/)
+    const parts: string[] = []
+    if (filesMatch) parts.push(`${filesMatch[1]} files`)
+    if (insMatch) parts.push(`+${insMatch[1]}`)
+    if (delMatch) parts.push(`-${delMatch[1]}`)
+    if (parts.length > 0) diffStatsLabel = ` (${parts.join(', ')})`
+  } catch {
+    // ignore — diffStatsLabel stays empty
+  }
+
   log.info(`Git diff size: ${diff.length} chars`)
   console.log('')
 
@@ -392,7 +409,7 @@ export const handleCommitWorkflow = async (
 
       spinner.start([
         'reading staged changes...',
-        'analyzing diff...',
+        `analyzing diff${diffStatsLabel}...`,
         `generating commit message with ${getAIProviderShortName(currentProvider)}${currentModel ? ` (${currentModel})` : ''}...`,
         'formatting conventional commit...',
       ])

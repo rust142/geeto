@@ -99,14 +99,14 @@ export const handlePull = async (): Promise<void> => {
 
   // Fetch to get latest state
   console.log('')
-  const fetchSpinner = log.spinner()
-  fetchSpinner.start('Fetching latest from remote...')
+  const fetchProgress = new ScrambleProgress()
+  fetchProgress.start(['fetching latest from remote...'])
   try {
     const fetchRemote = tracking?.remote ?? 'origin'
     await execAsync(`git fetch ${fetchRemote} --quiet`, true)
-    fetchSpinner.succeed('Fetched latest from remote')
+    fetchProgress.succeed('Fetched latest from remote')
   } catch {
-    fetchSpinner.fail('Could not fetch from remote')
+    fetchProgress.fail('Could not fetch from remote')
     log.warn('Continuing with local info...')
   }
 
@@ -198,14 +198,34 @@ export const handlePull = async (): Promise<void> => {
     }
   }
 
-  // Execute pull
+  // Execute pull — count objects before animation (sync, but local = fast)
+  let pullObjectCount = 0
+  let pullDeltaCount = 0
+  try {
+    const objCount =
+      Number(
+        exec(
+          `git rev-list --objects ${remote}/${currentBranch} ^HEAD 2>/dev/null | wc -l`,
+          true
+        ).trim()
+      ) || 0
+    if (objCount > 0) pullObjectCount = objCount
+    if (counts?.behind) pullDeltaCount = counts.behind
+  } catch {
+    /* ignore */
+  }
+
   console.log('')
   const pullProgress = new ScrambleProgress()
   pullProgress.start([
-    `fetching remote refs from ${remote}...`,
-    'downloading objects...',
-    'resolving deltas...',
-    `merging ${remote}/${currentBranch}...`,
+    'fetching remote refs...',
+    pullObjectCount > 0
+      ? { text: 'downloading objects', countTo: pullObjectCount }
+      : 'downloading objects...',
+    pullDeltaCount > 0
+      ? { text: 'resolving deltas', countTo: pullDeltaCount }
+      : 'resolving deltas...',
+    `merging ${remote}/${currentBranch} → ${currentBranch}...`,
   ])
 
   try {
