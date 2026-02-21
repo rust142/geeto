@@ -104,8 +104,7 @@ const setupGitHubCLI = (): boolean => {
     spinner.start('Installing GitHub CLI...')
     try {
       exec(installCommand, true)
-      spinner.stop()
-      log.success('GitHub CLI installed successfully')
+      spinner.succeed('GitHub CLI installed successfully')
 
       // Windows-specific: Add gh to PATH if not found after install
       if (platform === 'win32' && !commandExists('gh')) {
@@ -363,10 +362,9 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
     try {
       // Use async exec to allow spinner to animate during installation
       await execAsync(installCommand, true)
-      spinner.stop()
-      log.success('Copilot CLI installed successfully!')
+      spinner.succeed('Copilot CLI installed successfully!')
     } catch (error) {
-      spinner.stop()
+      spinner.fail(`Failed to install Copilot CLI`)
       // Special handling for npm ENOTEMPTY error
       const errorMsg = String(error)
       if (choice === 'npm' && errorMsg.includes('ENOTEMPTY')) {
@@ -380,9 +378,8 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
           // First uninstall, then reinstall
           await execAsync('npm uninstall -g @github/copilot', true)
           await execAsync('npm install -g @github/copilot --force', true)
-          retrySpinner.stop()
+          retrySpinner.succeed('Copilot CLI installed successfully!')
           console.log('')
-          log.success('Copilot CLI installed successfully!')
         } catch (retryError) {
           retrySpinner.stop()
           console.log('')
