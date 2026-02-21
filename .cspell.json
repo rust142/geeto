@@ -101,7 +101,11 @@
     "noconfirm",
     "worktrees",
     "arvl",
-    "AIPR"
+    "AIPR",
+    "gepr",
+    "gtopr",
+    "gpro",
+    "geepr"
   ],
   "ignorePaths": [
     "node_modules/**",

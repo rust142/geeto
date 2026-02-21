@@ -72,7 +72,6 @@ export async function handlePush(
           progress = Math.min(95, progress + Math.max(1, Math.floor(Math.random() * 6)))
           progressBar.update(progress)
         }, 250)
-        console.log('')
 
         try {
           // Check if remote branch exists; if not, treat as commits to push
