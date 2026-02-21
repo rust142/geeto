@@ -6,6 +6,7 @@
 import { colors } from './colors.js'
 import { exec, execAsync, execSilent } from './exec.js'
 import { log } from './logging.js'
+import { ScrambleProgress } from './scramble.js'
 import { confirm } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 
@@ -471,8 +472,12 @@ export const safePush = async (
           try {
             // Try to pull with rebase
             console.log('')
-            const pullSpinner = log.spinner()
-            pullSpinner.start('Pulling remote changes...')
+            const pullSpinner = new ScrambleProgress()
+            pullSpinner.start([
+              'connecting to remote...',
+              'pulling remote changes...',
+              'rebasing local commits...',
+            ])
             exec(`git pull --rebase origin "${branch}"`)
             pullSpinner.stop()
             log.success('Successfully pulled and rebased')
@@ -616,8 +621,8 @@ export const safePull = async (
 
     const branchArg = branch ? ` ${branch}` : ''
     console.log('')
-    const pullSpinner = log.spinner()
-    pullSpinner.start('Pulling from remote...')
+    const pullSpinner = new ScrambleProgress()
+    pullSpinner.start(['connecting to remote...', 'pulling from remote...', 'merging changes...'])
     await execAsync(`git pull ${remote}${branchArg}`, true)
     pullSpinner.stop()
     log.success('Pull completed')

@@ -9,6 +9,7 @@ import { colors } from '../utils/colors.js'
 import { exec, execAsync, execSilent } from '../utils/exec.js'
 import { getCurrentBranch } from '../utils/git.js'
 import { log } from '../utils/logging.js'
+import { ScrambleProgress } from '../utils/scramble.js'
 
 /**
  * Get last commit info
@@ -246,8 +247,12 @@ export const handleAmend = async (): Promise<void> => {
       console.log('')
       const forcePush = confirm('Force push to update remote?')
       if (forcePush) {
-        const pushSpinner = log.spinner()
-        pushSpinner.start('Force pushing...')
+        const pushSpinner = new ScrambleProgress()
+        pushSpinner.start([
+          'preparing force push...',
+          'pushing to remote...',
+          'confirming remote state...',
+        ])
         try {
           await execAsync(`git push --force-with-lease origin ${current}`, true)
           pushSpinner.succeed('Force pushed!')

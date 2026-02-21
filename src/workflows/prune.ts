@@ -7,6 +7,7 @@ import { confirm } from '../cli/input.js'
 import { colors } from '../utils/colors.js'
 import { execAsync, execSilent } from '../utils/exec.js'
 import { log } from '../utils/logging.js'
+import { ScrambleProgress } from '../utils/scramble.js'
 
 /**
  * Get list of stale remote-tracking branches
@@ -69,8 +70,12 @@ export const handlePrune = async (): Promise<void> => {
     console.log(`  ${GR}Remote:${R} ${C}${remote}${R}`)
 
     console.log('')
-    const scanSpinner = log.spinner()
-    scanSpinner.start(`Scanning stale branches on ${remote}...`)
+    const scanSpinner = new ScrambleProgress()
+    scanSpinner.start([
+      'connecting to remote...',
+      `scanning stale branches on ${remote}...`,
+      'analyzing tracking refs...',
+    ])
     const stale = await getStaleBranches(remote)
 
     if (stale.length === 0) {
@@ -98,8 +103,12 @@ export const handlePrune = async (): Promise<void> => {
 
     try {
       console.log('')
-      const spinner = log.spinner()
-      spinner.start(`Pruning ${remote}...`)
+      const spinner = new ScrambleProgress()
+      spinner.start([
+        'connecting to remote...',
+        `pruning ${remote}...`,
+        'cleaning up references...',
+      ])
       await execAsync(`git remote prune ${remote}`, true)
       spinner.succeed(
         `Pruned ${stale.length} branch${stale.length === 1 ? '' : 'es'} from ${remote}`

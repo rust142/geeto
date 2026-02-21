@@ -108,10 +108,11 @@ export async function handlePush(
 
         try {
           await execAsync(`git push -u origin "${branch}"`, true)
-          pushProgress.stop()
 
           if (hasCommitsToPush) {
-            log.success(`Pushed ${branch} to remote`)
+            pushProgress.succeed(`Pushed ${branch} to remote`)
+          } else {
+            pushProgress.stop()
           }
         } catch (error) {
           pushProgress.fail('Push failed')
@@ -121,6 +122,7 @@ export async function handlePush(
       } else {
         // Push with scramble progress
 
+        console.log('')
         const branch = getCurrentBranch()
 
         const pushProgress = new ScrambleProgress()
@@ -163,10 +165,11 @@ export async function handlePush(
 
         try {
           await execAsync(`git push -u origin "${branch}"`, true)
-          pushProgress.stop()
 
           if (hasCommitsToPush) {
-            log.success(`Pushed ${branch} to remote`)
+            pushProgress.succeed(`Pushed ${branch} to remote`)
+          } else {
+            pushProgress.stop()
           }
         } catch (error) {
           pushProgress.fail('Push failed')
@@ -403,11 +406,11 @@ export async function handleMerge(
 
         try {
           await execAsync(`git push -u origin "${currentBranch}"`, true)
-          pushProgress.stop()
 
           if (hasCommitsToPush) {
-            log.success(`Pushed ${currentBranch} to remote`)
+            pushProgress.succeed(`Pushed ${currentBranch} to remote`)
           } else {
+            pushProgress.stop()
             log.info(`Branch ${currentBranch} is already up to date with remote`)
           }
         } catch (error) {
