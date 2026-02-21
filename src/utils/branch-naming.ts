@@ -474,9 +474,10 @@ export const handleBranchNaming = async (
       return result
     }
 
-    log.info(`Creating branch: ${result.workingBranch}`)
+    const spinner = log.spinner()
+    spinner.start(`Creating branch: ${result.workingBranch}`)
     exec(`git checkout -b "${result.workingBranch}"`, true)
-    log.success(`Branch created: ${result.workingBranch}`)
+    spinner.succeed(`Branch created: ${result.workingBranch}`)
   }
 
   return result

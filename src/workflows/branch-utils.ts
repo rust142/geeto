@@ -63,12 +63,13 @@ export const createBranch = async (name: string, currentBranch: string): Promise
     return false
   }
 
-  log.info(`Creating branch: ${name}`)
+  const spinner = log.spinner()
+  spinner.start(`Creating branch: ${name}`)
   const result = await safeCheckout(name, { create: true })
   if (!result.success) {
-    log.error(`Failed to create branch: ${result.error}`)
+    spinner.fail(`Failed to create branch: ${result.error}`)
     return false
   }
-  log.success(`Branch created: ${colors.cyan}${colors.bright}${name}${colors.reset}`)
+  spinner.succeed(`Branch created: ${colors.cyan}${colors.bright}${name}${colors.reset}`)
   return true
 }
