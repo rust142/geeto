@@ -99,7 +99,16 @@
     "artix",
     "pacman",
     "noconfirm",
-    "worktrees"
+    "worktrees",
+    "arvl",
+    "AIPR",
+    "gepr",
+    "gtopr",
+    "gpro",
+    "geepr",
+    "Finalise",
+    "shortstat",
+    "finalised"
   ],
   "ignorePaths": [
     "node_modules/**",

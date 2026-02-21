@@ -20,7 +20,7 @@ export const ensureGemini = async (): Promise<boolean> => {
 }
 
 /**
- * Check and setup GitHub Copilot CLI
+ * Check and setup Copilot CLI
  */
 export const ensureGitHubCopilot = async (): Promise<boolean> => {
   try {

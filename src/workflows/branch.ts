@@ -257,7 +257,7 @@ export const handleBranchCreationWorkflow = async (
               if (!state.aiProvider || state.aiProvider === 'manual') {
                 const prov = await select('Choose AI provider for branch generation:', [
                   { label: 'Gemini', value: 'gemini' },
-                  { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
+                  { label: 'GitHub (Recommended)', value: 'copilot' },
                   { label: 'OpenRouter', value: 'openrouter' },
                   { label: 'Back to suggested branch selection', value: 'cancel-prov' },
                 ])
@@ -532,7 +532,7 @@ export const handleBranchCreationWorkflow = async (
                       case 'change-provider': {
                         const prov = await select('Choose AI provider:', [
                           { label: 'Gemini', value: 'gemini' },
-                          { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
+                          { label: 'GitHub (Recommended)', value: 'copilot' },
                           { label: 'OpenRouter', value: 'openrouter' },
                           { label: 'Back to suggested branch selection', value: 'cancel-prov' },
                         ])

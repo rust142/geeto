@@ -286,7 +286,7 @@ const handleChangeModelSetting = async (): Promise<boolean | void> => {
   const { chooseModelForProvider } = await import('../utils/git-ai.js')
   const provOptions = [
     { label: 'Gemini', value: 'gemini' },
-    { label: 'GitHub Copilot', value: 'copilot' },
+    { label: 'Copilot', value: 'copilot' },
     { label: 'OpenRouter', value: 'openrouter' },
     { label: 'Back to settings menu', value: 'back' },
   ]

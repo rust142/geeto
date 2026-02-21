@@ -470,8 +470,11 @@ export const safePush = async (
         if (action === 'pull') {
           try {
             // Try to pull with rebase
-            log.info('Pulling remote changes...')
+            console.log('')
+            const pullSpinner = log.spinner()
+            pullSpinner.start('Pulling remote changes...')
             exec(`git pull --rebase origin "${branch}"`)
+            pullSpinner.stop()
             log.success('Successfully pulled and rebased')
             // Retry push after successful pull
             retries++
@@ -612,7 +615,12 @@ export const safePull = async (
     }
 
     const branchArg = branch ? ` ${branch}` : ''
-    await execAsync(`git pull ${remote}${branchArg}`, false)
+    console.log('')
+    const pullSpinner = log.spinner()
+    pullSpinner.start('Pulling from remote...')
+    await execAsync(`git pull ${remote}${branchArg}`, true)
+    pullSpinner.stop()
+    log.success('Pull completed')
 
     // If we stashed, ask if user wants to pop
     try {

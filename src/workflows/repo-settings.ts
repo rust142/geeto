@@ -182,7 +182,7 @@ export const handleRepoSettings = async (): Promise<void> => {
         while (!providerChosen) {
           console.log('')
           aiProvider = (await select('Choose AI Provider:', [
-            { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
+            { label: 'GitHub (Recommended)', value: 'copilot' },
             { label: 'Gemini', value: 'gemini' },
             { label: 'OpenRouter', value: 'openrouter' },
           ])) as 'gemini' | 'copilot' | 'openrouter'
@@ -310,7 +310,7 @@ export const handleRepoSettings = async (): Promise<void> => {
           case 'change-provider': {
             console.log('')
             aiProvider = (await select('Choose AI Provider:', [
-              { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
+              { label: 'GitHub (Recommended)', value: 'copilot' },
               { label: 'Gemini', value: 'gemini' },
               { label: 'OpenRouter', value: 'openrouter' },
             ])) as 'gemini' | 'copilot' | 'openrouter'

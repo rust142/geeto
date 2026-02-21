@@ -40,6 +40,10 @@ let showPull = false
 let showPrune = false
 let showFetch = false
 let showStatus = false
+let showRevert = false
+let showAlias = false
+let showReword = false
+let dryRunMode = false
 let settingsAction:
   | 'separator'
   | 'models'
@@ -165,6 +169,18 @@ for (const arg of argv) {
   if (arg === '--status' || arg === '-st') {
     showStatus = true
   }
+  if (arg === '--revert' || arg === '-rv') {
+    showRevert = true
+  }
+  if (arg === '--alias' || arg === '-al') {
+    showAlias = true
+  }
+  if (arg === '--reword' || arg === '-rw') {
+    showReword = true
+  }
+  if (arg === '--dry-run' || arg === '-dr') {
+    dryRunMode = true
+  }
 }
 
 // Validate unknown flags
@@ -236,6 +252,14 @@ const validFlags = new Set([
   '-ft',
   '--status',
   '-st',
+  '--revert',
+  '-rv',
+  '--alias',
+  '-al',
+  '--reword',
+  '-rw',
+  '--dry-run',
+  '-dr',
 ])
 
 // Detect file path argument (non-flag arg → open in inline editor)
@@ -293,6 +317,9 @@ for (const arg of argv) {
     console.log(`    ${C}-sh, --stash${R}              Manage stashes interactively`)
     console.log(`    ${C}-am, --amend${R}              Amend the last commit`)
     console.log(`    ${C}-u,  --undo${R}               Undo the last git action safely`)
+    console.log(`    ${C}-rv, --revert${R}             Revert the last commit (soft reset)`)
+    console.log(`    ${C}-al, --alias${R}              Install shell aliases for geeto`)
+    console.log(`    ${C}-rw, --reword${R}             Edit past commit messages`)
     console.log(`    ${C}-sts, --stats${R}             Repository statistics dashboard`)
     console.log(`    ${C}     --abort${R}              Abort in-progress operation`)
     console.log(`    ${C}-pl, --pull${R}               Pull from remote interactively`)
@@ -327,6 +354,7 @@ for (const arg of argv) {
     console.log(`  ${B}OPTIONS${R}`)
     console.log(`    ${C}-f,  --fresh${R}              Start fresh (ignore checkpoint)`)
     console.log(`    ${C}-r,  --resume${R}             Resume from last checkpoint`)
+    console.log(`    ${C}-dr, --dry-run${R}            Simulate commands without executing`)
     console.log(`    ${C}-v,  --version${R}            Show version`)
     console.log(`    ${C}-h,  --help${R}               Show this help message`)
     console.log('')
@@ -335,6 +363,62 @@ for (const arg of argv) {
     console.log(`    ${C}geeto <file>${R}              Open file in inline editor`)
     console.log('')
     process.exit(0)
+  }
+
+  // Dry-run mode handling
+  if (dryRunMode) {
+    const { setDryRun, printDryRunBanner, printDryRunSummary } = await import('./utils/dry-run.js')
+
+    const hasOtherCommand =
+      startAt !== undefined ||
+      showCleanup ||
+      showSwitch ||
+      showCompare ||
+      showCherryPick ||
+      showPR ||
+      showIssue ||
+      showHistory ||
+      showStash ||
+      showAmend ||
+      showStats ||
+      showUndo ||
+      showRelease ||
+      showRepoSettings ||
+      showTrello ||
+      showTrelloLists ||
+      showTrelloGenerate ||
+      showAbort ||
+      showPull ||
+      showPrune ||
+      showFetch ||
+      showStatus ||
+      showRevert ||
+      showAlias ||
+      showReword ||
+      settingsAction !== undefined
+
+    if (!hasOtherCommand) {
+      // Standalone --dry-run: show interactive menu
+      try {
+        const { handleDryRunMenu } = await import('./workflows/dry-run.js')
+        await handleDryRunMenu()
+        process.exit(0)
+      } catch (error) {
+        console.error('Dry-run error:', error)
+        process.exit(1)
+      }
+    }
+
+    // Combo mode: activate dry-run, let normal routing handle it
+    setDryRun(true)
+    printDryRunBanner()
+
+    // Wrap process.exit to print summary before exiting
+    const originalExit = process.exit
+    process.exit = ((code?: number) => {
+      printDryRunSummary()
+      originalExit(code)
+    }) as typeof process.exit
   }
 
   // Inline file editor: geeto <filepath>
@@ -394,7 +478,7 @@ for (const arg of argv) {
   if (showPrune) {
     try {
       const { handlePrune } = await import('./workflows/prune.js')
-      handlePrune()
+      await handlePrune()
       process.exit(0)
     } catch (error) {
       console.error('Prune error:', error)
@@ -420,6 +504,39 @@ for (const arg of argv) {
       process.exit(0)
     } catch (error) {
       console.error('Status error:', error)
+      process.exit(1)
+    }
+  }
+
+  if (showRevert) {
+    try {
+      const { handleRevert } = await import('./workflows/revert.js')
+      await handleRevert()
+      process.exit(0)
+    } catch (error) {
+      console.error('Revert error:', error)
+      process.exit(1)
+    }
+  }
+
+  if (showAlias) {
+    try {
+      const { handleAlias } = await import('./workflows/alias.js')
+      await handleAlias()
+      process.exit(0)
+    } catch (error) {
+      console.error('Alias error:', error)
+      process.exit(1)
+    }
+  }
+
+  if (showReword) {
+    try {
+      const { handleReword } = await import('./workflows/reword.js')
+      await handleReword()
+      process.exit(0)
+    } catch (error) {
+      console.error('Reword error:', error)
       process.exit(1)
     }
   }

@@ -4,6 +4,7 @@ import type { OpenRouterModel } from '../api/openrouter.js'
 
 import { execGit } from './exec.js'
 import { getChangedFiles, getChangedFilesWithStatus } from './git.js'
+import { ScrambleProgress } from './scramble.js'
 
 export interface BranchNamingResult {
   workingBranch: string
@@ -111,10 +112,12 @@ export const handleBranchNaming = async (
       console.log('')
     }
 
-    const spinner = log.spinner()
-    spinner.start(
-      `Generating branch name with ${getAIProviderShortName(aiProvider)}${modelDisplay ? ` (${modelDisplay})` : ''}...`
-    )
+    const spinner = new ScrambleProgress()
+    spinner.start([
+      'analyzing task context...',
+      `generating branch name with ${getAIProviderShortName(aiProvider)}${modelDisplay ? ` (${modelDisplay})` : ''}...`,
+      'validating naming convention...',
+    ])
 
     // Only call provider to regenerate when not skipping (e.g., user selected Back)
     if (skipRegenerate) {
@@ -277,7 +280,7 @@ export const handleBranchNaming = async (
         case 'change-provider': {
           const prov = await select('Choose AI provider:', [
             { label: 'Gemini', value: 'gemini' },
-            { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
+            { label: 'Copilot (Recommended)', value: 'copilot' },
             { label: 'OpenRouter', value: 'openrouter' },
             { label: 'Back to suggested branch selection', value: 'cancel-prov' },
           ])
@@ -401,7 +404,7 @@ export const handleBranchNaming = async (
         case 'change-provider': {
           const prov = await select('Choose AI provider:', [
             { label: 'Gemini', value: 'gemini' },
-            { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
+            { label: 'Copilot (Recommended)', value: 'copilot' },
             { label: 'OpenRouter', value: 'openrouter' },
             { label: 'Back to suggested branch selection', value: 'cancel-prov' },
           ])
@@ -474,9 +477,10 @@ export const handleBranchNaming = async (
       return result
     }
 
-    log.info(`Creating branch: ${result.workingBranch}`)
+    const spinner = log.spinner()
+    spinner.start(`Creating branch: ${result.workingBranch}`)
     exec(`git checkout -b "${result.workingBranch}"`, true)
-    log.success(`Branch created: ${result.workingBranch}`)
+    spinner.succeed(`Branch created: ${result.workingBranch}`)
   }
 
   return result

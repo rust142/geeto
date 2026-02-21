@@ -4,6 +4,7 @@ import type { OpenRouterModel } from '../api/openrouter.js'
 
 import { DEFAULT_GEMINI_MODEL } from './config.js'
 import { isContextLimitFailure, isTransientAIFailure } from './git-ai-errors.js'
+import { ScrambleProgress } from './scramble.js'
 import { log } from '../utils/logging.js'
 
 // Re-export error detection functions for backward compatibility
@@ -32,7 +33,7 @@ export function getAIProviderDisplayName(aiProvider: string): string {
       return 'Gemini'
     }
     case 'copilot': {
-      return 'GitHub Copilot (Recommended)'
+      return 'GitHub (Recommended)'
     }
     case 'openrouter': {
       return 'OpenRouter'
@@ -50,7 +51,7 @@ export function getAIProviderShortName(aiProvider: string): string {
       return 'Gemini'
     }
     case 'copilot': {
-      return 'GitHub Copilot'
+      return 'Copilot'
     }
     case 'openrouter': {
       return 'OpenRouter'
@@ -330,10 +331,10 @@ export async function interactiveAIFallback(
         case 'gemini': {
           const gem = await import('../api/gemini.js')
           const { generateBranchName, generateCommitMessage } = gem
-          const spinner = log.spinner()
-          spinner.start(
-            `Retrying with ${getAIProviderShortName(aiProvider)}${getModelValue(currentModel) ? ` (${getModelValue(currentModel)})` : ''}...`
-          )
+          const spinner = new ScrambleProgress()
+          spinner.start([
+            `retrying with ${getAIProviderShortName(aiProvider)}${getModelValue(currentModel) ? ` (${getModelValue(currentModel)})` : ''}...`,
+          ])
           if (isCommit) {
             const res = await generateCommitMessage(
               diff || 'Code changes',
@@ -355,10 +356,10 @@ export async function interactiveAIFallback(
         case 'copilot': {
           const cop = await import('../api/copilot.js')
           const { generateBranchName, generateCommitMessage } = cop
-          const spinner = log.spinner()
-          spinner.start(
-            `Retrying with ${getAIProviderShortName(aiProvider)}${getModelValue(currentModel) ? ` (${getModelValue(currentModel)})` : ''}...`
-          )
+          const spinner = new ScrambleProgress()
+          spinner.start([
+            `retrying with ${getAIProviderShortName(aiProvider)}${getModelValue(currentModel) ? ` (${getModelValue(currentModel)})` : ''}...`,
+          ])
           if (isCommit) {
             const res = await generateCommitMessage(
               diff || 'Code changes',
@@ -380,10 +381,10 @@ export async function interactiveAIFallback(
         case 'openrouter': {
           const or = await import('../api/openrouter.js')
           const { generateBranchName, generateCommitMessage } = or
-          const spinner = log.spinner()
-          spinner.start(
-            `Retrying with ${getAIProviderShortName(aiProvider)}${getModelValue(currentModel) ? ` (${getModelValue(currentModel)})` : ''}...`
-          )
+          const spinner = new ScrambleProgress()
+          spinner.start([
+            `retrying with ${getAIProviderShortName(aiProvider)}${getModelValue(currentModel) ? ` (${getModelValue(currentModel)})` : ''}...`,
+          ])
           if (isCommit) {
             const res = await generateCommitMessage(
               diff || 'Code changes',
@@ -430,10 +431,10 @@ export async function interactiveAIFallback(
         // user already selected a model from the menu — apply it immediately
         currentModel = chosen as GeminiModel
         updateModel?.('gemini', chosen as GeminiModel)
-        const spinner = log.spinner()
-        spinner.start(
-          `${isCommit ? 'Generating commit message' : 'Generating branch name'} with Gemini (${chosen})...`
-        )
+        const spinner = new ScrambleProgress()
+        spinner.start([
+          `${isCommit ? 'generating commit message' : 'generating branch name'} with Gemini (${chosen})...`,
+        ])
 
         if (isCommit) {
           const res = await generateCommitMessage(diff, correction, chosen as GeminiModel)
@@ -467,10 +468,10 @@ export async function interactiveAIFallback(
         // user already selected a model from the menu — apply it immediately
         currentModel = chosen as CopilotModel
         updateModel?.('copilot', chosen as CopilotModel)
-        const spinner = log.spinner()
-        spinner.start(
-          `${isCommit ? 'Generating commit message' : 'Generating branch name'} with GitHub Copilot (${chosen})...`
-        )
+        const spinner = new ScrambleProgress()
+        spinner.start([
+          `${isCommit ? 'generating commit message' : 'generating branch name'} with GitHub (${chosen})...`,
+        ])
 
         if (isCommit) {
           const res = await generateCommitMessage(diff, correction, chosen as CopilotModel)
@@ -500,10 +501,10 @@ export async function interactiveAIFallback(
         // user already selected a model from the menu — apply it immediately
         currentModel = chosen as OpenRouterModel
         updateModel?.('openrouter', chosen as OpenRouterModel)
-        const spinner = log.spinner()
-        spinner.start(
-          `${isCommit ? 'Generating commit message' : 'Generating branch name'} with OpenRouter (${chosen})...`
-        )
+        const spinner = new ScrambleProgress()
+        spinner.start([
+          `${isCommit ? 'generating commit message' : 'generating branch name'} with OpenRouter (${chosen})...`,
+        ])
 
         if (isCommit) {
           const res = await generateCommitMessage(diff, correction, chosen as OpenRouterModel)
@@ -559,10 +560,10 @@ export async function interactiveAIFallback(
         aiProvider = 'gemini'
         currentModel = chosenModel as GeminiModel
         updateModel?.('gemini', chosenModel as GeminiModel)
-        const spinner = log.spinner()
-        spinner.start(
-          `${isCommit ? 'Generating commit message' : 'Generating branch name'} with Gemini (${chosenModel})...`
-        )
+        const spinner = new ScrambleProgress()
+        spinner.start([
+          `${isCommit ? 'generating commit message' : 'generating branch name'} with Gemini (${chosenModel})...`,
+        ])
 
         if (isCommit) {
           // Use built-in Gemini API for commit generation
@@ -595,10 +596,10 @@ export async function interactiveAIFallback(
         aiProvider = 'copilot'
         currentModel = chosen as CopilotModel
         updateModel?.('copilot', chosen as CopilotModel)
-        const spinner = log.spinner()
-        spinner.start(
-          `${isCommit ? 'Generating commit message' : 'Generating branch name'} with GitHub Copilot (${chosen})...`
-        )
+        const spinner = new ScrambleProgress()
+        spinner.start([
+          `${isCommit ? 'generating commit message' : 'generating branch name'} with GitHub (${chosen})...`,
+        ])
 
         if (isCommit) {
           const res = await generateCommitMessage(diff, correction, chosen as CopilotModel)
@@ -629,10 +630,10 @@ export async function interactiveAIFallback(
         aiProvider = 'openrouter'
         currentModel = chosen as OpenRouterModel
         updateModel?.('openrouter', chosen as OpenRouterModel)
-        const spinner = log.spinner()
-        spinner.start(
-          `${isCommit ? 'Generating commit message' : 'Generating branch name'} with OpenRouter (${chosen})...`
-        )
+        const spinner = new ScrambleProgress()
+        spinner.start([
+          `${isCommit ? 'generating commit message' : 'generating branch name'} with OpenRouter (${chosen})...`,
+        ])
 
         if (isCommit) {
           const res = await generateCommitMessage(diff, correction, chosen as OpenRouterModel)
@@ -684,7 +685,7 @@ export async function chooseModelForProvider(
     if (models.length === 0) {
       log.warn('⚠ Copilot SDK not available.')
       console.log('')
-      log.info('The Copilot CLI is required to use GitHub Copilot models.')
+      log.info('The Copilot CLI is required to use Copilot models.')
       console.log('')
 
       const { confirm } = await import('../cli/input.js')

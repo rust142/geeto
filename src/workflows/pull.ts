@@ -6,9 +6,10 @@
 import { confirm } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
-import { exec, execSilent } from '../utils/exec.js'
+import { exec, execAsync, execSilent } from '../utils/exec.js'
 import { getCurrentBranch } from '../utils/git.js'
 import { log } from '../utils/logging.js'
+import { ScrambleProgress } from '../utils/scramble.js'
 
 /**
  * Get list of configured remotes
@@ -97,11 +98,16 @@ export const handlePull = async (): Promise<void> => {
   }
 
   // Fetch to get latest state
+  console.log('')
+  const fetchProgress = new ScrambleProgress()
+  fetchProgress.start(['fetching latest from remote...'])
   try {
     const fetchRemote = tracking?.remote ?? 'origin'
-    execSilent(`git fetch ${fetchRemote} --quiet`)
+    await execAsync(`git fetch ${fetchRemote} --quiet`, true)
+    fetchProgress.succeed('Fetched latest from remote')
   } catch {
-    log.warn('Could not fetch from remote. Continuing with local info...')
+    fetchProgress.fail('Could not fetch from remote')
+    log.warn('Continuing with local info...')
   }
 
   const counts = getAheadBehind()
@@ -192,18 +198,45 @@ export const handlePull = async (): Promise<void> => {
     }
   }
 
-  // Execute pull
+  // Execute pull — count objects before animation (sync, but local = fast)
+  let pullObjectCount = 0
+  let pullDeltaCount = 0
+  try {
+    const objCount =
+      Number(
+        exec(
+          `git rev-list --objects ${remote}/${currentBranch} ^HEAD 2>/dev/null | wc -l`,
+          true
+        ).trim()
+      ) || 0
+    if (objCount > 0) pullObjectCount = objCount
+    if (counts?.behind) pullDeltaCount = counts.behind
+  } catch {
+    /* ignore */
+  }
+
   console.log('')
-  console.log(`  ${GR}Running: ${pullCmd}${R}`)
-  console.log('')
+  const pullProgress = new ScrambleProgress()
+  pullProgress.start([
+    'fetching remote refs...',
+    pullObjectCount > 0
+      ? { text: 'downloading objects', countTo: pullObjectCount }
+      : 'downloading objects...',
+    pullDeltaCount > 0
+      ? { text: 'resolving deltas', countTo: pullDeltaCount }
+      : 'resolving deltas...',
+    `merging ${remote}/${currentBranch} → ${currentBranch}...`,
+  ])
 
   try {
-    const output = exec(pullCmd, false)
-    if (output.trim()) {
-      console.log(output)
+    const result = await execAsync(pullCmd, true)
+    pullProgress.succeed('Pull completed successfully')
+
+    if (result.stdout.trim()) {
+      console.log(result.stdout)
     }
-    log.success('Pull completed successfully.')
   } catch (error) {
+    pullProgress.fail('Pull failed')
     const msg = error instanceof Error ? error.message : String(error)
 
     if (msg.includes('CONFLICT') || msg.includes('conflict')) {

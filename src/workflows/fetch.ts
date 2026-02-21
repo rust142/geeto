@@ -5,7 +5,7 @@
 
 import { select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
-import { exec, execSilent } from '../utils/exec.js'
+import { execAsync, execSilent } from '../utils/exec.js'
 import { getCurrentBranch } from '../utils/git.js'
 import { log } from '../utils/logging.js'
 
@@ -80,15 +80,16 @@ export const handleFetch = async (): Promise<void> => {
   }
 
   console.log('')
-  console.log(`  ${GR}Running: ${fetchCmd}${R}`)
-  console.log('')
+  const spinner = log.spinner()
+  spinner.start('Fetching from remote...')
 
   try {
-    exec(fetchCmd, false)
-    log.success('Fetch completed.')
+    await execAsync(fetchCmd, true)
+    spinner.succeed('Fetch completed')
   } catch (error) {
+    spinner.fail('Fetch failed')
     const msg = error instanceof Error ? error.message : String(error)
-    log.error(`Fetch failed: ${msg}`)
+    log.error(msg)
     console.log('')
     return
   }

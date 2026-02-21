@@ -1,15 +1,16 @@
 import type { GeetoState } from '../types/index.js'
 
 import { handleCommitWorkflow } from './commit.js'
-import { confirm, ProgressBar } from '../cli/input.js'
+import { confirm } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { STEP } from '../core/constants.js'
 import { colors } from '../utils/colors.js'
 import { getStepProgress } from '../utils/display.js'
 import { exec, execAsync } from '../utils/exec.js'
 import { safeCheckout, safeMerge } from '../utils/git-errors.js'
-import { getCurrentBranch, pushWithRetry } from '../utils/git.js'
+import { getCurrentBranch } from '../utils/git.js'
 import { log } from '../utils/logging.js'
+import { ScrambleProgress } from '../utils/scramble.js'
 import { saveState } from '../utils/state.js'
 
 /** Extract a user-friendly message from a push error. */
@@ -64,101 +65,111 @@ export async function handlePush(
 
     if (shouldPush) {
       if (opts?.suppressLogs) {
-        const progressBar = new ProgressBar(100, 'Pushing to remote')
-
-        // Perform push silently to avoid interleaving git progress output
-        let progress = 0
-        const interval = setInterval(() => {
-          progress = Math.min(95, progress + Math.max(1, Math.floor(Math.random() * 6)))
-          progressBar.update(progress)
-        }, 250)
         console.log('')
+        const branch = getCurrentBranch()
 
+        const pushProgress = new ScrambleProgress()
+        pushProgress.start(['initializing push...'])
+
+        // Async pre-check so animation keeps running
+        let hasCommitsToPush = false
+        let objectCount = 0
         try {
-          // Check if remote branch exists; if not, treat as commits to push
-          let hasCommitsToPush = false
-          try {
-            const remoteRef = exec(
-              `git ls-remote --heads origin "${getCurrentBranch()}"`,
-              true
-            ).trim()
-            if (remoteRef) {
-              const commitsAhead = exec(
-                `git rev-list HEAD...origin/"${getCurrentBranch()}" --count`,
-                true
-              ).trim()
-              hasCommitsToPush = commitsAhead !== '0' && commitsAhead !== ''
-            } else {
-              // remote branch doesn't exist yet
-              hasCommitsToPush = true
+          const lsResult = await execAsync(`git ls-remote --heads origin "${branch}"`, true)
+          const remoteRef = lsResult.stdout.trim()
+          if (remoteRef) {
+            const commitsAhead = exec(`git rev-list HEAD...origin/"${branch}" --count`, true).trim()
+            hasCommitsToPush = commitsAhead !== '0' && commitsAhead !== ''
+            if (hasCommitsToPush) {
+              try {
+                objectCount =
+                  Number(
+                    exec(`git rev-list --objects HEAD ^origin/"${branch}" | wc -l`, true).trim()
+                  ) || 0
+              } catch {
+                /* ignore */
+              }
             }
-          } catch {
-            // If any of the checks fail, assume there are commits to push
+          } else {
             hasCommitsToPush = true
           }
+        } catch {
+          hasCommitsToPush = true
+        }
 
-          await execAsync(`git push -u origin "${getCurrentBranch()}"`, true)
-          clearInterval(interval)
-          progressBar.update(100)
-          progressBar.complete()
-          console.log('')
+        pushProgress.addSteps([
+          objectCount > 0
+            ? { text: 'collecting objects', countTo: objectCount }
+            : 'collecting objects...',
+          { text: 'compressing deltas', countTo: 100, suffix: '%' },
+          `uploading to origin/${branch}...`,
+          'verifying remote refs...',
+        ])
+
+        try {
+          await execAsync(`git push -u origin "${branch}"`, true)
+          pushProgress.stop()
 
           if (hasCommitsToPush) {
-            log.success(`Pushed ${getCurrentBranch()} to remote`)
+            log.success(`Pushed ${branch} to remote`)
           }
         } catch (error) {
-          progressBar.complete()
-          console.log('')
+          pushProgress.fail('Push failed')
           log.error(describePushError(error))
           throw error
         }
       } else {
-        // Push without progress bar
+        // Push with scramble progress
 
-        const progressBar = new ProgressBar(100, 'Pushing to remote')
+        const branch = getCurrentBranch()
 
-        // Perform push while updating progress bar
-        let progress = 0
-        const interval = setInterval(() => {
-          progress = Math.min(95, progress + Math.max(1, Math.floor(Math.random() * 6)))
-          progressBar.update(progress)
-        }, 250)
+        const pushProgress = new ScrambleProgress()
+        pushProgress.start(['initializing push...'])
 
+        // Async pre-check so animation keeps running
+        let hasCommitsToPush = false
+        let objectCount = 0
         try {
-          // Check if remote branch exists; if not, treat as commits to push
-          let hasCommitsToPush = false
-          try {
-            const remoteRef = exec(
-              `git ls-remote --heads origin "${getCurrentBranch()}"`,
-              true
-            ).trim()
-            if (remoteRef) {
-              const commitsAhead = exec(
-                `git rev-list HEAD...origin/"${getCurrentBranch()}" --count`,
-                true
-              ).trim()
-              hasCommitsToPush = commitsAhead !== '0' && commitsAhead !== ''
-            } else {
-              // remote branch doesn't exist yet
-              hasCommitsToPush = true
+          const lsResult = await execAsync(`git ls-remote --heads origin "${branch}"`, true)
+          const remoteRef = lsResult.stdout.trim()
+          if (remoteRef) {
+            const commitsAhead = exec(`git rev-list HEAD...origin/"${branch}" --count`, true).trim()
+            hasCommitsToPush = commitsAhead !== '0' && commitsAhead !== ''
+            if (hasCommitsToPush) {
+              try {
+                objectCount =
+                  Number(
+                    exec(`git rev-list --objects HEAD ^origin/"${branch}" | wc -l`, true).trim()
+                  ) || 0
+              } catch {
+                /* ignore */
+              }
             }
-          } catch {
-            // If any of the checks fail, assume there are commits to push
+          } else {
             hasCommitsToPush = true
           }
+        } catch {
+          hasCommitsToPush = true
+        }
 
-          await execAsync(`git push -u origin "${getCurrentBranch()}"`, true)
-          clearInterval(interval)
-          progressBar.update(100)
-          progressBar.complete()
-          console.log('')
+        pushProgress.addSteps([
+          objectCount > 0
+            ? { text: 'collecting objects', countTo: objectCount }
+            : 'collecting objects...',
+          { text: 'compressing deltas', countTo: 100, suffix: '%' },
+          `uploading to origin/${branch}...`,
+          'verifying remote refs...',
+        ])
+
+        try {
+          await execAsync(`git push -u origin "${branch}"`, true)
+          pushProgress.stop()
 
           if (hasCommitsToPush) {
-            log.success(`Pushed ${getCurrentBranch()} to remote`)
+            log.success(`Pushed ${branch} to remote`)
           }
         } catch (error) {
-          progressBar.complete()
-          console.log('')
+          pushProgress.fail('Push failed')
           log.error(describePushError(error))
           throw error
         }
@@ -296,6 +307,7 @@ export async function handleMerge(
           await safeCheckout(featureBranch)
           return featureBranch
         }
+        console.log('')
         log.success(
           `${colors.cyan}${featureBranch}${colors.reset} → merged into ${colors.cyan}${targetBranch}${colors.reset}`
         )
@@ -319,6 +331,7 @@ export async function handleMerge(
           await safeCheckout(featureBranch)
           return featureBranch
         }
+        console.log('')
         log.success(
           `${colors.cyan}${featureBranch}${colors.reset} → squashed & merged into ${colors.cyan}${targetBranch}${colors.reset}`
         )
@@ -328,8 +341,6 @@ export async function handleMerge(
       // Push the updated target branch back to remote
       const shouldPushTarget = confirm(`Push ${targetBranch} to origin?`)
       if (shouldPushTarget) {
-        // Provide visible push progress by allowing git to print progress to terminal
-        console.log('')
         // Get remote URL silently for a nicer message
         let remoteUrl = ''
         try {
@@ -344,51 +355,63 @@ export async function handleMerge(
         }
 
         console.log('')
-        const progressBar = new ProgressBar(100, `Pushing ${targetBranch} to remote`)
+        const currentBranch = getCurrentBranch()
 
-        // Perform push while updating progress bar
-        let progress = 0
-        const interval = setInterval(() => {
-          progress = Math.min(95, progress + Math.max(1, Math.floor(Math.random() * 6)))
-          progressBar.update(progress)
-        }, 250)
+        const pushProgress = new ScrambleProgress()
+        pushProgress.start(['initializing push...'])
+
+        // Async pre-check so animation keeps running
+        let hasCommitsToPush = false
+        let objectCount = 0
         try {
-          // Check if remote branch exists; if not, treat as commits to push
-          let hasCommitsToPush = false
-          try {
-            const remoteRef = exec(
-              `git ls-remote --heads origin "${getCurrentBranch()}"`,
+          const lsResult = await execAsync(`git ls-remote --heads origin "${currentBranch}"`, true)
+          const remoteRef = lsResult.stdout.trim()
+          if (remoteRef) {
+            const commitsAhead = exec(
+              `git rev-list HEAD...origin/"${currentBranch}" --count`,
               true
             ).trim()
-            if (remoteRef) {
-              const commitsAhead = exec(
-                `git rev-list HEAD...origin/"${getCurrentBranch()}" --count`,
-                true
-              ).trim()
-              hasCommitsToPush = commitsAhead !== '0' && commitsAhead !== ''
-            } else {
-              // remote branch doesn't exist yet
-              hasCommitsToPush = true
+            hasCommitsToPush = commitsAhead !== '0' && commitsAhead !== ''
+            if (hasCommitsToPush) {
+              try {
+                objectCount =
+                  Number(
+                    exec(
+                      `git rev-list --objects HEAD ^origin/"${currentBranch}" | wc -l`,
+                      true
+                    ).trim()
+                  ) || 0
+              } catch {
+                /* ignore */
+              }
             }
-          } catch {
-            // If any of the checks fail, assume there are commits to push
+          } else {
             hasCommitsToPush = true
           }
+        } catch {
+          hasCommitsToPush = true
+        }
 
-          await execAsync(`git push -u origin "${getCurrentBranch()}"`, true)
-          clearInterval(interval)
-          progressBar.update(100)
-          progressBar.complete()
-          console.log('')
+        pushProgress.addSteps([
+          objectCount > 0
+            ? { text: 'collecting objects', countTo: objectCount }
+            : 'collecting objects...',
+          { text: 'compressing deltas', countTo: 100, suffix: '%' },
+          `uploading to origin/${targetBranch}...`,
+          'verifying remote refs...',
+        ])
+
+        try {
+          await execAsync(`git push -u origin "${currentBranch}"`, true)
+          pushProgress.stop()
 
           if (hasCommitsToPush) {
-            log.success(`Pushed ${getCurrentBranch()} to remote`)
+            log.success(`Pushed ${currentBranch} to remote`)
           } else {
-            log.info(`Branch ${getCurrentBranch()} is already up to date with remote`)
+            log.info(`Branch ${currentBranch} is already up to date with remote`)
           }
         } catch (error) {
-          progressBar.complete()
-          console.log('')
+          pushProgress.fail('Push failed')
           log.error(describePushError(error))
           throw error
         }
@@ -418,16 +441,19 @@ export async function handleCleanup(featureBranch: string, state: GeetoState): P
       if (protectedBranches.has(featureBranch.toLowerCase())) {
         log.info(`Skipping deletion of protected branch '${featureBranch}'`)
       } else {
-        console.log('')
         const deleteAnswer = confirm(`Delete branch '${featureBranch}'?`)
         if (deleteAnswer) {
           try {
-            exec(`git branch -d ${featureBranch}`, true)
-            log.success(`Local branch '${featureBranch}' deleted`)
-
-            // Also delete remote branch if it exists
+            console.log('')
             try {
-              pushWithRetry(`git push origin --delete ${featureBranch}`, true)
+              const deleteProgress = new ScrambleProgress()
+              deleteProgress.start([
+                'removing remote branch...',
+                'updating remote refs...',
+                `cleaning up origin/${featureBranch}...`,
+              ])
+              await execAsync(`git push origin --delete ${featureBranch}`, true)
+              deleteProgress.stop()
               log.success(`Remote branch '${featureBranch}' deleted`)
             } catch {
               // Remote branch might not exist, ignore error
@@ -465,16 +491,24 @@ export async function handleCleanup(featureBranch: string, state: GeetoState): P
 
               if (forceDeleteChoice === 'force') {
                 try {
-                  exec(`git branch -D ${featureBranch}`, true)
-                  log.success(`Local branch '${featureBranch}' deleted`)
-
-                  // Also delete remote branch if it exists
+                  console.log('')
                   try {
-                    pushWithRetry(`git push origin --delete ${featureBranch}`, true)
+                    const deleteProgress = new ScrambleProgress()
+                    deleteProgress.start([
+                      'removing remote branch...',
+                      'updating remote refs...',
+                      `cleaning up origin/${featureBranch}...`,
+                    ])
+                    await execAsync(`git push origin --delete ${featureBranch}`, true)
+                    deleteProgress.stop()
                     log.success(`Remote branch '${featureBranch}' deleted`)
                   } catch {
                     // Remote branch might not exist, ignore error
                   }
+
+                  // Also delete local branch if it exists
+                  exec(`git branch -D ${featureBranch}`, true)
+                  log.success(`Local branch '${featureBranch}' deleted`)
                 } catch (forceError) {
                   log.error(`Failed to delete branch: ${forceError}`)
                 }

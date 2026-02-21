@@ -2,6 +2,7 @@
  * Commit workflow - handles commit-related operations
  */
 
+import { execSync } from 'node:child_process'
 import path from 'node:path'
 import type { CopilotModel } from '../api/copilot.js'
 import type { GeminiModel } from '../api/gemini.js'
@@ -14,6 +15,7 @@ import { colors } from '../utils/colors.js'
 import { extractCommitTitle, getCommitTypes, normalizeAIOutput } from '../utils/commit-helpers.js'
 import { DEFAULT_GEMINI_MODEL } from '../utils/config.js'
 import { getStepProgress } from '../utils/display.js'
+import { isDryRun } from '../utils/dry-run.js'
 import { execGit } from '../utils/exec.js'
 import {
   chooseModelForProvider,
@@ -24,6 +26,7 @@ import {
   isTransientAIFailure,
 } from '../utils/git-ai.js'
 import { log } from '../utils/logging.js'
+import { ScrambleProgress } from '../utils/scramble.js'
 import { saveState } from '../utils/state.js'
 
 export const getDefaultCommitTool = (
@@ -173,6 +176,26 @@ export const handleCommitWorkflow = async (
       }
 
       if (res.status === 0) {
+        const display = titleStr.split('\n')[0] ?? titleStr
+        console.log('')
+        log.success(`Committed: ${colors.cyan}${colors.bright}${display}${colors.reset}`)
+
+        // In dry-run mode, offer to revert the commit immediately
+        if (isDryRun()) {
+          console.log('')
+          const revert = confirm('Revert this dry-run commit?', true)
+          if (revert) {
+            try {
+              // Bypass execGit to avoid dry-run guard interception
+              execSync('git reset --soft HEAD~1', { stdio: 'pipe' })
+              log.warn('Commit reverted — changes still staged.')
+            } catch {
+              log.error('Failed to revert.')
+            }
+            process.exit(0)
+          }
+        }
+
         return true
       }
 
@@ -212,7 +235,7 @@ export const handleCommitWorkflow = async (
 
   const aiTools = [
     { label: 'Gemini', value: 'gemini' },
-    { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
+    { label: 'GitHub (Recommended)', value: 'copilot' },
     { label: 'OpenRouter', value: 'openrouter' },
     { label: 'Manual commit', value: 'manual' },
   ]
@@ -255,6 +278,25 @@ export const handleCommitWorkflow = async (
     log.warn('No staged changes found. Cannot generate a commit message from empty diff. Aborting.')
     return false
   }
+
+  // Parse diff stats for count-up animation
+  let diffStatsStep: import('../utils/scramble.js').StepInput = 'analyzing diff...'
+  try {
+    const shortstat = execGit('git diff --cached --shortstat', true).trim()
+    const filesMatch = shortstat.match(/(\d+)\s+file/)
+    const insMatch = shortstat.match(/(\d+)\s+insertion/)
+    const delMatch = shortstat.match(/(\d+)\s+deletion/)
+    const counters: import('../utils/scramble.js').CounterDef[] = []
+    if (filesMatch) counters.push({ to: Number(filesMatch[1]), suffix: ' files' })
+    if (insMatch) counters.push({ to: Number(insMatch[1]), prefix: '+' })
+    if (delMatch) counters.push({ to: Number(delMatch[1]), prefix: '-' })
+    if (counters.length > 0) {
+      diffStatsStep = { text: 'analyzing diff', counts: counters }
+    }
+  } catch {
+    // ignore — diffStatsStep stays as plain string
+  }
+
   log.info(`Git diff size: ${diff.length} chars`)
   console.log('')
 
@@ -349,7 +391,8 @@ export const handleCommitWorkflow = async (
     // Try generating commit message via AI
     let initialAiResult: string | null = null
     let currentModel: string | undefined
-    const spinner = log.spinner()
+
+    const spinner = new ScrambleProgress()
     try {
       let currentProvider: 'gemini' | 'copilot' | 'openrouter' | undefined
       if (state.aiProvider && state.aiProvider !== 'manual') {
@@ -366,9 +409,12 @@ export const handleCommitWorkflow = async (
         currentModel = state.geminiModel ?? DEFAULT_GEMINI_MODEL
       }
 
-      spinner.start(
-        `Generating commit message with ${getAIProviderShortName(currentProvider)}${currentModel ? ` (${currentModel})` : ''}...`
-      )
+      spinner.start([
+        'reading staged changes...',
+        diffStatsStep,
+        `generating commit message with ${getAIProviderShortName(currentProvider)}${currentModel ? ` (${currentModel})` : ''}...`,
+        'formatting conventional commit...',
+      ])
 
       if (currentProvider === 'copilot') {
         const { generateCommitMessage } = await import('../api/copilot.js')
@@ -443,12 +489,14 @@ export const handleCommitWorkflow = async (
           if (correction) {
             console.log('')
           }
-          const spinner = log.spinner()
-          spinner.start(
-            `Regenerating commit message with ${getAIProviderShortName(
+          const spinner = new ScrambleProgress()
+          spinner.start([
+            'reviewing feedback...',
+            `regenerating with ${getAIProviderShortName(
               state.aiProvider ?? 'gemini'
-            )}${directModelName ? ` (${directModelName})` : ''}...`
-          )
+            )}${directModelName ? ` (${directModelName})` : ''}...`,
+            'formatting conventional commit...',
+          ])
 
           try {
             switch (state.aiProvider) {
@@ -691,7 +739,7 @@ export const handleCommitWorkflow = async (
         case 'change-provider': {
           const prov = await select('Choose AI provider:', [
             { label: 'Gemini', value: 'gemini' },
-            { label: 'GitHub Copilot (Recommended)', value: 'copilot' },
+            { label: 'GitHub (Recommended)', value: 'copilot' },
             { label: 'OpenRouter', value: 'openrouter' },
             { label: 'Back to suggested commit selection', value: 'back' },
           ])

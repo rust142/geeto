@@ -28,6 +28,7 @@ import {
   getStepName,
   getStepProgress,
 } from '../utils/display.js'
+import { isDryRun } from '../utils/dry-run.js'
 import { exec } from '../utils/exec.js'
 import {
   getChangedFiles,
@@ -271,23 +272,21 @@ export const main = async (opts?: {
           const { ensureAIProvider } = await import('../core/setup.js')
           const aiReady = await ensureAIProvider(aiProvider)
           if (!aiReady) {
-            log.warn(
-              `${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup is no longer valid.`
-            )
+            log.warn(`${aiProvider === 'gemini' ? 'Gemini' : 'Copilot'} setup is no longer valid.`)
             const fixSetup = confirm(
-              `Fix ${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup now?`
+              `Fix ${aiProvider === 'gemini' ? 'Gemini' : 'Copilot'} setup now?`
             )
             if (fixSetup) {
               const setupSuccess = await ensureAIProvider(aiProvider)
               if (!setupSuccess) {
                 log.warn(
-                  `Could not fix ${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup. Switching to manual mode.`
+                  `Could not fix ${aiProvider === 'gemini' ? 'Gemini' : 'Copilot'} setup. Switching to manual mode.`
                 )
                 aiProvider = 'gemini' // Keep gemini but will use manual fallback
               }
             } else {
               log.warn(
-                `${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup invalid. Will use manual mode for AI features.`
+                `${aiProvider === 'gemini' ? 'Gemini' : 'Copilot'} setup invalid. Will use manual mode for AI features.`
               )
             }
           }
@@ -635,6 +634,9 @@ export const main = async (opts?: {
       }
     }
 
+    // Dry-run: exit after branch step
+    if (isDryRun() && opts?.startAt === 'branch') return
+
     // STEP 3: Commit
     if (state.step < STEP.COMMITTED) {
       // Refresh staged files from git in real-time. The staging step is
@@ -668,6 +670,9 @@ export const main = async (opts?: {
       }
     }
 
+    // Dry-run: exit after commit step
+    if (isDryRun() && opts?.startAt === 'commit') return
+
     // STEP 4: Push — ask user before pushing in interactive mode
     if (opts?.startAt) {
       // Non-interactive: only push automatically if starting at push
@@ -676,8 +681,6 @@ export const main = async (opts?: {
       } else if (opts.startAt === 'merge') {
         // intentionally skip push prompt here; merge step will validate push status
       } else {
-        // Provide visible push progress by allowing git to print progress to terminal
-        console.log('')
         // Get remote URL silently for a nicer message
         let remoteUrl = ''
         try {
@@ -713,6 +716,9 @@ export const main = async (opts?: {
         log.info('Skipping push as per user request')
       }
     }
+
+    // Dry-run: exit after push step
+    if (isDryRun() && opts?.startAt === 'push') return
 
     // STEP 5: Merge (simplified)
     // If the current branch has commits that are not pushed, ask the user to push

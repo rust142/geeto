@@ -151,9 +151,11 @@ export const handleAbort = async (): Promise<void> => {
   }
 
   try {
-    exec(selected.abortCmd, true)
     console.log('')
-    log.success(`${selected.label} aborted successfully.`)
+    const spinner = log.spinner()
+    spinner.start(`Aborting ${selected.label.toLowerCase()}...`)
+    exec(selected.abortCmd, true)
+    spinner.succeed(`${selected.label} aborted successfully`)
 
     // Show current state after abort
     try {
