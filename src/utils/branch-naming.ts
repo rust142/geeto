@@ -486,4 +486,59 @@ export const handleBranchNaming = async (
   return result
 }
 
+// ── Issue ID extraction & project linking ──────────────────────────
+
+/**
+ * Extract Trello card shortLink from a branch name.
+ * Branch format: {prefix}{shortLink}{separator}{slug}
+ * e.g. "dev/abc123XY-add-login-page" → "abc123XY"
+ *
+ * Also works with merge commit subjects like:
+ * "Merge branch 'dev/abc123XY-add-login-page'"
+ */
+export const extractCardIdFromBranch = (
+  branchOrSubject: string,
+  separator: '-' | '_' = '-'
+): string | null => {
+  let branch = branchOrSubject
+
+  // Extract branch name from merge commit subjects
+  const mergeMatch = branch.match(/Merge\s+branch\s+'([^']+)'/)
+  if (mergeMatch?.[1]) branch = mergeMatch[1]
+
+  // Also handle "Merge pull request #N from org/branch"
+  const prMatch = branch.match(/from\s+\S+\/(.+)$/)
+  if (prMatch?.[1]) branch = prMatch[1]
+
+  // Strip prefix (everything up to and including last '/')
+  const slashIdx = branch.lastIndexOf('/')
+  const suffix = slashIdx === -1 ? branch : branch.slice(slashIdx + 1)
+
+  // Trello shortLink is 8 alphanumeric chars at the start, followed by separator
+  const cardRegex = separator === '-' ? /^([a-zA-Z0-9]{8})-/ : /^([a-zA-Z0-9]{8})_/
+  const cardMatch = suffix.match(cardRegex)
+  if (cardMatch?.[1]) return cardMatch[1]
+
+  return null
+}
+
+/**
+ * Build a project management URL from a card/issue ID.
+ * Currently supports: Trello (via shortLink)
+ * Future: Jira ({baseUrl}/browse/{key}), Linear, Asana, etc.
+ */
+export const buildProjectLink = (cardId: string, tool: 'trello' | 'none'): string | null => {
+  switch (tool) {
+    case 'trello': {
+      return `https://trello.com/c/${cardId}`
+    }
+    case 'none': {
+      return null
+    }
+    default: {
+      return null
+    }
+  }
+}
+
 export default handleBranchNaming

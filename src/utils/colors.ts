@@ -8,6 +8,7 @@ export const colors = {
   green: '\u001B[32m',
   yellow: '\u001B[33m',
   blue: '\u001B[34m',
+  magenta: '\u001B[35m',
   cyan: '\u001B[36m',
   red: '\u001B[31m',
   gray: '\u001B[90m',

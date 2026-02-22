@@ -68,6 +68,7 @@ export interface BranchStrategyConfig {
   lastTrelloList?: string // Last selected Trello list ID
   protectedBranches?: string[] // Custom protected branches (beyond defaults)
   allowedBases?: string[] // Custom base branches allowed for branching (no warning)
+  projectTool?: TaskPlatform // Project management tool for issue ID linking
 }
 
 export type TaskPlatform = 'trello' | 'none'

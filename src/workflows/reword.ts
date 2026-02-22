@@ -47,8 +47,15 @@ interface CommitInfo {
   subject: string
   body: string
   author: string
+  committer: string
+  authorDate: string
+  committerDate: string
   relativeDate: string
   refs: string
+  /** true when authorDate ≠ committerDate (rebased / amended) */
+  isModified: boolean
+  /** true when author ≠ committer (cherry-picked / applied by someone else) */
+  isReauthored: boolean
 }
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -58,7 +65,7 @@ const REC = '<<END>>'
 
 const getRecentCommits = (limit: number): CommitInfo[] => {
   try {
-    const format = ['%H', '%h', '%s', '%b', '%an', '%cr', '%D'].join(SEP)
+    const format = ['%H', '%h', '%s', '%b', '%an', '%cn', '%ai', '%ci', '%cr', '%D'].join(SEP)
     const raw = execSilent(`git log --format="${format}${REC}" -${limit}`).trim()
     if (!raw) return []
 
@@ -68,20 +75,39 @@ const getRecentCommits = (limit: number): CommitInfo[] => {
       .filter(Boolean)
       .map((r) => {
         const p = r.split(SEP)
+        const authorName = p[4] ?? ''
+        const committerName = p[5] ?? ''
+        const authorDate = (p[6] ?? '').trim()
+        const committerDate = (p[7] ?? '').trim()
+        // Compare only date portion (first 19 chars: YYYY-MM-DD HH:MM:SS)
+        const isModified = authorDate.slice(0, 19) !== committerDate.slice(0, 19)
+        const isReauthored = authorName !== committerName
         return {
           hash: p[0] ?? '',
           shortHash: p[1] ?? '',
           subject: p[2] ?? '',
           body: (p[3] ?? '').trim(),
-          author: p[4] ?? '',
-          relativeDate: p[5] ?? '',
-          refs: p[6] ?? '',
+          author: authorName,
+          committer: committerName,
+          authorDate,
+          committerDate,
+          relativeDate: p[8] ?? '',
+          refs: p[9] ?? '',
+          isModified,
+          isReauthored,
         }
       })
       .filter((c) => c.hash !== '')
   } catch {
     return []
   }
+}
+
+/** Badge for modified/reauthored commits */
+const modBadge = (c: CommitInfo): string => {
+  if (c.isReauthored) return ` ${colors.magenta}🍒${colors.reset}`
+  if (c.isModified) return ` ${colors.blue}🔄${colors.reset}`
+  return ''
 }
 
 /** Get the diff (patch) for a specific commit. */
@@ -394,12 +420,28 @@ export const handleReword = async (): Promise<void> => {
       ? hyperlink(`${repoUrl}/commit/${c.hash}`, `${colors.yellow}${hashCol}${colors.reset}`)
       : `${colors.yellow}${hashCol}${colors.reset}`
 
+    const badge = modBadge(c)
+
     const label =
-      `${indicator}${hashDisplay}` +
+      `${indicator}${hashDisplay}${badge}` +
       `  ${colors.gray}${c.relativeDate}${colors.reset}` +
       `${refs}  ${colors.bright}${subj}${colors.reset}`
     return { label, value: c.hash }
   })
+
+  // Show modification legend if any modified/reauthored commits exist
+  const modCount = commits.filter((c) => c.isModified && !c.isReauthored).length
+  const reauthorCount = commits.filter((c) => c.isReauthored).length
+  if (modCount > 0 || reauthorCount > 0) {
+    const parts: string[] = []
+    if (modCount > 0) {
+      parts.push(`${colors.blue}🔄${colors.reset} rebased/amended (${modCount})`)
+    }
+    if (reauthorCount > 0) {
+      parts.push(`${colors.magenta}🍒${colors.reset} cherry-picked (${reauthorCount})`)
+    }
+    console.log(`\n  ${colors.gray}Legend: ${parts.join('  ')}${colors.reset}`)
+  }
 
   console.log('')
   const selected = await multiSelect('Select commits to edit:', options)
@@ -442,7 +484,7 @@ export const handleReword = async (): Promise<void> => {
         )
       : `${colors.yellow}${commit.shortHash}${colors.reset}`
     console.log(
-      `  ${hashDisp}` +
+      `  ${hashDisp}${modBadge(commit)}` +
         `  ${colors.gray}${commit.relativeDate}${colors.reset}` +
         `  ${colors.bright}${commit.subject}${colors.reset}`
     )
@@ -942,12 +984,13 @@ export const handleReword = async (): Promise<void> => {
     if (!isFirst) {
       console.log(`  ${colors.cyan}│${colors.reset}`)
     }
+    const badge = commit ? modBadge(commit) : ''
     const summaryHash =
       repoUrl && commit
         ? hyperlink(`${repoUrl}/commit/${commit.hash}`, `${colors.yellow}${short}${colors.reset}`)
         : `${colors.yellow}${short}${colors.reset}`
     console.log(
-      `  ${colors.cyan}│${colors.reset}  ${summaryHash}  ${colors.gray}${commit?.relativeDate ?? ''}${colors.reset}`
+      `  ${colors.cyan}│${colors.reset}  ${summaryHash}${badge}  ${colors.gray}${commit?.relativeDate ?? ''}${colors.reset}`
     )
     console.log(`  ${colors.cyan}│${colors.reset}  ${colors.red}− ${oldTitle}${colors.reset}`)
     console.log(`  ${colors.cyan}│${colors.reset}  ${colors.green}+ ${newTitle}${colors.reset}`)
