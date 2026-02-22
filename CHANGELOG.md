@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.4](https://github.com/rust142/geeto/compare/v0.6.3...v0.6.4) (2026-02-22)
+
+### Features
+
+* feat(api): add system Copilot CLI fallback and Windows support ([5d6fe37](https://github.com/rust142/geeto/commit/5d6fe37))
+
 ## [0.6.3](https://github.com/rust142/geeto/compare/v0.6.2...v0.6.3) (2026-02-22)
 
 ### Bug Fixes

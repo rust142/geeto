@@ -1,5 +1,15 @@
 # Releases
 
+## v0.6.4 — February 22, 2026
+
+### What's New?
+
+#### New Features
+
+- Adds a fallback to use the system Copilot CLI and adds support for Windows.
+
+---
+
 ## v0.6.3 — February 22, 2026
 
 ### What's New?
