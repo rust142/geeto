@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.3](https://github.com/rust142/geeto/compare/v0.6.2...v0.6.3) (2026-02-22)
+
+### Bug Fixes
+
+* fix(copilot-sdk): Ensure Bun compatibility for internal CLI ([d92ad5f](https://github.com/rust142/geeto/commit/d92ad5f))
+
 ## [0.6.2](https://github.com/rust142/geeto/compare/v0.6.1...v0.6.2) (2026-02-22)
 
 ### Features

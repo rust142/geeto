@@ -1,5 +1,15 @@
 # Releases
 
+## v0.6.3 — February 22, 2026
+
+### What's New?
+
+#### Bug Fixes
+
+- Fixed an issue to ensure compatibility for our internal CLI when using Bun.
+
+---
+
 ## v0.6.2 — February 22, 2026
 
 ### What's New?
