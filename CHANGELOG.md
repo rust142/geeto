@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.6.2](https://github.com/rust142/geeto/compare/v0.6.1...v0.6.2) (2026-02-22)
+
+### Features
+
+* feat(cli): add rich commit history and project task linking ([304cdf3](https://github.com/rust142/geeto/commit/304cdf3))
+* feat(reword): refine commit format consistency checks ([dea1696](https://github.com/rust142/geeto/commit/dea1696))
+* feat(reword): add consistency checks, enhanced UI, and rebase safety ([55b9696](https://github.com/rust142/geeto/commit/55b9696))
+* feat(cli): add new Git commands and update project info ([fe73c95](https://github.com/rust142/geeto/commit/fe73c95))
+
+### Other Changes
+
+* chore(cspell): add new words to dictionary ([58ec047](https://github.com/rust142/geeto/commit/58ec047))
+* chore(release): v0.6.1 ([9632430](https://github.com/rust142/geeto/commit/9632430))
+* chore(release): publish v0.6.1 as a version-only update ([40c6736](https://github.com/rust142/geeto/commit/40c6736))
+
 ## [0.6.1](https://github.com/rust142/geeto/compare/v0.6.0...v0.6.1) (2026-02-21)
 
 ### Features
