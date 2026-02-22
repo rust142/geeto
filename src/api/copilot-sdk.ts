@@ -137,54 +137,28 @@ export const findBestCopilotBinary = (): { path: string; version: string } | nul
   return null
 }
 
-// Cached best copilot binary info
-let cachedCopilotPath: string | null = null
-
 /**
  * Check if Copilot CLI version is compatible with SDK.
- * Automatically finds the newest copilot binary to bypass PATH cache issues.
- * Returns true if compatible, false otherwise.
+ * Note: The SDK bundles its own CLI (@github/copilot npm package) and does NOT
+ * use the standalone Copilot CLI from PATH (/opt/homebrew/bin/copilot).
+ * This check is kept for setup guidance only.
  */
 export const checkCopilotCliVersion = (): boolean => {
   const best = findBestCopilotBinary()
   if (!best) {
     return false
   }
-
-  const minNum = parseParts(MIN_COPILOT_VERSION)
-  const currentNum = parseParts(best.version)
-
-  if (currentNum >= minNum) {
-    // Cache the path for the SDK to use
-    cachedCopilotPath = best.path
-    // Update PATH so CopilotClient can find it
-    if (cachedCopilotPath) {
-      const binDir = path.dirname(cachedCopilotPath)
-      if (!process.env.PATH?.startsWith(binDir)) {
-        process.env.PATH = `${binDir}:${process.env.PATH}`
-      }
-    }
-    return true
-  }
-
-  return false
+  return parseParts(best.version) >= parseParts(MIN_COPILOT_VERSION)
 }
 
 let client: _CopilotClient | null = null
-let versionChecked = false
-let versionCompatible = false
 
+/**
+ * Lazily start the Copilot SDK client.
+ * The SDK uses its own bundled CLI (@github/copilot), not the standalone binary.
+ * Under Bun, requires 'node' in PATH (SDK spawns the CLI via node).
+ */
 const ensureClient = async (): Promise<boolean> => {
-  // Check CLI version once before attempting to start client
-  if (!versionChecked) {
-    versionChecked = true
-    versionCompatible = checkCopilotCliVersion()
-  }
-
-  if (!versionCompatible) {
-    return false
-  }
-
   if (client) {
     return true
   }
@@ -192,17 +166,19 @@ const ensureClient = async (): Promise<boolean> => {
     // Suppress Node.js experimental warnings from copilot subprocess
     process.env.NODE_NO_WARNINGS = '1'
     client = new CopilotClient({ autoStart: true })
-    // Narrow client into a local const to satisfy strict no-non-null assertions
-    const startedClient = client
-    if (!startedClient) {
-      return false
-    }
-    await startedClient.start()
+    await client.start()
     return true
   } catch (error: unknown) {
-    // SDK optional: log info and fall back
     const msg = error instanceof Error && error.message ? error.message : String(error)
-    log.info(msg)
+    // Provide helpful context for common failures
+    if (msg.includes('headless') || msg.includes('Unknown flag')) {
+      log.info('Copilot SDK: bundled CLI does not support --headless (Bun compat issue).')
+      log.info('Upgrade SDK: bun add @github/copilot-sdk@latest')
+    } else if (msg.includes('not found') || msg.includes('ENOENT')) {
+      log.info('Copilot SDK: @github/copilot package not found. Run: bun install')
+    } else {
+      log.info(`Copilot SDK unavailable: ${msg}`)
+    }
     client = null
     return false
   }
