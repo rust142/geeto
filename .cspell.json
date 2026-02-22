@@ -114,7 +114,8 @@
     "Konsole",
     "iterm",
     "wezterm",
-    "reauthor"
+    "reauthor",
+    "behaviour"
   ],
   "ignorePaths": [
     "node_modules/**",
