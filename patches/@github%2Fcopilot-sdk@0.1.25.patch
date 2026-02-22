@@ -1,0 +1,15 @@
+diff --git a/dist/client.js b/dist/client.js
+index 5d97b964a62bf29654361e68e165d2be6edbe281..5947ec198b287265733619f1c9520a6d543b24b3 100644
+--- a/dist/client.js
++++ b/dist/client.js
+@@ -760,8 +760,9 @@ class CopilotClient {
+       }
+       const stdioConfig = this.options.useStdio ? ["pipe", "pipe", "pipe"] : ["ignore", "pipe", "pipe"];
+       const isJsFile = this.options.cliPath.endsWith(".js");
++      const nodeExecPath = process.versions.bun ? "node" : process.execPath;
+       if (isJsFile) {
+-        this.cliProcess = spawn(process.execPath, [this.options.cliPath, ...args], {
++        this.cliProcess = spawn(nodeExecPath, [this.options.cliPath, ...args], {
+           stdio: stdioConfig,
+           cwd: this.options.cwd,
+           env: envWithoutNodeDebug,
