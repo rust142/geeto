@@ -108,7 +108,13 @@
     "geepr",
     "Finalise",
     "shortstat",
-    "finalised"
+    "finalised",
+    "Reauthored",
+    "reauthored",
+    "Konsole",
+    "iterm",
+    "wezterm",
+    "reauthor"
   ],
   "ignorePaths": [
     "node_modules/**",

@@ -253,6 +253,7 @@ export const getBranchStrategyConfig = (): BranchStrategyConfig | null => {
       const trelloListMatch = content.match(/last_trello_list\s*=\s*["']([^"']+)["']/)
       const protectedMatch = content.match(/protected_branches\s*=\s*\[([^\]]*)\]/)
       const allowedBasesMatch = content.match(/allowed_bases\s*=\s*\[([^\]]*)\]/)
+      const projectToolMatch = content.match(/project_tool\s*=\s*["']([^"']+)["']/)
 
       // Only return config if separator has been explicitly set
       if (separatorMatch) {
@@ -283,6 +284,7 @@ export const getBranchStrategyConfig = (): BranchStrategyConfig | null => {
           lastTrelloList: trelloListMatch?.[1],
           protectedBranches,
           allowedBases,
+          projectTool: (projectToolMatch?.[1] as 'trello' | 'none') ?? undefined,
         }
       }
     }
@@ -318,7 +320,7 @@ export const saveBranchStrategyConfig = (config: BranchStrategyConfig): void => 
 # Auto-generated on ${new Date().toISOString()}
 
 separator = "${config.separator}"
-${config.lastNamingStrategy ? `last_naming_strategy = "${config.lastNamingStrategy}"\n` : ''}${config.lastTrelloList ? `last_trello_list = "${config.lastTrelloList}"\n` : ''}${protectedLine}${allowedBasesLine}`
+${config.lastNamingStrategy ? `last_naming_strategy = "${config.lastNamingStrategy}"\n` : ''}${config.lastTrelloList ? `last_trello_list = "${config.lastTrelloList}"\n` : ''}${config.projectTool ? `project_tool = "${config.projectTool}"\n` : ''}${protectedLine}${allowedBasesLine}`
 
     fs.writeFileSync(path, configContent, 'utf8')
   } catch (error: unknown) {
