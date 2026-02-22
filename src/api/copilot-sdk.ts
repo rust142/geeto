@@ -85,16 +85,19 @@ const getVersionFromPath = (binPath: string): string | null => {
  */
 export const findBestCopilotBinary = (): { path: string; version: string } | null => {
   const minNum = parseParts(MIN_COPILOT_VERSION)
+  const isWin = os.platform() === 'win32'
+  const copilotBin = isWin ? 'copilot.exe' : 'copilot'
 
   // Super fast path: check cache first
   const cached = readCache()
-  if (cached && parseParts(cached.version) >= minNum) {
+  if (cached && fs.existsSync(cached.path) && parseParts(cached.version) >= minNum) {
     return { path: cached.path, version: cached.version }
   }
 
   // Check PATH first (most common case)
   try {
-    const pathBin = exec('which copilot', true).trim()
+    const whichCmd = isWin ? 'where copilot' : 'which copilot'
+    const pathBin = exec(whichCmd, true).trim().split('\n')[0]?.trim() // `where` may return multiple
     if (pathBin && fs.existsSync(pathBin)) {
       const ver = getVersionFromPath(pathBin)
       if (ver) {
@@ -112,13 +115,34 @@ export const findBestCopilotBinary = (): { path: string; version: string } | nul
 
   // PATH version is outdated or not found - scan known locations
   const home = os.homedir()
-  const knownPaths = [
-    '/usr/local/bin/copilot',
-    '/usr/bin/copilot',
-    path.join(home, '.config/Code/User/globalStorage/github.copilot-chat/copilotCli/copilot'),
-    path.join(home, '.npm-global/bin/copilot'),
-    path.join(home, '.local/bin/copilot'),
-  ]
+  const knownPaths: string[] = isWin
+    ? [
+        // Windows install locations (matches copilot-setup.ts)
+        path.join(process.env.LOCALAPPDATA ?? '', 'Programs', 'GitHub CLI', copilotBin),
+        'C:\\Program Files\\GitHub CLI\\' + copilotBin,
+        'C:\\Program Files (x86)\\GitHub CLI\\' + copilotBin,
+        path.join(home, 'AppData', 'Roaming', 'npm', copilotBin),
+        path.join(home, 'scoop', 'shims', copilotBin),
+        path.join(
+          home,
+          '.config',
+          'Code',
+          'User',
+          'globalStorage',
+          'github.copilot-chat',
+          'copilotCli',
+          copilotBin
+        ),
+      ]
+    : [
+        // macOS / Linux install locations (matches copilot-setup.ts)
+        '/opt/homebrew/bin/copilot',
+        '/usr/local/bin/copilot',
+        '/usr/bin/copilot',
+        path.join(home, '.config/Code/User/globalStorage/github.copilot-chat/copilotCli/copilot'),
+        path.join(home, '.npm-global/bin/copilot'),
+        path.join(home, '.local/bin/copilot'),
+      ]
 
   for (const binPath of knownPaths) {
     if (fs.existsSync(binPath)) {
@@ -139,9 +163,8 @@ export const findBestCopilotBinary = (): { path: string; version: string } | nul
 
 /**
  * Check if Copilot CLI version is compatible with SDK.
- * Note: The SDK bundles its own CLI (@github/copilot npm package) and does NOT
- * use the standalone Copilot CLI from PATH (/opt/homebrew/bin/copilot).
- * This check is kept for setup guidance only.
+ * The standalone CLI is used as fallback when the bundled CLI is unavailable
+ * (e.g. in bun-compiled binaries). Also used for setup guidance.
  */
 export const checkCopilotCliVersion = (): boolean => {
   const best = findBestCopilotBinary()
@@ -155,32 +178,67 @@ let client: _CopilotClient | null = null
 
 /**
  * Lazily start the Copilot SDK client.
- * The SDK uses its own bundled CLI (@github/copilot), not the standalone binary.
- * Under Bun, requires 'node' in PATH (SDK spawns the CLI via node).
+ *
+ * Resolution order:
+ * 1. Bundled CLI – SDK resolves @github/copilot from node_modules (npm/bun install).
+ * 2. System CLI  – Standalone Copilot CLI binary found on PATH or known locations
+ *                  (used when bundled CLI is unavailable, e.g. Bun-compiled binary).
  */
 const ensureClient = async (): Promise<boolean> => {
   if (client) {
     return true
   }
+
+  // Suppress Node.js experimental warnings from copilot subprocess
+  process.env.NODE_NO_WARNINGS = '1'
+
+  // ── Attempt 1: bundled CLI (default SDK behaviour) ────────────────────
   try {
-    // Suppress Node.js experimental warnings from copilot subprocess
-    process.env.NODE_NO_WARNINGS = '1'
     client = new CopilotClient({ autoStart: true })
     await client.start()
     return true
-  } catch (error: unknown) {
-    const msg = error instanceof Error && error.message ? error.message : String(error)
-    // Provide helpful context for common failures
-    if (msg.includes('headless') || msg.includes('Unknown flag')) {
-      log.info('Copilot SDK: bundled CLI does not support --headless (Bun compat issue).')
-      log.info('Upgrade SDK: bun add @github/copilot-sdk@latest')
-    } else if (msg.includes('not found') || msg.includes('ENOENT')) {
-      log.info('Copilot SDK: @github/copilot package not found. Run: bun install')
-    } else {
-      log.info(`Copilot SDK unavailable: ${msg}`)
+  } catch (bundledError: unknown) {
+    const bundledMsg = bundledError instanceof Error ? bundledError.message : String(bundledError)
+
+    // Only fall through to system CLI when the bundled CLI cannot be resolved
+    // (e.g. running inside a bun-compiled binary where node_modules don't exist).
+    const isMissingModule =
+      bundledMsg.includes('Cannot find module') ||
+      bundledMsg.includes('ResolveMessage') ||
+      bundledMsg.includes('ENOENT')
+
+    if (!isMissingModule) {
+      // Not a resolution error — report and bail out
+      if (bundledMsg.includes('headless') || bundledMsg.includes('Unknown flag')) {
+        log.info('Copilot SDK: bundled CLI does not support --headless (Bun compat issue).')
+        log.info('Upgrade SDK: bun add @github/copilot-sdk@latest')
+      } else {
+        log.info(`Copilot SDK unavailable: ${bundledMsg}`)
+      }
+      client = null
+      return false
     }
-    client = null
-    return false
+
+    // ── Attempt 2: system Copilot CLI (standalone native binary) ────────
+    const systemCli = findBestCopilotBinary()
+    if (!systemCli) {
+      log.info('Copilot SDK: bundled CLI not found and no system Copilot CLI available.')
+      log.info('Install Copilot CLI: brew install copilot-cli')
+      client = null
+      return false
+    }
+
+    try {
+      log.info(`Using system Copilot CLI (v${systemCli.version})`)
+      client = new CopilotClient({ cliPath: systemCli.path, autoStart: true })
+      await client.start()
+      return true
+    } catch (systemError: unknown) {
+      const sysMsg = systemError instanceof Error ? systemError.message : String(systemError)
+      log.info(`System Copilot CLI failed: ${sysMsg}`)
+      client = null
+      return false
+    }
   }
 }
 
