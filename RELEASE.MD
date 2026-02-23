@@ -1,5 +1,16 @@
 # Releases
 
+## v0.6.5 — February 23, 2026
+
+### What's New?
+
+#### Other Improvements
+
+- The project now ignores the internal "instructions" directory so those files are no longer included.
+- Copilot CLI logs include an extra newline to make entries easier to read.
+
+---
+
 ## v0.6.4 — February 22, 2026
 
 ### What's New?

@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.5](https://github.com/rust142/geeto/compare/v0.6.4...v0.6.5) (2026-02-23)
+
+### Other Changes
+
+* chore(repo): ignore instructions dir and add newline to Copilot CLI log ([540b2b1](https://github.com/rust142/geeto/commit/540b2b1))
+
 ## [0.6.4](https://github.com/rust142/geeto/compare/v0.6.3...v0.6.4) (2026-02-22)
 
 ### Features
