@@ -229,7 +229,7 @@ const ensureClient = async (): Promise<boolean> => {
     }
 
     try {
-      log.info(`Using system Copilot CLI (v${systemCli.version})`)
+      log.info(`Using system Copilot CLI (v${systemCli.version})\n`)
       client = new CopilotClient({ cliPath: systemCli.path, autoStart: true })
       await client.start()
       return true
