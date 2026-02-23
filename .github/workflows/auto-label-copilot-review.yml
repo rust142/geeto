@@ -31,7 +31,7 @@ jobs:
           fetch-depth: 0
 
       - name: Ensure AI-related labels exist
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             // Common single-word labels that should trigger AI assessment
@@ -67,7 +67,7 @@ jobs:
 
       - name: Prepare issue context
         id: prepare_issue
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             // Robustly determine issue number from workflow input or event payload
@@ -96,7 +96,7 @@ jobs:
 
       - name: Add 'copilot' label to issue
         if: ${{ steps.prepare_issue.outputs.issue_number != '' }}
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const labelName = 'copilot';
@@ -110,7 +110,7 @@ jobs:
 
       - name: Auto-detect category labels from title/body (heuristic)
         if: ${{ steps.prepare_issue.outputs.issue_number != '' }}
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const issueNumber = Number('${{ steps.prepare_issue.outputs.issue_number }}');
@@ -183,7 +183,7 @@ jobs:
 
       - name: Post consolidated formatted comment
         if: ${{ steps.prepare_issue.outputs.issue_number != '' }}
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           AI_ASSESSMENTS: ${{ steps.ai-assessment.outputs.ai_assessments }}
           ISSUE_NUMBER: ${{ steps.prepare_issue.outputs.issue_number }}
