@@ -44,6 +44,13 @@ sudo dpkg -i geeto.deb
 rm geeto.deb
 ```
 
+### Scoop (Windows)
+
+```bash
+scoop bucket add indra87g_awesome-indonesia-dev https://github.com/indra87g/awesome-indonesia-dev
+scoop install indra87g_awesome-indonesia-dev/geeto
+```
+
 ### NPM / Bun
 
 ```bash
