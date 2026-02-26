@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.6.6](https://github.com/rust142/geeto/compare/v0.6.5...v0.6.6) (2026-02-26)
+
+### Features
+
+* feat(cli): add interactive arrow-key toggle to confirm prompt ([1b524e7](https://github.com/rust142/geeto/commit/1b524e7))
+
+### Other Changes
+
+* refactor(cli): centralize logging, spinner handling, and AI provider routing ([ef96064](https://github.com/rust142/geeto/commit/ef96064))
+
 ## [0.6.5](https://github.com/rust142/geeto/compare/v0.6.4...v0.6.5) (2026-02-23)
 
 ### Other Changes

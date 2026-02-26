@@ -1,5 +1,20 @@
 # Releases
 
+## v0.6.6 — February 26, 2026
+
+### What's New?
+
+#### New Features
+
+- Added an interactive arrow-key toggle to confirmation prompts for easier keyboard navigation.
+
+#### Other Improvements
+
+- Improved logging and progress spinner behavior for clearer, more consistent output.
+- Made AI provider selection and routing more reliable for smoother AI-powered features.
+
+---
+
 ## v0.6.5 — February 23, 2026
 
 ### What's New?
