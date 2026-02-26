@@ -338,6 +338,14 @@ export const select = async (question: string, options: SelectOption[]): Promise
 export const multiSelect = async (question: string, options: SelectOption[]): Promise<string[]> => {
   return new Promise((resolve) => {
     let selectedIndex = 0
+    // Skip initial disabled items (but allow group headers with children)
+    while (
+      selectedIndex < options.length &&
+      options[selectedIndex]?.disabled &&
+      !options[selectedIndex]?.children
+    ) {
+      selectedIndex++
+    }
     const maxVisibleItems = 15
     let scrollOffset = 0
     let searchMode = false
@@ -346,6 +354,35 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
     let rangeQuery = ''
     let filteredOptions = options
     const checked = new Set<string>()
+    const totalSelectable = options.filter((o) => !o.disabled && !o.children).length
+
+    /** Group header values to filter out from results */
+    const groupValues = new Set(options.filter((o) => o.children).map((o) => o.value))
+
+    /** Get checked values excluding group header values */
+    const getResult = () => [...checked].filter((v) => !groupValues.has(v))
+
+    /** Skip over disabled items when navigating (group headers with children are NOT skipped) */
+    const skipDisabled = (dir: 1 | -1): void => {
+      while (
+        filteredOptions[selectedIndex]?.disabled &&
+        !filteredOptions[selectedIndex]?.children &&
+        selectedIndex >= 0 &&
+        selectedIndex < filteredOptions.length
+      ) {
+        selectedIndex += dir
+      }
+      // Clamp
+      if (selectedIndex < 0) selectedIndex = 0
+      if (selectedIndex >= filteredOptions.length) selectedIndex = filteredOptions.length - 1
+      // If still on disabled (and not a group header), find nearest enabled
+      if (filteredOptions[selectedIndex]?.disabled && !filteredOptions[selectedIndex]?.children) {
+        const idx = filteredOptions.findIndex(
+          (o) => !o.disabled || (o.children && o.children.length > 0)
+        )
+        if (idx !== -1) selectedIndex = idx
+      }
+    }
 
     const filterOptions = (query: string) => {
       if (!query) return options
@@ -370,16 +407,38 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
       str.replaceAll(/\u001B\[\d*;?\d*m|\u001B\]8;;[^\u0007]*\u0007/g, '')
 
     const renderItem = (opt: SelectOption, idx: number) => {
+      // Group header (folder) — selectable, toggles children
+      if (opt.children && opt.children.length > 0) {
+        const checkedCount = opt.children.filter((v) => checked.has(v)).length
+        const total = opt.children.length
+        const cursor = idx === selectedIndex ? `${colors.cyan}❯${colors.reset}` : ' '
+        let box: string
+        if (checkedCount === total) {
+          box = `${colors.green}◉${colors.reset}`
+        } else if (checkedCount > 0) {
+          box = `${colors.yellow}◐${colors.reset}`
+        } else {
+          box = `${colors.gray}○${colors.reset}`
+        }
+        const label =
+          idx === selectedIndex
+            ? `${colors.cyan}${colors.bright}${opt.label}${colors.reset}`
+            : `${colors.bright}${opt.label}${colors.reset}`
+        return `${cursor} ${box} ${label}`
+      }
+
+      // Disabled items are non-interactive separators
+      if (opt.disabled) {
+        return `  ${colors.bright}${opt.label}${colors.reset}`
+      }
       const cursor = idx === selectedIndex ? `${colors.cyan}❯${colors.reset}` : ' '
       const box = checked.has(opt.value)
         ? `${colors.green}◉${colors.reset}`
         : `${colors.gray}○${colors.reset}`
-      // Show 1-based number for quick range selection
-      const num = `${colors.gray}${String(idx + 1).padStart(2, ' ')}${colors.reset}`
 
       // Truncate label to fit terminal width
       const cols = process.stdout.columns || 80
-      const prefixLen = 5 + Math.max(2, String(idx + 1).length) // "❯ ◉ XX "
+      const prefixLen = 5 // "❯ ◉ "
       const maxLabelLen = cols - prefixLen - 1
       const visibleLabel = stripAnsi(opt.label)
       let displayLabel = opt.label
@@ -396,67 +455,45 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
             ? `${colors.cyan}${colors.bright}${opt.label}${colors.reset}`
             : `${colors.gray}${opt.label}${colors.reset}`
       }
-      return `${cursor} ${box} ${num} ${displayLabel}`
+      return `${cursor} ${box} ${displayLabel}`
     }
-
-    // Track how many lines the previous render produced (for accurate clearing)
-    let lastRenderedLines = 0
 
     const renderMenu = () => {
       const { start, end } = getVisibleRange()
 
-      // If range mode, cursor is on the range input line (no newline was written)
-      // First clear current line, then go up for the rest
-      if (rangeMode) {
-        process.stdout.write('\u001B[2K\r') // Clear current range input line
-      }
-
-      // Clear exactly the number of lines the PREVIOUS render produced
-      for (let i = 0; i < lastRenderedLines; i++) {
-        process.stdout.write('\u001B[1A\u001B[2K')
-      }
-
-      let linesRendered = 0
+      // Restore cursor to right after question line and clear everything below
+      process.stdout.write('\u001B8\u001B[J')
 
       if (searchMode) {
         console.log(`${colors.cyan}/ search:${colors.reset} ${searchQuery}`)
-        linesRendered++
       }
 
-      // Count line
       console.log(
-        `${colors.gray}  Selected: ${colors.cyan}${checked.size}${colors.gray}/${options.length}${colors.reset}`
+        `${colors.gray}  Selected: ${colors.cyan}${checked.size}${colors.gray}/${totalSelectable}${colors.reset}`
       )
-      linesRendered++
 
       // Scroll indicator: items above
       const above = start
       if (above > 0) {
         console.log(`${colors.gray}  ↑ ${above} more above${colors.reset}`)
-        linesRendered++
       }
 
       console.log('') // Blank line
-      linesRendered++
 
       for (let idx = start; idx < end; idx++) {
         const opt = filteredOptions[idx]
         if (!opt) continue
         console.log(renderItem(opt, idx))
-        linesRendered++
       }
 
       // Scroll indicator: items below
       const below = filteredOptions.length - end
       if (below > 0) {
         console.log('')
-        linesRendered++
         console.log(`${colors.gray}  ↓ ${below} more below${colors.reset}`)
-        linesRendered++
       }
 
       console.log('') // Separator before hint
-      linesRendered++
 
       // Hint line at bottom
       const hintText = rangeMode
@@ -465,61 +502,19 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
           ? `  (Esc cancel search, Space toggle, Enter confirm)`
           : `  (↑↓/jk Space toggle, 'a' all, 'n' none, '#' range, / search, Enter confirm, 'q' quit)`
       console.log(`${colors.gray}${hintText}${colors.reset}`)
-      linesRendered++
 
       // Range input at the very bottom (no newline so cursor stays at end)
       if (rangeMode) {
         process.stdout.write(`${colors.cyan}# range:${colors.reset} ${rangeQuery}`)
       }
-
-      lastRenderedLines = linesRendered
     }
+
+    // Print question line and save cursor position (DEC save)
+    console.log(`${colors.cyan}?${colors.reset} ${question}`)
+    process.stdout.write('\u001B7')
 
     // Initial render
-    console.log(`${colors.cyan}?${colors.reset} ${question}`)
-    {
-      let initLines = 0
-      console.log(
-        `${colors.gray}  Selected: ${colors.cyan}${checked.size}${colors.gray}/${options.length}${colors.reset}`
-      )
-      initLines++
-
-      const { start, end } = getVisibleRange()
-
-      const above = start
-      if (above > 0) {
-        console.log(`${colors.gray}  ↑ ${above} more above${colors.reset}`)
-        initLines++
-      }
-
-      console.log('')
-      initLines++
-
-      for (let idx = start; idx < end; idx++) {
-        const opt = filteredOptions[idx]
-        if (!opt) continue
-        console.log(renderItem(opt, idx))
-        initLines++
-      }
-
-      // Scroll indicator: items below
-      const below = filteredOptions.length - end
-      if (below > 0) {
-        console.log('')
-        initLines++
-        console.log(`${colors.gray}  ↓ ${below} more below${colors.reset}`)
-        initLines++
-      }
-
-      // Hint at bottom
-      console.log('')
-      initLines++
-      console.log(
-        `${colors.gray}  (↑↓/jk Space toggle, 'a' all, 'n' none, '#' range, / search, Enter confirm, 'q' quit)${colors.reset}`
-      )
-      initLines++
-      lastRenderedLines = initLines
-    }
+    renderMenu()
 
     if (process.stdin.isTTY) {
       process.stdin.setRawMode(true)
@@ -628,11 +623,20 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
 
         if (keyStr === ' ') {
           const opt = filteredOptions[selectedIndex]
-          if (opt) {
-            if (checked.has(opt.value)) {
-              checked.delete(opt.value)
+          if (opt && !opt.disabled) {
+            if (opt.children && opt.children.length > 0) {
+              const allChecked = opt.children.every((v) => checked.has(v))
+              if (allChecked) {
+                for (const v of opt.children) checked.delete(v)
+              } else {
+                for (const v of opt.children) checked.add(v)
+              }
             } else {
-              checked.add(opt.value)
+              if (checked.has(opt.value)) {
+                checked.delete(opt.value)
+              } else {
+                checked.add(opt.value)
+              }
             }
           }
           renderMenu()
@@ -641,7 +645,7 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
 
         if (keyStr === '\r' || keyStr === '\n') {
           cleanup()
-          resolve([...checked])
+          resolve(getResult())
           return
         }
 
@@ -649,6 +653,7 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
           searchQuery = searchQuery.slice(0, -1)
           filteredOptions = filterOptions(searchQuery)
           selectedIndex = 0
+          skipDisabled(1)
           scrollOffset = 0
           renderMenu()
           return
@@ -656,12 +661,14 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
 
         if (keyStr === '\u001B[A' || keyStr === 'k') {
           selectedIndex = selectedIndex > 0 ? selectedIndex - 1 : filteredOptions.length - 1
+          skipDisabled(-1)
           renderMenu()
           return
         }
 
         if (keyStr === '\u001B[B' || keyStr === 'j') {
           selectedIndex = selectedIndex < filteredOptions.length - 1 ? selectedIndex + 1 : 0
+          skipDisabled(1)
           renderMenu()
           return
         }
@@ -697,23 +704,35 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
         case '\u001B[A':
         case 'k': {
           selectedIndex = selectedIndex > 0 ? selectedIndex - 1 : filteredOptions.length - 1
+          skipDisabled(-1)
           renderMenu()
           break
         }
         case '\u001B[B':
         case 'j': {
           selectedIndex = selectedIndex < filteredOptions.length - 1 ? selectedIndex + 1 : 0
+          skipDisabled(1)
           renderMenu()
           break
         }
         case ' ': {
-          // Toggle current item
+          // Toggle current item (skip disabled)
           const opt = filteredOptions[selectedIndex]
-          if (opt) {
-            if (checked.has(opt.value)) {
-              checked.delete(opt.value)
+          if (opt && !opt.disabled) {
+            if (opt.children && opt.children.length > 0) {
+              // Group header: toggle all children
+              const allChecked = opt.children.every((v) => checked.has(v))
+              if (allChecked) {
+                for (const v of opt.children) checked.delete(v)
+              } else {
+                for (const v of opt.children) checked.add(v)
+              }
             } else {
-              checked.add(opt.value)
+              if (checked.has(opt.value)) {
+                checked.delete(opt.value)
+              } else {
+                checked.add(opt.value)
+              }
             }
           }
           renderMenu()
@@ -721,9 +740,9 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
         }
         case 'a':
         case 'A': {
-          // Select all
+          // Select all (only non-disabled, non-group-header)
           for (const opt of options) {
-            checked.add(opt.value)
+            if (!opt.disabled && !opt.children) checked.add(opt.value)
           }
           renderMenu()
           break
@@ -738,7 +757,7 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
         case '\r':
         case '\n': {
           cleanup()
-          resolve([...checked])
+          resolve(getResult())
           break
         }
         case 'q':
@@ -752,45 +771,8 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
         case 'C': {
           console.clear()
           console.log(`${colors.cyan}?${colors.reset} ${question}`)
-          let clearLines = 0
-          console.log(
-            `${colors.gray}  Selected: ${colors.cyan}${checked.size}${colors.gray}/${options.length}${colors.reset}`
-          )
-          clearLines++
-
-          const { start, end } = getVisibleRange()
-
-          const aboveC = start
-          if (aboveC > 0) {
-            console.log(`${colors.gray}  ↑ ${aboveC} more above${colors.reset}`)
-            clearLines++
-          }
-
-          console.log('')
-          clearLines++
-
-          for (let idx = start; idx < end; idx++) {
-            const opt = filteredOptions[idx]
-            if (!opt) continue
-            console.log(renderItem(opt, idx))
-            clearLines++
-          }
-
-          const belowC = filteredOptions.length - end
-          if (belowC > 0) {
-            console.log('')
-            clearLines++
-            console.log(`${colors.gray}  ↓ ${belowC} more below${colors.reset}`)
-            clearLines++
-          }
-
-          console.log('')
-          clearLines++
-          console.log(
-            `${colors.gray}  (↑↓/jk Space toggle, 'a' all, 'n' none, '#' range, / search, Enter confirm, 'q' quit)${colors.reset}`
-          )
-          clearLines++
-          lastRenderedLines = clearLines
+          process.stdout.write('\u001B7') // Re-save cursor after clear
+          renderMenu()
           break
         }
       }

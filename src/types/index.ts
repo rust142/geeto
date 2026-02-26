@@ -5,6 +5,10 @@ import type { OpenRouterModel } from '../api/openrouter.js'
 export interface SelectOption {
   label: string
   value: string
+  /** When true, item is shown but cannot be selected (e.g. separators). */
+  disabled?: boolean
+  /** Child values — toggling this item toggles all children (group header). */
+  children?: string[]
 }
 
 export interface GeetoState {

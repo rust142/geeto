@@ -11,7 +11,7 @@ import { handleCommitWorkflow } from './commit.js'
 import { handleCleanup, handleMerge, handlePush } from './main-steps.js'
 import { showSettingsMenu } from './settings.js'
 import { closeInput, confirm } from '../cli/input.js'
-import { select } from '../cli/menu.js'
+import { multiSelect, select } from '../cli/menu.js'
 import { STEP, TASK_PLATFORMS } from '../core/constants.js'
 import { colors } from '../utils/colors.js'
 import {
@@ -21,6 +21,7 @@ import {
   setSkipTrelloPrompt,
 } from '../utils/config.js'
 import {
+  buildFileSelectOptions,
   displayChangedFiles,
   displayCompletionSummary,
   displayCurrentProviderStatus,
@@ -539,7 +540,7 @@ export const main = async (opts?: {
           log.step(`Step 1: Stage Changes  ${getStepProgress(1)}`)
         }
 
-        let stageChoice: 'all' | 'skip' | 'without' | 'cancel'
+        let stageChoice: 'all' | 'select' | 'skip' | 'without' | 'cancel'
         if (opts?.stageAll) {
           stageChoice = 'all'
           if (!suppressLogs) {
@@ -548,16 +549,30 @@ export const main = async (opts?: {
         } else {
           stageChoice = (await select('What to stage?', [
             { label: 'Stage all changes', value: 'all' },
+            { label: 'Select files to stage', value: 'select' },
             { label: 'Already staged', value: 'skip' },
             { label: 'Continue without staging', value: 'without' },
             { label: 'Cancel', value: 'cancel' },
-          ])) as 'all' | 'skip' | 'without' | 'cancel'
+          ])) as 'all' | 'select' | 'skip' | 'without' | 'cancel'
         }
 
         switch (stageChoice) {
           case 'all': {
             exec('git add -A')
             log.success('All changes staged')
+            break
+          }
+          case 'select': {
+            const fileOptions = buildFileSelectOptions(changedWithStatus)
+            const selectedFiles = await multiSelect('Select files to stage:', fileOptions)
+            if (selectedFiles.length > 0) {
+              for (const file of selectedFiles) {
+                exec(`git add "${file}"`, true)
+              }
+              log.success(`Staged ${selectedFiles.length} files`)
+            } else {
+              log.info('No files selected')
+            }
             break
           }
           case 'without': {

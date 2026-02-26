@@ -1,5 +1,48 @@
 # Changelog
 
+## [0.6.6](https://github.com/rust142/geeto/compare/v0.6.5...v0.6.6) (2026-02-26)
+
+### Features
+
+* feat(cli): add interactive arrow-key toggle to confirm prompt ([1b524e7](https://github.com/rust142/geeto/commit/1b524e7))
+
+### Other Changes
+
+* refactor(cli): centralize logging, spinner handling, and AI provider routing ([ef96064](https://github.com/rust142/geeto/commit/ef96064))
+
+## [0.6.5](https://github.com/rust142/geeto/compare/v0.6.4...v0.6.5) (2026-02-23)
+
+### Other Changes
+
+* chore(repo): ignore instructions dir and add newline to Copilot CLI log ([540b2b1](https://github.com/rust142/geeto/commit/540b2b1))
+
+## [0.6.4](https://github.com/rust142/geeto/compare/v0.6.3...v0.6.4) (2026-02-22)
+
+### Features
+
+* feat(api): add system Copilot CLI fallback and Windows support ([5d6fe37](https://github.com/rust142/geeto/commit/5d6fe37))
+
+## [0.6.3](https://github.com/rust142/geeto/compare/v0.6.2...v0.6.3) (2026-02-22)
+
+### Bug Fixes
+
+* fix(copilot-sdk): Ensure Bun compatibility for internal CLI ([d92ad5f](https://github.com/rust142/geeto/commit/d92ad5f))
+
+## [0.6.2](https://github.com/rust142/geeto/compare/v0.6.1...v0.6.2) (2026-02-22)
+
+### Features
+
+* feat(cli): add rich commit history and project task linking ([304cdf3](https://github.com/rust142/geeto/commit/304cdf3))
+* feat(reword): refine commit format consistency checks ([dea1696](https://github.com/rust142/geeto/commit/dea1696))
+* feat(reword): add consistency checks, enhanced UI, and rebase safety ([55b9696](https://github.com/rust142/geeto/commit/55b9696))
+* feat(cli): add new Git commands and update project info ([fe73c95](https://github.com/rust142/geeto/commit/fe73c95))
+
+### Other Changes
+
+* chore(cspell): add new words to dictionary ([58ec047](https://github.com/rust142/geeto/commit/58ec047))
+* chore(release): v0.6.1 ([9632430](https://github.com/rust142/geeto/commit/9632430))
+* chore(release): publish v0.6.1 as a version-only update ([40c6736](https://github.com/rust142/geeto/commit/40c6736))
+
 ## [0.6.1](https://github.com/rust142/geeto/compare/v0.6.0...v0.6.1) (2026-02-21)
 
 ### Features
