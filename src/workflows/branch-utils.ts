@@ -64,7 +64,7 @@ export const createBranch = async (name: string, currentBranch: string): Promise
   }
 
   const spinner = log.spinner()
-  spinner.start(`Creating branch: ${name}`)
+  spinner.start(`Creating branch: ${name}...`)
   const result = await safeCheckout(name, { create: true })
   if (!result.success) {
     spinner.fail(`Failed to create branch: ${result.error}`)

@@ -9,7 +9,8 @@ import { withSpinnerSync } from './spinner-wrapper.js'
 
 /* ──────────────────────────── box helpers ──────────────────────────── */
 
-const BOX_W = 56
+/** Standard width for box content. Used across workflows for visual consistency. */
+export const BOX_W = 56
 
 function boxTop(title: string): string {
   const pad = BOX_W - title.length - 3

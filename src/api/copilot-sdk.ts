@@ -209,12 +209,15 @@ const ensureClient = async (): Promise<boolean> => {
 
     if (!isMissingModule) {
       // Not a resolution error — report and bail out
+      log.clearLine()
+      log.gap()
       if (bundledMsg.includes('headless') || bundledMsg.includes('Unknown flag')) {
         log.info('Copilot SDK: bundled CLI does not support --headless (Bun compat issue).')
         log.info('Upgrade SDK: bun add @github/copilot-sdk@latest')
       } else {
         log.info(`Copilot SDK unavailable: ${bundledMsg}`)
       }
+      log.gap()
       client = null
       return false
     }
@@ -222,20 +225,29 @@ const ensureClient = async (): Promise<boolean> => {
     // ── Attempt 2: system Copilot CLI (standalone native binary) ────────
     const systemCli = findBestCopilotBinary()
     if (!systemCli) {
+      log.clearLine()
+      log.gap()
       log.info('Copilot SDK: bundled CLI not found and no system Copilot CLI available.')
       log.info('Install Copilot CLI: brew install copilot-cli')
+      log.gap()
       client = null
       return false
     }
 
     try {
-      log.info(`Using system Copilot CLI (v${systemCli.version})\n`)
+      log.clearLine()
+      log.gap()
+      log.info(`Using system Copilot CLI (v${systemCli.version})`)
+      log.gap()
       client = new CopilotClient({ cliPath: systemCli.path, autoStart: true })
       await client.start()
       return true
     } catch (systemError: unknown) {
       const sysMsg = systemError instanceof Error ? systemError.message : String(systemError)
+      log.clearLine()
+      log.gap()
       log.info(`System Copilot CLI failed: ${sysMsg}`)
+      log.gap()
       client = null
       return false
     }
@@ -327,7 +339,8 @@ export const generateBranchName = async (
         .replaceAll(/^-|-$/g, '')
       return cleaned || null
     } catch (error) {
-      console.log('') // Force newline to separate from any active spinner
+      log.clearLine()
+      log.gap()
       log.error('Copilot Error: ' + String(error))
       return null
     }
@@ -365,7 +378,8 @@ fetching. Updates .gitignore for geeto binaries.`
       const normalized = cleaned.replaceAll(/\n\s*\n+/g, '\n\n').trim()
       return normalized && normalized.length >= 8 ? normalized : null
     } catch (error) {
-      console.log('') // Force newline to separate from any active spinner
+      log.clearLine()
+      log.gap()
       log.error('Copilot Error: ' + String(error))
       return null
     }
@@ -604,7 +618,8 @@ Formatting (follow EXACTLY — this is markdownlint-compliant):
         .trim()
       return cleaned || null
     } catch (error) {
-      console.log('')
+      log.clearLine()
+      log.gap()
       log.error('Copilot Error: ' + String(error))
       return null
     }

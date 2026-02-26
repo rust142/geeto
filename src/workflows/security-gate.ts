@@ -12,6 +12,7 @@ import { confirm } from '../cli/input.js'
 import { multiSelect, select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
 import { exec } from '../utils/exec.js'
+import { generateCommitMessageWithProvider } from '../utils/git-ai.js'
 import { getCurrentBranch, getStagedFiles } from '../utils/git.js'
 import { log } from '../utils/logging.js'
 import { loadState } from '../utils/state.js'
@@ -361,23 +362,14 @@ async function runSecurityScan(
     let result: string | null = null
 
     // Use generateCommitMessage as a generic text generator
-    switch (aiProvider) {
-      case 'gemini': {
-        const { generateCommitMessage } = await import('../api/gemini.js')
-        result = await generateCommitMessage(prompt, undefined, model as GeminiModel)
-        break
-      }
-      case 'copilot': {
-        const { generateCommitMessage } = await import('../api/copilot.js')
-        result = await generateCommitMessage(prompt, undefined, model as CopilotModel)
-        break
-      }
-      case 'openrouter': {
-        const { generateCommitMessage } = await import('../api/openrouter.js')
-        result = await generateCommitMessage(prompt, undefined, model as OpenRouterModel)
-        break
-      }
-    }
+    result = await generateCommitMessageWithProvider(
+      aiProvider,
+      prompt,
+      undefined,
+      model as CopilotModel,
+      model as OpenRouterModel,
+      model as GeminiModel
+    )
 
     spinner.stop()
 
@@ -388,8 +380,7 @@ async function runSecurityScan(
     log.warn('AI returned empty response')
     return null
   } catch (error) {
-    spinner.stop()
-    log.error(`Failed to analyze security: ${error}`)
+    spinner.fail(`Failed to analyze security: ${error}`)
     return null
   }
 }

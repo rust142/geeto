@@ -6,6 +6,7 @@
 import { confirm } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
+import { BOX_W } from '../utils/display.js'
 import { exec, execSilent } from '../utils/exec.js'
 import { getCurrentBranch } from '../utils/git.js'
 import { log } from '../utils/logging.js'
@@ -98,7 +99,7 @@ export const handleUndo = async (): Promise<void> => {
   }
 
   // Show what happened
-  const line = '─'.repeat(56)
+  const line = '─'.repeat(BOX_W)
   console.log(`${colors.cyan}┌${line}┐${colors.reset}`)
   console.log(
     `${colors.cyan}│${colors.reset} ${colors.bright}Last action on ${colors.green}${branch}${colors.reset}`

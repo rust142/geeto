@@ -72,6 +72,18 @@ export const log = {
   divider: () => {
     console.log(`${colors.gray}${'─'.repeat(58)}${colors.reset}`)
   },
+  /** Print a blank line for spacing between sections. */
+  gap: () => {
+    console.log('')
+  },
+  /**
+   * Clear the current terminal line.
+   * Useful before printing messages while a spinner/animation is active,
+   * so the spinner frame doesn't leave artefacts on the same line.
+   */
+  clearLine: () => {
+    process.stdout.write('\r\u001B[K')
+  },
   spinner: () => new Spinner(),
   banner: () => {
     console.log('')
