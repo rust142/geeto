@@ -410,8 +410,7 @@ export async function handleMerge(
           if (hasCommitsToPush) {
             pushProgress.succeed(`Pushed ${currentBranch} to remote`)
           } else {
-            pushProgress.stop()
-            log.info(`Branch ${currentBranch} is already up to date with remote`)
+            pushProgress.succeed(`Branch ${currentBranch} is already up to date with remote`)
           }
         } catch (error) {
           pushProgress.fail('Push failed')
@@ -456,8 +455,7 @@ export async function handleCleanup(featureBranch: string, state: GeetoState): P
                 `cleaning up origin/${featureBranch}...`,
               ])
               await execAsync(`git push origin --delete ${featureBranch}`, true)
-              deleteProgress.stop()
-              log.success(`Remote branch '${featureBranch}' deleted`)
+              deleteProgress.succeed(`Remote branch '${featureBranch}' deleted`)
             } catch {
               // Remote branch might not exist, ignore error
             }
@@ -503,8 +501,7 @@ export async function handleCleanup(featureBranch: string, state: GeetoState): P
                       `cleaning up origin/${featureBranch}...`,
                     ])
                     await execAsync(`git push origin --delete ${featureBranch}`, true)
-                    deleteProgress.stop()
-                    log.success(`Remote branch '${featureBranch}' deleted`)
+                    deleteProgress.succeed(`Remote branch '${featureBranch}' deleted`)
                   } catch {
                     // Remote branch might not exist, ignore error
                   }

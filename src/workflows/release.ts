@@ -12,6 +12,7 @@ import type { OpenRouterModel } from '../api/openrouter.js'
 import { askQuestion, confirm, editInline } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
+import { BOX_W } from '../utils/display.js'
 import { exec, execAsync, execSilent } from '../utils/exec.js'
 import {
   chooseModelForProvider,
@@ -353,7 +354,7 @@ const getExistingGithubReleases = (): string[] => {
 }
 
 const handleSyncReleases = async (): Promise<void> => {
-  const line = '─'.repeat(56)
+  const line = '─'.repeat(BOX_W)
 
   // Check if gh CLI is available
   try {
@@ -533,15 +534,15 @@ const handleSyncReleases = async (): Promise<void> => {
 
         // Preview notes for user review
         console.log('')
-        console.log(`${colors.cyan}┌${'─'.repeat(56)}┐${colors.reset}`)
+        console.log(`${colors.cyan}┌${'─'.repeat(BOX_W)}┐${colors.reset}`)
         console.log(
           `${colors.cyan}│${colors.reset} ${colors.bright}Release Notes — ${tag}${colors.reset}`
         )
-        console.log(`${colors.cyan}├${'─'.repeat(56)}┤${colors.reset}`)
+        console.log(`${colors.cyan}├${'─'.repeat(BOX_W)}┤${colors.reset}`)
         for (const noteLine of releaseBody.split('\n')) {
           console.log(`${colors.cyan}│${colors.reset} ${noteLine}`)
         }
-        console.log(`${colors.cyan}└${'─'.repeat(56)}┘${colors.reset}`)
+        console.log(`${colors.cyan}└${'─'.repeat(BOX_W)}┘${colors.reset}`)
 
         console.log('')
         const reviewAction = await select(`Publish release for ${tag}?`, [
@@ -697,7 +698,7 @@ const handleDeleteReleases = async (): Promise<void> => {
 // ─── Recover missing tags ───
 
 const handleRecoverTags = async (): Promise<void> => {
-  const line = '─'.repeat(56)
+  const line = '─'.repeat(BOX_W)
 
   console.log('')
   const spinner = log.spinner()
@@ -881,7 +882,7 @@ export const handleRelease = async (): Promise<void> => {
   const lastTag = tags[0] ?? ''
 
   // Show current state
-  const line = '─'.repeat(56)
+  const line = '─'.repeat(BOX_W)
   console.log(`${colors.cyan}┌${line}┐${colors.reset}`)
   console.log(
     `${colors.cyan}│${colors.reset} ${colors.bright}Current version: ${colors.yellow}v${currentVersion}${colors.reset}`
@@ -1107,15 +1108,15 @@ export const handleRelease = async (): Promise<void> => {
       aiReleaseNotes = result
 
       // Preview
-      console.log(`${colors.cyan}┌${'─'.repeat(56)}┐${colors.reset}`)
+      console.log(`${colors.cyan}┌${'─'.repeat(BOX_W)}┐${colors.reset}`)
       console.log(
         `${colors.cyan}│${colors.reset} ${colors.bright}Release Notes Preview${colors.reset}`
       )
-      console.log(`${colors.cyan}├${'─'.repeat(56)}┤${colors.reset}`)
+      console.log(`${colors.cyan}├${'─'.repeat(BOX_W)}┤${colors.reset}`)
       for (const line of aiReleaseNotes.split('\n')) {
         console.log(`${colors.cyan}│${colors.reset} ${line}`)
       }
-      console.log(`${colors.cyan}└${'─'.repeat(56)}┘${colors.reset}`)
+      console.log(`${colors.cyan}└${'─'.repeat(BOX_W)}┘${colors.reset}`)
       console.log('')
 
       const action = await select('Accept these release notes?', [

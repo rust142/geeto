@@ -282,7 +282,7 @@ export const handleInteractiveCleanup = async (): Promise<void> => {
       try {
         // Try normal delete first with spinner
         const spinner = log.spinner()
-        spinner.start(`Deleting local: ${branch.name}`)
+        spinner.start(`Deleting local: ${branch.name}...`)
         try {
           exec(`git branch -d "${branch.name}"`, true)
           spinner.succeed(`Deleted local: ${branch.name}`)
@@ -295,7 +295,7 @@ export const handleInteractiveCleanup = async (): Promise<void> => {
           console.log('')
           if (forceDelete) {
             const spinner2 = log.spinner()
-            spinner2.start(`Force deleting local: ${branch.name}`)
+            spinner2.start(`Force deleting local: ${branch.name}...`)
             try {
               exec(`git branch -D "${branch.name}"`, true)
               spinner2.succeed(`Force deleted local: ${branch.name}`)
@@ -319,7 +319,7 @@ export const handleInteractiveCleanup = async (): Promise<void> => {
     if (branch.hasRemote) {
       try {
         const spinner = log.spinner()
-        spinner.start(`Deleting remote: ${branch.name}`)
+        spinner.start(`Deleting remote: ${branch.name}...`)
         try {
           await execAsync(`git push origin --delete "${branch.name}"`, true)
           spinner.succeed(`Deleted remote: ${branch.name}`)

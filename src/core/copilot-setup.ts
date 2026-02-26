@@ -163,8 +163,7 @@ const setupGitHubCLI = (): boolean => {
 
       return true
     } catch (error) {
-      spinner.stop()
-      log.error(`Failed to install GitHub CLI: ${error}`)
+      spinner.fail(`Failed to install GitHub CLI: ${error}`)
       log.info('Please install GitHub CLI manually from: https://cli.github.com')
       if (platform === 'win32') {
         log.info('After installation, you may need to add it to PATH manually.')

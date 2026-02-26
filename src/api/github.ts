@@ -97,7 +97,8 @@ export const createPullRequest = async (params: GitHubPRParams): Promise<GitHubP
         errors?: Array<{ message: string }>
       }
       const details = error.errors?.map((e) => e.message).join(', ') ?? ''
-      console.log('')
+      log.clearLine()
+      log.gap()
       log.error(
         'GitHub API error: ' + `${response.status} - ` + `${error.message ?? response.statusText}`
       )
@@ -108,7 +109,8 @@ export const createPullRequest = async (params: GitHubPRParams): Promise<GitHubP
     return (await response.json()) as GitHubPR
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error)
-    console.log('')
+    log.clearLine()
+    log.gap()
     log.error(`Failed to create PR: ${msg}`)
     return null
   }
@@ -134,7 +136,8 @@ export const listPullRequests = async (
     const response = await githubFetch(`/repos/${owner}/${repo}/pulls?` + `${params.toString()}`)
 
     if (!response.ok) {
-      console.log('')
+      log.clearLine()
+      log.gap()
       log.warn('GitHub API error: ' + `${response.status} ${response.statusText}`)
       return []
     }
@@ -142,7 +145,8 @@ export const listPullRequests = async (
     return (await response.json()) as GitHubPR[]
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error)
-    console.log('')
+    log.clearLine()
+    log.gap()
     log.warn(`Failed to list PRs: ${msg}`)
     return []
   }
@@ -212,7 +216,8 @@ export const createIssue = async (params: GitHubIssueParams): Promise<GitHubIssu
         errors?: Array<{ message: string }>
       }
       const details = error.errors?.map((e) => e.message).join(', ') ?? ''
-      console.log('')
+      log.clearLine()
+      log.gap()
       log.error(
         'GitHub API error: ' + `${response.status} - ` + `${error.message ?? response.statusText}`
       )
@@ -223,7 +228,8 @@ export const createIssue = async (params: GitHubIssueParams): Promise<GitHubIssu
     return (await response.json()) as GitHubIssue
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error)
-    console.log('')
+    log.clearLine()
+    log.gap()
     log.error(`Failed to create issue: ${msg}`)
     return null
   }

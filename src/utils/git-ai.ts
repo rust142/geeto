@@ -150,6 +150,31 @@ export async function generateTextWithProvider(
   }
 }
 
+/** Ask the right provider to generate a commit message from a diff. */
+export async function generateCommitMessageWithProvider(
+  aiProvider: string,
+  diff: string,
+  correction?: string,
+  copilotModel?: CopilotModel,
+  openrouterModel?: OpenRouterModel,
+  geminiModel?: GeminiModel
+): Promise<string | null> {
+  switch (aiProvider) {
+    case 'gemini': {
+      const { generateCommitMessage } = await import('../api/gemini.js')
+      return generateCommitMessage(diff, correction, geminiModel as GeminiModel)
+    }
+    case 'copilot': {
+      const { generateCommitMessage } = await import('../api/copilot.js')
+      return generateCommitMessage(diff, correction, copilotModel)
+    }
+    default: {
+      const { generateCommitMessage } = await import('../api/openrouter.js')
+      return generateCommitMessage(diff, correction, openrouterModel)
+    }
+  }
+}
+
 /**
  * Interactive fallback menu when AI generation fails.
  */
