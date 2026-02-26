@@ -2,6 +2,8 @@
  * Display helpers for showing git and provider status
  */
 
+import type { SelectOption } from '../types/index.js'
+
 import { colors } from './colors.js'
 import { getTrelloConfig } from './config.js'
 import { getGitUser, getRemoteUrl, getUpstreamBranch } from './git-commands.js'
@@ -215,4 +217,62 @@ export function displayCompletionSummary(state: {
     )
   }
   console.log('')
+}
+/**
+ * Group files by their parent folder, sorted alphabetically.
+ */
+export function groupFilesByFolder(
+  files: { status: string; file: string }[]
+): { folder: string; files: { status: string; file: string }[] }[] {
+  const groups = new Map<string, { status: string; file: string }[]>()
+
+  for (const f of files) {
+    const lastSlash = f.file.lastIndexOf('/')
+    const folder = lastSlash === -1 ? '.' : f.file.slice(0, lastSlash)
+    if (!groups.has(folder)) groups.set(folder, [])
+    const group = groups.get(folder)
+    if (group) group.push(f)
+  }
+
+  // Sort groups by folder name, root (.) first
+  const entries = [...groups.entries()]
+  entries.sort((a, b) => {
+    if (a[0] === '.') return -1
+    if (b[0] === '.') return 1
+    return a[0].localeCompare(b[0])
+  })
+
+  return entries.map(([folder, groupFiles]) => {
+    groupFiles.sort((a, b) => a.file.localeCompare(b.file))
+    return { folder, files: groupFiles }
+  })
+}
+
+/**
+ * Build SelectOption[] for multiSelect with folder group headers.
+ * Folder headers are disabled (non-selectable separators).
+ */
+export function buildFileSelectOptions(files: { status: string; file: string }[]): SelectOption[] {
+  const groups = groupFilesByFolder(files)
+  const options: SelectOption[] = []
+
+  for (const group of groups) {
+    // Folder header — selectable group toggle (toggles all children)
+    const folderLabel = group.folder === '.' ? '📁 ./ (root)' : `📁 ${group.folder}/`
+    const childValues = group.files.map((f) => f.file)
+    options.push({ label: folderLabel, value: `__folder__${group.folder}`, children: childValues })
+
+    // Files in this folder
+    for (const f of group.files) {
+      const badge = statusBadge(f.status).padEnd(14)
+      const parts = f.file.split('/')
+      const fileName = f.file.includes('/') ? (parts.at(-1) ?? f.file) : f.file
+      options.push({
+        label: `    ${badge} ${fileName}`,
+        value: f.file,
+      })
+    }
+  }
+
+  return options
 }
