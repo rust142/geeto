@@ -19,6 +19,7 @@ import { isDryRun } from '../utils/dry-run.js'
 import { execGit } from '../utils/exec.js'
 import {
   chooseModelForProvider,
+  generateCommitMessageWithProvider,
   getAIProviderShortName,
   getModelValue,
   interactiveAIFallback,
@@ -416,32 +417,17 @@ export const handleCommitWorkflow = async (
         'formatting conventional commit...',
       ])
 
-      if (currentProvider === 'copilot') {
-        const { generateCommitMessage } = await import('../api/copilot.js')
-        initialAiResult = await generateCommitMessage(
-          diff,
-          correction,
-          state.copilotModel as CopilotModel
-        )
-      } else if (currentProvider === 'openrouter') {
-        const { generateCommitMessage } = await import('../api/openrouter.js')
-        initialAiResult = await generateCommitMessage(
-          diff,
-          correction,
-          state.openrouterModel as OpenRouterModel
-        )
-      } else {
-        const { generateCommitMessage } = await import('../api/gemini.js')
-        initialAiResult = await generateCommitMessage(
-          diff,
-          correction,
-          state.geminiModel as GeminiModel
-        )
-      }
+      initialAiResult = await generateCommitMessageWithProvider(
+        currentProvider,
+        diff,
+        correction,
+        state.copilotModel as CopilotModel,
+        state.openrouterModel as OpenRouterModel,
+        state.geminiModel as GeminiModel
+      )
       spinner.stop()
     } catch {
-      spinner.stop()
-      log.warn('Initial AI generation attempt failed, will enter interactive fallback')
+      spinner.fail('Initial AI generation attempt failed, will enter interactive fallback')
       initialAiResult = null
     }
 

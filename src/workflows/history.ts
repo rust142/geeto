@@ -9,6 +9,7 @@ import { select } from '../cli/menu.js'
 import { buildProjectLink, extractCardIdFromBranch } from '../utils/branch-naming.js'
 import { colors } from '../utils/colors.js'
 import { getBranchStrategyConfig } from '../utils/config.js'
+import { BOX_W } from '../utils/display.js'
 import { execSilent } from '../utils/exec.js'
 import { getRemoteUrl } from '../utils/git-commands.js'
 import { getCurrentBranch } from '../utils/git.js'
@@ -457,7 +458,7 @@ export const handleHistory = async (): Promise<void> => {
   const stats = getStats()
 
   // Header info box
-  const line = '─'.repeat(56)
+  const line = '─'.repeat(BOX_W)
   console.log(`${colors.cyan}┌${line}┐${colors.reset}`)
   console.log(
     `${colors.cyan}│${colors.reset} Branch: ${colors.green}${colors.bright}${current}${colors.reset}`

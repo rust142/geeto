@@ -6,6 +6,7 @@
 import { askQuestion, confirm } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
+import { BOX_W } from '../utils/display.js'
 import { exec, execSilent } from '../utils/exec.js'
 import { getCurrentBranch } from '../utils/git.js'
 import { log } from '../utils/logging.js'
@@ -161,7 +162,7 @@ const handleStashAction = async (stash: StashEntry): Promise<'back' | 'done'> =>
   const diffStats = getStashDiff(stash.ref)
 
   console.log('')
-  const line = '─'.repeat(56)
+  const line = '─'.repeat(BOX_W)
   console.log(`${colors.cyan}┌${line}┐${colors.reset}`)
   console.log(
     `${colors.cyan}│${colors.reset} ${colors.yellow}${stash.ref}${colors.reset}` +

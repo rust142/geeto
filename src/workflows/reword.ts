@@ -24,10 +24,12 @@ import {
   normalizeAIOutput,
 } from '../utils/commit-helpers.js'
 import { DEFAULT_GEMINI_MODEL } from '../utils/config.js'
+import { BOX_W } from '../utils/display.js'
 import { isDryRun, logDryRun } from '../utils/dry-run.js'
 import { execAsync, execSilent } from '../utils/exec.js'
 import {
   chooseModelForProvider,
+  generateCommitMessageWithProvider,
   getAIProviderShortName,
   getModelValue,
   interactiveAIFallback,
@@ -565,32 +567,17 @@ export const handleReword = async (): Promise<void> => {
         'formatting conventional commit...',
       ])
 
-      if (currentProvider === 'copilot') {
-        const { generateCommitMessage } = await import('../api/copilot.js')
-        initialAiResult = await generateCommitMessage(
-          diff,
-          correction,
-          state.copilotModel as CopilotModel
-        )
-      } else if (currentProvider === 'openrouter') {
-        const { generateCommitMessage } = await import('../api/openrouter.js')
-        initialAiResult = await generateCommitMessage(
-          diff,
-          correction,
-          state.openrouterModel as OpenRouterModel
-        )
-      } else {
-        const { generateCommitMessage } = await import('../api/gemini.js')
-        initialAiResult = await generateCommitMessage(
-          diff,
-          correction,
-          state.geminiModel as GeminiModel
-        )
-      }
+      initialAiResult = await generateCommitMessageWithProvider(
+        currentProvider,
+        diff,
+        correction,
+        state.copilotModel as CopilotModel,
+        state.openrouterModel as OpenRouterModel,
+        state.geminiModel as GeminiModel
+      )
       spinner.stop()
     } catch {
-      spinner.stop()
-      log.warn('AI generation failed, falling back to manual edit')
+      spinner.fail('AI generation failed, falling back to manual edit')
       const edited = await editInline(currentMsg, `Edit: ${commit.shortHash} ${commit.subject}`)
       if (edited && edited.trim() !== currentMsg.trim()) {
         newMessages.set(commit.hash, edited.trim())
@@ -963,7 +950,7 @@ export const handleReword = async (): Promise<void> => {
   }
 
   // Preview changes — complete before/after summary
-  const line = '─'.repeat(56)
+  const line = '─'.repeat(BOX_W)
   console.log('')
   console.log(`  ${colors.cyan}┌${line}┐${colors.reset}`)
   console.log(

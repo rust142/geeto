@@ -115,7 +115,8 @@
     "iterm",
     "wezterm",
     "reauthor",
-    "behaviour"
+    "behaviour",
+    "artefacts"
   ],
   "ignorePaths": [
     "node_modules/**",

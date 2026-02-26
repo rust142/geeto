@@ -56,15 +56,145 @@ export const highlightDiff = (diff: string): string => {
 }
 
 /**
- * Ask a yes/no confirmation question
+ * Ask a yes/no confirmation question with interactive arrow-key toggle.
+ *
+ * Shortcuts:
+ * - ↑ / ↓     → cycle between Y and N (wraps around)
+ * - y / Y      → immediately confirm yes
+ * - n / N      → immediately confirm no
+ * - Enter      → confirm current selection
+ * - Ctrl+C     → exit
+ *
+ * Falls back to plain text input when stdin is not a TTY.
  */
 export const confirm = (question: string, defaultYes: boolean = true): boolean => {
-  const suffix = defaultYes ? ' (Y/n): ' : ' (y/N): '
-  const answer = askQuestion(`${question}${suffix}`)
-  if (answer === '') {
-    return defaultYes
+  // Ensure cursor is visible and raw mode is off before we start
+  if (process.stdin.isTTY && process.stdin.isRaw) {
+    process.stdin.setRawMode(false)
   }
-  return answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes'
+  process.stdout.write('\u001B[?25h')
+
+  // Non-TTY fallback — plain text input
+  if (!process.stdin.isTTY) {
+    const suffix = defaultYes ? ' (Y/n): ' : ' (y/N): '
+    const answer = askQuestion(`${question}${suffix}`)
+    if (answer === '') return defaultYes
+    return answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes'
+  }
+
+  let selected: boolean | null = null // null = no selection yet, use defaultYes on Enter
+  const suffix = defaultYes ? '(Y/n)' : '(y/N)'
+  const cols = process.stdout.columns || 80
+  let lastVisibleLen = 0
+
+  /** Strip ANSI escape codes to compute visible text length. */
+  const visLen = (s: string): number => s.replaceAll(/\u001B\[\d*;?\d*m/g, '').length
+
+  /** Move cursor to the first physical line of the prompt and clear everything below. */
+  const clearPrompt = (): void => {
+    if (lastVisibleLen > 0) {
+      const physLines = Math.ceil(lastVisibleLen / cols)
+      for (let i = 1; i < physLines; i++) {
+        process.stdout.write('\u001B[A') // move up
+      }
+    }
+    process.stdout.write('\r\u001B[J') // carriage return + clear to end of screen
+  }
+
+  /** Render the interactive prompt line. */
+  const render = (): void => {
+    clearPrompt()
+    const answer =
+      selected === null
+        ? ''
+        : selected
+          ? '\u001B[36m\u001B[1mY\u001B[0m'
+          : '\u001B[36m\u001B[1mN\u001B[0m'
+    const line = `${question} ${suffix} ${answer}`
+    process.stdout.write(line)
+    lastVisibleLen = visLen(line)
+  }
+
+  /** Render the final confirmed state and move to next line. */
+  const renderFinal = (label: string): void => {
+    clearPrompt()
+    const line = `${question} ${suffix} \u001B[36m${label}\u001B[0m`
+    process.stdout.write(line + '\n')
+  }
+
+  // Initial render (on a new line) — shows empty, cursor visible for input
+  process.stdout.write('\n')
+  render()
+
+  // Enter raw mode for key-by-key reading
+  rl.pause()
+  process.stdin.setRawMode(true)
+
+  const buf = Buffer.alloc(16)
+
+  try {
+    for (;;) {
+      let n: number
+      try {
+        n = fs.readSync(0, buf, 0, buf.length, null)
+      } catch {
+        break
+      }
+      if (n === 0) break
+
+      const b = buf[0] as number | undefined
+      if (b === undefined) break
+
+      // Ctrl+C → exit
+      if (b === 3) {
+        process.stdout.write('\u001B[?25h\n')
+        process.exit(0)
+      }
+
+      // Enter → confirm current selection (null = use default)
+      if (b === 13 || b === 10) {
+        const result = selected ?? defaultYes
+        renderFinal(result ? 'Y' : 'N')
+        return result
+      }
+
+      // y / Y → immediately yes
+      if (b === 0x79 || b === 0x59) {
+        renderFinal('Y')
+        return true
+      }
+
+      // n / N → immediately no
+      if (b === 0x6e || b === 0x4e) {
+        renderFinal('N')
+        return false
+      }
+
+      // ESC sequences — arrow keys
+      if (b === 27 && n >= 3 && buf[1] === 0x5b) {
+        const arrow = buf[2]
+        // UP (0x41) or DOWN (0x42) → toggle
+        if (arrow === 0x41 || arrow === 0x42) {
+          if (selected === null) {
+            // First arrow press: UP → Y, DOWN → N
+            selected = arrow === 0x41
+          } else {
+            selected = !selected
+          }
+          render()
+        }
+        continue
+      }
+    }
+  } finally {
+    if (process.stdin.isTTY) {
+      process.stdin.setRawMode(false)
+    }
+    process.stdout.write('\u001B[?25h') // Show cursor
+    rl.resume()
+  }
+
+  return selected ?? defaultYes
 }
 
 /**

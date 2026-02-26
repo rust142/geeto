@@ -20,7 +20,7 @@ import { colors } from '../utils/colors.js'
 import { DEFAULT_GEMINI_MODEL, hasGithubConfig } from '../utils/config.js'
 import { isDryRun, logDryRun } from '../utils/dry-run.js'
 import { execAsync, execSilent } from '../utils/exec.js'
-import { getAIProviderShortName } from '../utils/git-ai.js'
+import { generateTextWithProvider, getAIProviderShortName } from '../utils/git-ai.js'
 import { getCurrentBranch } from '../utils/git.js'
 import { log } from '../utils/logging.js'
 import { loadState, saveState } from '../utils/state.js'
@@ -173,20 +173,16 @@ const callAIForPR = async (
 
   let result: string | null = null
   try {
-    if (provider === 'copilot') {
-      const { generateText } = await import('../api/copilot.js')
-      result = await generateText(prompt, model as CopilotModel)
-    } else if (provider === 'openrouter') {
-      const { generateText } = await import('../api/openrouter.js')
-      result = await generateText(prompt, model as OpenRouterModel)
-    } else {
-      const { generateText } = await import('../api/gemini.js')
-      result = await generateText(prompt, (model as GeminiModel) ?? 'gemini-2.5-flash')
-    }
+    result = await generateTextWithProvider(
+      provider,
+      prompt,
+      model as CopilotModel,
+      model as OpenRouterModel,
+      (model as GeminiModel) ?? 'gemini-2.5-flash'
+    )
     spinner.stop()
   } catch {
-    spinner.stop()
-    log.warn('AI generation failed')
+    spinner.fail('AI generation failed')
     return null
   }
 

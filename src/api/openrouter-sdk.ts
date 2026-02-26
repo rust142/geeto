@@ -3,7 +3,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { OpenRouter } from '@openrouter/sdk'
 
-import { GeminiModel } from './gemini.js'
+import { OpenRouterModel } from './openrouter.js'
 import { getOpenRouterConfig } from '../utils/config.js'
 import { log } from '../utils/logging.js'
 
@@ -43,7 +43,7 @@ export const isAvailable = (): boolean => {
 export const generateBranchName = async (
   text: string,
   correction?: string,
-  model?: GeminiModel
+  model?: OpenRouterModel
 ): Promise<string | null> => {
   const promptBase = `Generate a git branch name suffix from this input. Output ONLY the kebab-case suffix (lowercase-with-hyphens), 3-50 chars, nothing else.`
   const prompt = correction
@@ -77,7 +77,8 @@ export const generateBranchName = async (
       .replaceAll(/^-|-$/g, '')
     return cleaned || null
   } catch (error) {
-    console.log('') // Force newline to separate from any active spinner
+    log.clearLine()
+    log.gap()
     log.error('OpenRouter Error: ' + String(error))
     return null
   }
@@ -85,7 +86,7 @@ export const generateBranchName = async (
 export const generateCommitMessage = async (
   diff: string,
   correction?: string,
-  model?: GeminiModel
+  model?: OpenRouterModel
 ): Promise<string | null> => {
   const promptBase = `Generate a conventional commit message from this git diff. Output ONLY the commit message in this format:\n\n<type>(<scope>): <short summary>\n\n<Detailed multi-line body explaining the change. Wrap lines at ~72 characters. LIMITS: subject max 100 chars; body max 360 chars. Include why the change was made and any important notes. Separate subject and body by a single blank line. Do not include any extraneous commentary or markers. Use imperative mood.
 
@@ -118,7 +119,8 @@ fetching. Updates .gitignore for geeto binaries.`
     const normalized = cleaned.replaceAll(/\n\s*\n+/g, '\n\n').trim()
     return normalized && normalized.length >= 8 ? normalized : null
   } catch (error) {
-    console.log('') // Force newline to separate from any active spinner
+    log.clearLine()
+    log.gap()
     log.error('OpenRouter Error: ' + String(error))
     return null
   }
@@ -420,7 +422,7 @@ export const generateReleaseNotes = async (
   commits: string,
   language: 'en' | 'id',
   correction?: string,
-  model?: GeminiModel
+  model?: OpenRouterModel
 ): Promise<string | null> => {
   const langLabel = language === 'id' ? 'Indonesian (Bahasa Indonesia)' : 'English'
   const promptBase = `You are a release notes writer. Given a list of git commit messages, generate user-friendly release notes in ${langLabel}. Output ONLY the release notes content (no title/heading, no version number, no date — those are added separately).
@@ -479,7 +481,8 @@ Formatting (follow EXACTLY — this is markdownlint-compliant):
       .trim()
     return cleaned || null
   } catch (error) {
-    console.log('')
+    log.clearLine()
+    log.gap()
     log.error('OpenRouter Error: ' + String(error))
     return null
   }

@@ -81,7 +81,8 @@ export const generateBranchName = async (
 
     return sdkRes
   } catch (error) {
-    console.log('') // Force newline to separate from any active spinner
+    log.clearLine()
+    log.gap()
     log.warn('Gemini Error: ' + String(error))
     return null
   }
@@ -104,7 +105,8 @@ export const generateCommitMessage = async (
     const sdkRes = await sdkGenerateCommitMessage(diff, correction, model)
     return sdkRes
   } catch (error) {
-    console.log('') // Force newline to separate from any active spinner
+    log.clearLine()
+    log.gap()
     log.warn('Gemini Error: ' + String(error))
     return null
   }
@@ -124,7 +126,8 @@ export const generateReleaseNotes = async (
     }
     return await sdkGenerateReleaseNotes(commits, language, correction, model)
   } catch (error) {
-    console.log('')
+    log.clearLine()
+    log.gap()
     log.warn('Gemini Error: ' + String(error))
     return null
   }
