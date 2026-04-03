@@ -68,6 +68,7 @@ export interface TrelloList {
 
 export interface BranchStrategyConfig {
   separator: '-' | '_'
+  prefixSeparator?: '#' | '/'
   lastNamingStrategy?: 'title-full' | 'title-ai' | 'ai' | 'trello' | 'manual'
   lastTrelloList?: string // Last selected Trello list ID
   protectedBranches?: string[] // Custom protected branches (beyond defaults)
@@ -102,4 +103,12 @@ export interface OpenRouterConfig {
 
 export interface GitHubConfig {
   token: string
+}
+
+export type Platform = 'github' | 'gitlab'
+
+export interface GitLabConfig {
+  token: string
+  /** GitLab instance URL (default: https://gitlab.com) */
+  url?: string
 }

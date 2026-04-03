@@ -528,7 +528,7 @@ export async function showSecurityGateMenu(): Promise<void> {
 
   log.info(`Files to analyze: ${scanData.files.length}`)
   if (scanData.hasDependencies) {
-    log.warn('⚠ Dependency changes detected - will check for known vulnerabilities')
+    log.warn('Dependency changes detected - will check for known vulnerabilities')
   }
 
   // Run security scan

@@ -708,7 +708,7 @@ export async function chooseModelForProvider(
 
     // Check if no models are available (SDK not installed or not functioning)
     if (models.length === 0) {
-      log.warn('⚠ Copilot SDK not available.')
+      log.warn('Copilot SDK not available.')
       console.log('')
       log.info('The Copilot CLI is required to use Copilot models.')
       console.log('')
@@ -738,7 +738,7 @@ export async function chooseModelForProvider(
             const chosen = await select(prompt ?? 'Choose Copilot model:', options)
             return chosen as string | 'back'
           } else {
-            log.warn('⚠ Installation completed but models still not available.')
+            log.warn('Installation completed but models still not available.')
             log.info('You may need to restart your terminal or check your installation.')
             return 'back'
           }
@@ -774,7 +774,7 @@ export async function chooseModelForProvider(
 
     // Check if no models are available
     if (models.length === 0) {
-      log.warn('⚠ No OpenRouter models available.')
+      log.warn('No OpenRouter models available.')
       return undefined
     }
 
@@ -800,7 +800,7 @@ export async function chooseModelForProvider(
 
   // Check if no models are available
   if (models.length === 0) {
-    log.warn('⚠ No Gemini models available.')
+    log.warn('No Gemini models available.')
     return undefined
   }
 

@@ -17,11 +17,14 @@ import {
 import { handleRecoverTags } from './release-recover.js'
 import { handleDeleteReleases, handleSyncReleases } from './release-sync.js'
 import {
+  bumpPrerelease,
   categorizeCommits,
+  formatSemver,
   getCommitsSinceTag,
   getCurrentVersion,
   getExistingTags,
   parseSemver,
+  promoteToStable,
   updatePackageVersion,
 } from './release-utils.js'
 import { askQuestion, confirm, editInline } from '../cli/input.js'
@@ -35,6 +38,7 @@ import {
   getAIProviderShortName,
   getModelValue,
 } from '../utils/git-ai.js'
+import { detectPlatformFromRemote, getPlatformCLI } from '../utils/github-helpers.js'
 import { log } from '../utils/logging.js'
 import { ScrambleProgress } from '../utils/scramble.js'
 import { loadState } from '../utils/state.js'
@@ -46,11 +50,16 @@ export const handleRelease = async (): Promise<void> => {
   log.step(`${colors.cyan}Release / Tag Manager${colors.reset}\n`)
 
   // Main menu: create new release, sync, or manage releases
+  // Detect platform for CLI commands
+  const platform = detectPlatformFromRemote()
+  const cli = platform ? getPlatformCLI(platform) : 'gh'
+  const platformName = platform === 'gitlab' ? 'GitLab' : 'GitHub'
+
   const mode = await select('What do you want to do?', [
     { label: 'Create a new release', value: 'create' },
-    { label: 'Sync GitHub Releases for existing tags', value: 'sync' },
+    { label: `Sync ${platformName} Releases for existing tags`, value: 'sync' },
     { label: 'Recover missing tags from release commits', value: 'recover' },
-    { label: 'Delete GitHub Releases', value: 'delete' },
+    { label: `Delete ${platformName} Releases`, value: 'delete' },
   ])
 
   if (mode === 'sync') {
@@ -107,39 +116,91 @@ export const handleRelease = async (): Promise<void> => {
 
   // Version bump selection
   console.log('')
-  const { major, minor, patch } = semver
-  const bumpType = await select('Version bump:', [
+  const { major, minor, patch, prerelease } = semver
+  const nextPatch = `${major}.${minor}.${patch + 1}`
+
+  // Padded label builder for aligned columns
+  const vpad = (name: string, ver: string, desc: string) =>
+    `${name.padEnd(8)}${colors.gray}${ver.padEnd(20)}${colors.reset}${desc}`
+
+  // Build dynamic menu based on whether current version is a prerelease
+  const bumpOptions = []
+
+  if (prerelease) {
+    const [preLabel] = prerelease.split('.')
+    const bumped = bumpPrerelease(semver)
+    const stable = promoteToStable(semver)
+    bumpOptions.push(
+      {
+        label: vpad(`Next ${preLabel}`, formatSemver(bumped), 'bump prerelease'),
+        value: 'pre-bump',
+      },
+      {
+        label: vpad('Stable', formatSemver(stable), 'promote to stable'),
+        value: 'promote',
+      }
+    )
+  }
+
+  bumpOptions.push(
     {
-      label: `Patch  ${colors.gray}${major}.${minor}.${patch + 1}${colors.reset} — bug fixes`,
+      label: vpad('Patch', nextPatch, 'bug fixes'),
       value: 'patch',
     },
     {
-      label: `Minor  ${colors.gray}${major}.${minor + 1}.0${colors.reset} — new features`,
+      label: vpad('Minor', `${major}.${minor + 1}.0`, 'new features'),
       value: 'minor',
     },
     {
-      label: `Major  ${colors.gray}${major + 1}.0.0${colors.reset} — breaking changes`,
+      label: vpad('Major', `${major + 1}.0.0`, 'breaking changes'),
       value: 'major',
-    },
-    { label: 'Custom — enter version manually', value: 'custom' },
-    { label: 'Cancel', value: 'cancel' },
-  ])
+    }
+  )
+
+  if (!prerelease) {
+    const nextMinor = `${major}.${minor + 1}.0`
+    bumpOptions.push(
+      {
+        label: vpad('Alpha', `${nextMinor}-alpha.1`, 'early development'),
+        value: 'alpha',
+      },
+      {
+        label: vpad('Beta', `${nextMinor}-beta.1`, 'feature testing'),
+        value: 'beta',
+      },
+      {
+        label: vpad('RC', `${nextMinor}-rc.1`, 'release candidate'),
+        value: 'rc',
+      }
+    )
+  }
+
+  bumpOptions.push({ label: 'Cancel', value: 'cancel' })
+
+  const bumpType = await select('Version bump:', bumpOptions)
 
   if (bumpType === 'cancel') return
 
   let newVersion: string
-  switch (bumpType) {
-    case 'custom': {
-      if (process.stdin.isTTY) {
-        process.stdin.setRawMode(false)
-      }
-      const input = askQuestion('Enter version (e.g. 1.2.3): ').trim()
-      if (!parseSemver(input)) {
-        log.error('Invalid semver format.')
-        return
-      }
-      newVersion = input
+  let isPreVersion = false
 
+  switch (bumpType) {
+    case 'pre-bump': {
+      const bumped = bumpPrerelease(semver)
+      newVersion = formatSemver(bumped)
+      isPreVersion = true
+      break
+    }
+    case 'promote': {
+      const stable = promoteToStable(semver)
+      newVersion = formatSemver(stable)
+      break
+    }
+    case 'alpha':
+    case 'beta':
+    case 'rc': {
+      newVersion = `${major}.${minor + 1}.0-${bumpType}.1`
+      isPreVersion = true
       break
     }
     case 'major': {
@@ -548,12 +609,12 @@ export const handleRelease = async (): Promise<void> => {
     }
   }
 
-  // 6. Create GitHub Release (if tag was pushed and gh CLI is available)
-  let ghReleaseCreated = false
+  // 6. Create Release (if tag was pushed and platform CLI is available)
+  let releaseCreated = false
   if (pushChoice === 'both') {
     try {
-      execSilent('gh --version')
-      // gh CLI is available — create a GitHub Release
+      execSilent(`${cli} --version`)
+      // Platform CLI is available — create a Release
 
       // Build release body from AI notes or template
       const releaseBody = aiReleaseNotes
@@ -569,18 +630,19 @@ export const handleRelease = async (): Promise<void> => {
       writeFileSync(tempFile, releaseBody, 'utf8')
 
       const releaseSpinner = new ScrambleProgress()
-      releaseSpinner.start(['Creating GitHub release'])
+      releaseSpinner.start([`Creating ${platformName} release`])
 
       try {
+        const preFlag = isPreVersion ? ' --prerelease' : ''
         await execAsync(
-          `gh release create v${newVersion} --title "v${newVersion}" --notes-file "${tempFile}"`,
+          `${cli} release create v${newVersion} --title "v${newVersion}" --notes-file "${tempFile}"${preFlag}`,
           true
         )
-        releaseSpinner.succeed('GitHub Release created')
-        ghReleaseCreated = true
+        releaseSpinner.succeed(`${platformName} Release created`)
+        releaseCreated = true
       } catch (error) {
         const stderr = (error as { stderr?: string }).stderr?.trim()
-        releaseSpinner.fail('Failed to create GitHub Release')
+        releaseSpinner.fail(`Failed to create ${platformName} Release`)
         if (stderr) log.error(`  ${stderr.split('\n')[0]}`)
       }
 
@@ -592,7 +654,7 @@ export const handleRelease = async (): Promise<void> => {
         /* ignore cleanup errors */
       }
     } catch {
-      // gh CLI not available — skip silently
+      // Platform CLI not available — skip silently
     }
   }
 
@@ -615,9 +677,9 @@ export const handleRelease = async (): Promise<void> => {
   console.log(
     `${colors.cyan}│${colors.reset}  ${colors.green}✓${colors.reset} Tag v${newVersion} created`
   )
-  if (ghReleaseCreated) {
+  if (releaseCreated) {
     console.log(
-      `${colors.cyan}│${colors.reset}  ${colors.green}✓${colors.reset} GitHub Release published`
+      `${colors.cyan}│${colors.reset}  ${colors.green}✓${colors.reset} ${platformName} Release published`
     )
   }
   console.log(`${colors.cyan}└${line}┘${colors.reset}`)

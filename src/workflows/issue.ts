@@ -1,5 +1,5 @@
 /**
- * Create GitHub Issue workflow
+ * Create Issue workflow — supports GitHub and GitLab
  * Interactive issue creation from CLI
  */
 
@@ -7,14 +7,14 @@ import type { CopilotModel } from '../api/copilot.js'
 import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 
-import { createIssue, listLabels } from '../api/github.js'
+import { getPlatformAPI } from '../api/platform.js'
 import { askMultiline, askQuestion, confirm, editInline } from '../cli/input.js'
 import { multiSelect, select } from '../cli/menu.js'
 import { getModelForProvider, showAIPreview, updateModelInState } from '../utils/ai-workflow.js'
 import { colors } from '../utils/colors.js'
 import { isDryRun, logDryRun } from '../utils/dry-run.js'
 import { generateTextWithProvider, getAIProviderShortName } from '../utils/git-ai.js'
-import { getRepoFromRemote, validateGithubConfig } from '../utils/github-helpers.js'
+import { getPlatformRepoFromRemote, validatePlatformConfig } from '../utils/github-helpers.js'
 import { log } from '../utils/logging.js'
 import { loadPrompt } from '../utils/prompt-loader.js'
 import { loadState } from '../utils/state.js'
@@ -72,16 +72,18 @@ const callAIForIssue = async (
  */
 export const handleCreateIssue = async (): Promise<void> => {
   log.banner()
-  log.step(`${colors.cyan}Create GitHub Issue${colors.reset}\n`)
+  // Detect platform and resolve repo info
+  const platformRepo = getPlatformRepoFromRemote()
+  if (!platformRepo) return
 
-  // Check GitHub config
-  if (!validateGithubConfig()) return
+  const platformLabel = platformRepo.platform === 'github' ? 'GitHub' : 'GitLab'
+  log.step(`${colors.cyan}Create ${platformLabel} Issue${colors.reset}\n`)
 
-  // Resolve repo info from remote
-  const repoInfo = getRepoFromRemote()
-  if (!repoInfo) return
+  if (!validatePlatformConfig(platformRepo.platform)) return
 
-  log.info(`Repo: ${colors.cyan}${repoInfo.owner}/${repoInfo.repo}${colors.reset}`)
+  const api = getPlatformAPI(platformRepo.platform)
+
+  log.info(`Repo: ${colors.cyan}${platformRepo.owner}/${platformRepo.repo}${colors.reset}`)
 
   // Issue content generation
   let title = ''
@@ -265,7 +267,7 @@ export const handleCreateIssue = async (): Promise<void> => {
           `- OS: ${process.platform}`,
           `- Node: ${process.version}`,
         ].join('\n')
-        log.info('Bug report template applied. Edit in GitHub after creation.')
+        log.info(`Bug report template applied. Edit in ${platformLabel} after creation.`)
         break
       }
       case 'feature': {
@@ -284,7 +286,7 @@ export const handleCreateIssue = async (): Promise<void> => {
           '### Alternatives Considered',
           '',
         ].join('\n')
-        log.info('Feature request template applied. Edit in GitHub after creation.')
+        log.info(`Feature request template applied. Edit in ${platformLabel} after creation.`)
         break
       }
       default: {
@@ -298,7 +300,11 @@ export const handleCreateIssue = async (): Promise<void> => {
   console.log('')
   const spinner = log.spinner()
   spinner.start('Fetching labels...')
-  const labels = await listLabels(repoInfo.owner, repoInfo.repo)
+  const labels = await api.listLabels(
+    platformRepo.projectPath,
+    platformRepo.owner,
+    platformRepo.repo
+  )
   spinner.stop()
 
   let selectedLabels: string[] = []
@@ -323,14 +329,14 @@ export const handleCreateIssue = async (): Promise<void> => {
   let assignees: string[] = []
   switch (assignChoice) {
     case 'me': {
-      assignees = [repoInfo.owner]
+      assignees = [platformRepo.owner]
       break
     }
     case 'custom': {
       if (process.stdin.isTTY) {
         process.stdin.setRawMode(false)
       }
-      const username = askQuestion('GitHub username: ').trim()
+      const username = askQuestion(`${platformLabel} username: `).trim()
       if (username) assignees = [username]
       break
     }
@@ -372,7 +378,7 @@ export const handleCreateIssue = async (): Promise<void> => {
 
   // Create Issue
   if (isDryRun()) {
-    logDryRun(`GitHub API: Create issue "${title}"`)
+    logDryRun(`${platformLabel} API: Create issue "${title}"`)
     log.success('Issue would be created (dry-run)')
     return
   }
@@ -380,25 +386,26 @@ export const handleCreateIssue = async (): Promise<void> => {
   const issueSpinner = log.spinner()
   issueSpinner.start('Creating issue...')
 
-  const issue = await createIssue({
-    owner: repoInfo.owner,
-    repo: repoInfo.repo,
+  const issue = await api.createIssue({
+    projectPath: platformRepo.projectPath,
     title,
     body,
     labels: selectedLabels,
     assignees,
+    owner: platformRepo.owner,
+    repo: platformRepo.repo,
   })
 
   if (issue) {
     issueSpinner.succeed('Issue created!')
     console.log('')
     console.log(`  ${colors.green}#${issue.number}${colors.reset} ${issue.title}`)
-    console.log(`  ${colors.cyan}${issue.html_url}${colors.reset}`)
+    console.log(`  ${colors.cyan}${issue.url}${colors.reset}`)
 
     // OSC 8 clickable link
     console.log('')
     console.log(
-      `  \u001B]8;;${issue.html_url}\u0007` +
+      `  \u001B]8;;${issue.url}\u0007` +
         `${colors.cyan}Open in browser →${colors.reset}` +
         `\u001B]8;;\u0007`
     )

@@ -27,6 +27,7 @@ interface AliasEntry {
 }
 
 const ALIASES: AliasEntry[] = [
+  { alias: 'gt', command: 'geeto', desc: 'Run geeto (main workflow)' },
   { alias: 'gsa', command: 'geeto -sa', desc: 'Stage all' },
   { alias: 'gco', command: 'geeto -c', desc: 'Commit' },
   { alias: 'gps', command: 'geeto -p', desc: 'Push' },

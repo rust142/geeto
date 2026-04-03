@@ -7,6 +7,7 @@ Thank you for your interest in contributing to Geeto! This guide covers everythi
 - [Bun](https://bun.sh) ≥ 1.0
 - [Git](https://git-scm.com) ≥ 2.0
 - [GitHub CLI](https://cli.github.com) (for GitHub features)
+- [GitLab CLI](https://gitlab.com/gitlab-org/cli) (for GitLab features, optional)
 
 ## Setup
 
@@ -32,6 +33,7 @@ All branches must use the `dev#<description>` format:
 
 - Lowercase only, hyphens for spaces
 - 3-5 words maximum, descriptive and clear
+- Configure your preferred prefix format in Settings
 
 | Example                      | Status                 |
 | ---------------------------- | ---------------------- |

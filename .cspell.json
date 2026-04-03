@@ -117,7 +117,11 @@
     "reauthor",
     "behaviour",
     "artefacts",
-    "unparseable"
+    "unparseable",
+    "Glab",
+    "glab",
+    "glpat",
+    "vpad"
   ],
   "ignorePaths": [
     "node_modules/**",

@@ -302,7 +302,7 @@ export async function handleMerge(
   }
 
   if (!opts?.suppressLogs) {
-    log.info(`✓ Merge already done to: ${state.targetBranch}`)
+    log.success(`Merge already done to: ${state.targetBranch}`)
   }
   return state.targetBranch || getCurrentBranch()
 }
