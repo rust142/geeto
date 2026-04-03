@@ -373,8 +373,8 @@ export const askMultiline = (question: string, initialText = ''): string | null 
 }
 
 /**
- * Inline multi-line text editor using the system's built-in terminal editor.
- * Opens nano (macOS/Linux) or notepad (Windows) with the initial text.
+ * Inline multi-line text editor using the system's terminal editor.
+ * Opens vim (macOS/Linux) or notepad (Windows) with the initial text.
  *
  * Kept async (returns Promise) so all existing callers using
  * `await editInline(...)` continue to work without changes.
@@ -399,7 +399,7 @@ export const editInline = (
     return Promise.resolve(null)
   }
 
-  const editor = process.platform === 'win32' ? 'notepad' : 'nano'
+  const editor = process.platform === 'win32' ? 'notepad' : 'vim'
   try {
     spawnSync(editor, [tmpPath], { stdio: 'inherit' })
     const edited = fs.readFileSync(tmpPath, { encoding: 'utf8' }).trim()
