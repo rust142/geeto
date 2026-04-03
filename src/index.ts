@@ -3,8 +3,6 @@
  * Geeto - Git flow automation CLI tool with AI-powered branch naming
  * Main entry point - delegates to modular workflows via command registry
  */
-import path from 'node:path'
-
 import { VERSION } from './version.js'
 
 // ─── Command Registry ────────────────────────────────────────────────
@@ -317,7 +315,6 @@ interface ParsedArgs {
   dryRunMode: boolean
   showVersion: boolean
   showHelp: boolean
-  editFilePath?: string
   /** Set of matched command flags (by primary flag name) */
   activeFlags: Set<string>
 }
@@ -330,7 +327,6 @@ function parseArgs(argv: string[]): ParsedArgs {
   let dryRunMode = false
   let showVersion = false
   let showHelp = false
-  let editFilePath: string | undefined
   const activeFlags = new Set<string>()
 
   for (const arg of argv) {
@@ -361,10 +357,7 @@ function parseArgs(argv: string[]): ParsedArgs {
       }
     }
 
-    // Non-flag argument → file path for inline editor
-    if (!arg.startsWith('-') && !editFilePath) {
-      editFilePath = arg
-    }
+    // Non-flag argument → ignored
   }
 
   return {
@@ -375,7 +368,6 @@ function parseArgs(argv: string[]): ParsedArgs {
     dryRunMode,
     showVersion,
     showHelp,
-    editFilePath,
     activeFlags,
   }
 }
@@ -456,10 +448,6 @@ function showHelpMessage(): void {
   console.log(`    ${C}-v,  --version${R}            Show version`)
   console.log(`    ${C}-h,  --help${R}               Show this help message`)
   console.log('')
-
-  console.log(`  ${B}EDITOR${R}`)
-  console.log(`    ${C}geeto <file>${R}              Open file in inline editor`)
-  console.log('')
 }
 
 // ─── Command Execution ───────────────────────────────────────────────
@@ -493,33 +481,6 @@ async function handleDryRunSetup(args: ParsedArgs): Promise<void> {
   }) as typeof process.exit
 }
 
-async function handleFileEditor(filePath: string): Promise<void> {
-  try {
-    const fs = await import('node:fs')
-    const resolved = path.resolve(filePath)
-
-    let content = ''
-    if (fs.existsSync(resolved)) {
-      content = fs.readFileSync(resolved, 'utf8')
-    }
-
-    console.log(`  \u001B[90mEditing: ${resolved}\u001B[0m`)
-    const { editInline } = await import('./cli/input.js')
-    const result = await editInline(content, path.basename(filePath), path.extname(filePath))
-
-    if (result === null) {
-      console.log(`  \u001B[90m✗ Cancelled\u001B[0m`)
-    } else {
-      fs.writeFileSync(resolved, result + '\n', 'utf8')
-      console.log(`  \u001B[32m✓\u001B[0m Saved to ${filePath}`)
-    }
-    process.exit(0)
-  } catch (error) {
-    console.error('Editor error:', error)
-    process.exit(1)
-  }
-}
-
 async function executeCommand(args: ParsedArgs): Promise<void> {
   // 1. Version (instant, no imports)
   if (args.showVersion) {
@@ -538,13 +499,7 @@ async function executeCommand(args: ParsedArgs): Promise<void> {
     await handleDryRunSetup(args)
   }
 
-  // 4. Inline file editor
-  if (args.editFilePath) {
-    await handleFileEditor(args.editFilePath)
-    return
-  }
-
-  // 5. Registry commands — first match wins
+  // 4. Registry commands — first match wins
   for (const cmd of COMMAND_REGISTRY) {
     if (args.activeFlags.has(cmd.flag)) {
       try {
