@@ -84,46 +84,31 @@ export const confirm = (question: string, defaultYes: boolean = true): boolean =
 
   let selected: boolean | null = null // null = no selection yet, use defaultYes on Enter
   const suffix = defaultYes ? '(Y/n)' : '(y/N)'
-  const cols = process.stdout.columns || 80
-  let lastVisibleLen = 0
 
-  /** Strip ANSI escape codes to compute visible text length. */
-  const visLen = (s: string): number => s.replaceAll(/\u001B\[\d*;?\d*m/g, '').length
+  // Strip leading newlines from question — render them once as spacing, not on every redraw
+  const leadingNewlines = question.match(/^\n+/)?.[0] ?? ''
+  const cleanQuestion = question.slice(leadingNewlines.length)
 
-  /** Move cursor to the first physical line of the prompt and clear everything below. */
-  const clearPrompt = (): void => {
-    if (lastVisibleLen > 0) {
-      const physLines = Math.ceil(lastVisibleLen / cols)
-      for (let i = 1; i < physLines; i++) {
-        process.stdout.write('\u001B[A') // move up
-      }
-    }
-    process.stdout.write('\r\u001B[J') // carriage return + clear to end of screen
-  }
-
-  /** Render the interactive prompt line. */
+  /** Render the interactive prompt line (single-line overwrite). */
   const render = (): void => {
-    clearPrompt()
     const answer =
       selected === null
         ? ''
         : selected
           ? '\u001B[36m\u001B[1mY\u001B[0m'
           : '\u001B[36m\u001B[1mN\u001B[0m'
-    const line = `${question} ${suffix} ${answer}`
-    process.stdout.write(line)
-    lastVisibleLen = visLen(line)
+    const line = `${cleanQuestion} ${suffix} ${answer}`
+    process.stdout.write(`\r${line}\u001B[K`)
   }
 
   /** Render the final confirmed state and move to next line. */
   const renderFinal = (label: string): void => {
-    clearPrompt()
-    const line = `${question} ${suffix} \u001B[36m${label}\u001B[0m`
-    process.stdout.write(line + '\n')
+    const line = `${cleanQuestion} ${suffix} \u001B[36m${label}\u001B[0m`
+    process.stdout.write(`\r${line}\u001B[K\n`)
   }
 
-  // Initial render (on a new line) — shows empty, cursor visible for input
-  process.stdout.write('\n')
+  // Write leading newlines once, then initial render on the new line
+  process.stdout.write(leadingNewlines + '\n')
   render()
 
   // Enter raw mode for key-by-key reading
