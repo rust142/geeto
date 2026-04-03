@@ -121,7 +121,7 @@ export const handleRelease = async (): Promise<void> => {
 
   // Padded label builder for aligned columns
   const vpad = (name: string, ver: string, desc: string) =>
-    `${name.padEnd(8)}${colors.gray}${ver.padEnd(20)}${colors.reset}${desc}`
+    `${name.padEnd(12)}${colors.gray}${ver.padEnd(20)}${colors.reset}${desc}`
 
   // Build dynamic menu based on whether current version is a prerelease
   const bumpOptions = []
