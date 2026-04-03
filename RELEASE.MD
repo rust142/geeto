@@ -1,5 +1,26 @@
 # Releases
 
+## v0.7.0-alpha.1 — April 3, 2026
+
+### What's New?
+
+#### New Features
+
+- Support for GitLab and a unified platform interface
+- More consistent AI suggestions and improved AI command workflows
+- Pick files grouped by folder with multi-select and simple staging
+
+#### Bug Fixes
+
+- Geeto now removes old installations before reinstalling to avoid conflicts
+
+#### Other Improvements
+
+- Confirmation prompts are now simpler and clearer
+- Progress display during scramble operations is simplified to a single-line spinner
+
+---
+
 ## v0.6.6 — February 26, 2026
 
 ### What's New?

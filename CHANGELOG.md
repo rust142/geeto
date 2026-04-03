@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.7.0-alpha.1](https://github.com/rust142/geeto/compare/v0.6.6...v0.7.0-alpha.1) (2026-04-03)
+
+### Features
+
+* feat(platform): add GitLab integration and unified platform API ([87694dd](https://github.com/rust142/geeto/commit/87694dd))
+* feat(cli): centralize AI prompts and refactor AI/CLI workflows ([6273c94](https://github.com/rust142/geeto/commit/6273c94))
+* feat(cli/menu): add grouped multi-select with folder headers and file staging ([9c48220](https://github.com/rust142/geeto/commit/9c48220))
+
+### Bug Fixes
+
+* fix(install): clean up old geeto installations before reinstall ([dcf2630](https://github.com/rust142/geeto/commit/dcf2630))
+
+### Other Changes
+
+* refactor(input): simplify confirm prompt rendering ([5257b85](https://github.com/rust142/geeto/commit/5257b85))
+* refactor(scramble): simplify ScrambleProgress to single-line spinner ([33fede5](https://github.com/rust142/geeto/commit/33fede5))
+
 ## [0.6.6](https://github.com/rust142/geeto/compare/v0.6.5...v0.6.6) (2026-02-26)
 
 ### Features
