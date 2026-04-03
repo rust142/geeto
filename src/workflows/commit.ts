@@ -132,6 +132,197 @@ Other suggested commits:\n- ${conv.join('\n- ')}`
   return others.join('\n')
 }
 
+/** Attempt to run git commit using a temporary file to avoid shell quoting issues. */
+async function attemptCommit(titleStr: string, bodyStr?: string | null): Promise<boolean> {
+  // Compose full commit message
+  const msg = bodyStr ? `${titleStr}\n\n${bodyStr}\n` : `${titleStr}\n`
+
+  // Use spawnSync to avoid shell quoting pitfalls
+  const tempDir = await import('node:os')
+  const fs = await import('node:fs')
+  const { spawnSync } = await import('node:child_process')
+
+  const tmpFile = path.join(tempDir.tmpdir(), `geeto-commit-${Date.now()}.txt`)
+
+  try {
+    fs.writeFileSync(tmpFile, msg, 'utf8')
+  } catch (error: unknown) {
+    const errMsg = error instanceof Error ? error.message : String(error)
+    log.error(`Failed to write temporary commit message: ${errMsg}`)
+    return false
+  }
+
+  try {
+    const res = spawnSync('git', ['commit', '-F', tmpFile], { stdio: 'inherit' })
+    // cleanup
+    try {
+      fs.unlinkSync(tmpFile)
+    } catch {
+      /* ignore cleanup errors */
+    }
+
+    if (res.status === 0) {
+      const display = titleStr.split('\n')[0] ?? titleStr
+      console.log('')
+      log.success(`Committed: ${colors.cyan}${colors.bright}${display}${colors.reset}`)
+
+      // In dry-run mode, offer to revert the commit immediately
+      if (isDryRun()) {
+        console.log('')
+        const revert = confirm('Revert this dry-run commit?', true)
+        if (revert) {
+          try {
+            // Bypass execGit to avoid dry-run guard interception
+            execSync('git reset --soft HEAD~1', { stdio: 'pipe' })
+            log.warn('Commit reverted — changes still staged.')
+          } catch {
+            log.error('Failed to revert.')
+          }
+          process.exit(0)
+        }
+      }
+
+      return true
+    }
+
+    log.error('Commit failed due to commit hook or invalid message.')
+
+    const action = await select('Commit failed. Choose an action:', [
+      { label: "I've fixed it, retry", value: 'retry' },
+      { label: 'Edit commit message and retry', value: 'edit' },
+      { label: 'Abort', value: 'abort' },
+    ])
+
+    if (action === 'edit') {
+      const edited = await editInline(`${titleStr}\n\n${bodyStr ?? ''}`)
+      if (!edited?.trim()) {
+        return false
+      }
+
+      const normalized = normalizeAIOutput(edited.trim())
+      const newTitle =
+        extractCommitTitle(normalized) ?? edited.split('\n').find((l: string) => l.trim()) ?? ''
+      const newBody = newTitle ? extractCommitBody(normalized, newTitle) : null
+      return attemptCommit(newTitle as string, newBody)
+    }
+
+    if (action === 'retry') {
+      // User fixed issues outside of this tool; try committing again
+      return attemptCommit(titleStr, bodyStr)
+    }
+
+    return false
+  } catch (error: unknown) {
+    const errMsg = error instanceof Error ? error.message : String(error)
+    log.error(`Failed to run git commit: ${errMsg}`)
+    return false
+  }
+}
+
+/** Handle manual commit flow (conventional or freeform). */
+async function handleManualCommitFlow(state: GeetoState): Promise<boolean> {
+  log.info('Falling back to manual commit flow')
+
+  const mode = await select('Choose commit mode:', [
+    { label: 'Conventional commit (structured)', value: 'conventional' },
+    { label: 'Manual commit (freeform)', value: 'manual' },
+    { label: 'Cancel', value: 'cancel' },
+  ])
+
+  if (mode === 'cancel') {
+    log.warn('Commit cancelled.')
+    process.exit(0)
+  }
+
+  if (mode === 'manual') {
+    // Freeform manual commit: open inline editor
+    log.info('Write your commit message below:')
+    const edited = await editInline('')
+    if (!edited?.trim()) {
+      log.error('Commit message cannot be empty!')
+      process.exit(1)
+    }
+
+    const message = edited.trim()
+    const committed = await attemptCommit(message)
+    if (committed) {
+      return true
+    }
+
+    log.error('Commit failed or aborted.')
+    process.exit(1)
+  }
+
+  const commitType = await select('Select commit type:', getCommitTypes())
+
+  if (commitType === 'cancel') {
+    log.warn('Commit cancelled.')
+    process.exit(0)
+  }
+
+  const scope = askQuestion('Scope (optional, press Enter to skip): ').trim()
+  let description = ''
+
+  let suggestedDescription = state.workingBranch
+  const slashIndex = state.workingBranch.indexOf('/')
+  const hashIndex = state.workingBranch.indexOf('#')
+
+  if (slashIndex > 0) {
+    suggestedDescription = state.workingBranch.slice(slashIndex + 1)
+  } else if (hashIndex > 0) {
+    suggestedDescription = state.workingBranch.slice(hashIndex + 1)
+  }
+
+  suggestedDescription = suggestedDescription.replaceAll('-', ' ').replaceAll('_', ' ').trim()
+
+  const useSuggested = confirm(`Use suggested description: "${suggestedDescription}"?`)
+  if (useSuggested) {
+    description = suggestedDescription
+  } else {
+    while (!description) {
+      description = askQuestion('Commit message: ').trim()
+      if (!description) {
+        log.error('Commit message cannot be empty!')
+      }
+    }
+  }
+
+  // No prefix selection — keep description as entered
+
+  const commitMsg = scope
+    ? `${commitType}(${scope}): ${description}`
+    : `${commitType}: ${description}`
+
+  // Allow the user to review and edit the assembled message inline
+  const reviewChoice = await select('Review commit message:', [
+    { label: `Use: ${commitMsg}`, value: 'use' },
+    { label: 'Edit inline', value: 'edit' },
+    { label: 'Cancel', value: 'cancel' },
+  ])
+
+  if (reviewChoice === 'cancel') {
+    log.warn('Commit cancelled.')
+    process.exit(0)
+  }
+
+  let finalMsg = commitMsg
+  if (reviewChoice === 'edit') {
+    const edited = await editInline(commitMsg)
+    if (!edited?.trim()) {
+      log.warn('Commit cancelled.')
+      process.exit(0)
+    }
+    finalMsg = edited.trim()
+  }
+
+  const committed = await attemptCommit(finalMsg)
+  if (!committed) {
+    log.error('Commit failed or aborted.')
+    process.exit(1)
+  }
+  return true
+}
+
 export const handleCommitWorkflow = async (
   state: GeetoState,
   opts?: { suppressStep?: boolean; suppressConfirm?: boolean }
@@ -146,93 +337,6 @@ export const handleCommitWorkflow = async (
     | 'openrouter'
     | 'manual'
   let selectedTool = getDefaultCommitTool(aiProvider)
-
-  // Helper: attempt to run git commit using a temporary file to avoid shell quoting issues
-  const attemptCommit = async (titleStr: string, bodyStr?: string | null): Promise<boolean> => {
-    // Compose full commit message
-    const msg = bodyStr ? `${titleStr}\n\n${bodyStr}\n` : `${titleStr}\n`
-
-    // Use spawnSync to avoid shell quoting pitfalls
-    const tempDir = await import('node:os')
-    const fs = await import('node:fs')
-    const { spawnSync } = await import('node:child_process')
-
-    const tmpFile = path.join(tempDir.tmpdir(), `geeto-commit-${Date.now()}.txt`)
-
-    try {
-      fs.writeFileSync(tmpFile, msg, 'utf8')
-    } catch (error: unknown) {
-      const errMsg = error instanceof Error ? error.message : String(error)
-      log.error(`Failed to write temporary commit message: ${errMsg}`)
-      return false
-    }
-
-    try {
-      const res = spawnSync('git', ['commit', '-F', tmpFile], { stdio: 'inherit' })
-      // cleanup
-      try {
-        fs.unlinkSync(tmpFile)
-      } catch {
-        /* ignore cleanup errors */
-      }
-
-      if (res.status === 0) {
-        const display = titleStr.split('\n')[0] ?? titleStr
-        console.log('')
-        log.success(`Committed: ${colors.cyan}${colors.bright}${display}${colors.reset}`)
-
-        // In dry-run mode, offer to revert the commit immediately
-        if (isDryRun()) {
-          console.log('')
-          const revert = confirm('Revert this dry-run commit?', true)
-          if (revert) {
-            try {
-              // Bypass execGit to avoid dry-run guard interception
-              execSync('git reset --soft HEAD~1', { stdio: 'pipe' })
-              log.warn('Commit reverted — changes still staged.')
-            } catch {
-              log.error('Failed to revert.')
-            }
-            process.exit(0)
-          }
-        }
-
-        return true
-      }
-
-      log.error('Commit failed due to commit hook or invalid message.')
-
-      const action = await select('Commit failed. Choose an action:', [
-        { label: "I've fixed it, retry", value: 'retry' },
-        { label: 'Edit commit message and retry', value: 'edit' },
-        { label: 'Abort', value: 'abort' },
-      ])
-
-      if (action === 'edit') {
-        const edited = await editInline(`${titleStr}\n\n${bodyStr ?? ''}`)
-        if (!edited?.trim()) {
-          return false
-        }
-
-        const normalized = normalizeAIOutput(edited.trim())
-        const newTitle =
-          extractCommitTitle(normalized) ?? edited.split('\n').find((l: string) => l.trim()) ?? ''
-        const newBody = newTitle ? extractCommitBody(normalized, newTitle) : null
-        return attemptCommit(newTitle as string, newBody)
-      }
-
-      if (action === 'retry') {
-        // User fixed issues outside of this tool; try committing again
-        return attemptCommit(titleStr, bodyStr)
-      }
-
-      return false
-    } catch (error: unknown) {
-      const errMsg = error instanceof Error ? error.message : String(error)
-      log.error(`Failed to run git commit: ${errMsg}`)
-      return false
-    }
-  }
 
   const aiTools = [
     { label: 'Gemini', value: 'gemini' },
@@ -338,7 +442,6 @@ export const handleCommitWorkflow = async (
         saveState(state)
 
         // Prompt model for chosen provider (centralized helper)
-        log.info(`Selected AI Provider: ${getAIProviderShortName(effectiveProvider)}`)
         const chosenModel = await chooseModelForProvider(
           effectiveProvider,
           'Choose model:',
@@ -889,111 +992,7 @@ export const handleCommitWorkflow = async (
   }
 
   if (!commitSuccess || selectedTool === 'manual') {
-    log.info('Falling back to manual commit flow')
-
-    const mode = await select('Choose commit mode:', [
-      { label: 'Conventional commit (structured)', value: 'conventional' },
-      { label: 'Manual commit (freeform)', value: 'manual' },
-      { label: 'Cancel', value: 'cancel' },
-    ])
-
-    if (mode === 'cancel') {
-      log.warn('Commit cancelled.')
-      process.exit(0)
-    }
-
-    if (mode === 'manual') {
-      // Freeform manual commit: open inline editor
-      log.info('Write your commit message below:')
-      const edited = await editInline('')
-      if (!edited?.trim()) {
-        log.error('Commit message cannot be empty!')
-        process.exit(1)
-      }
-
-      const message = edited.trim()
-      const committed = await attemptCommit(message)
-      if (committed) {
-        log.success(
-          `Committed: ${colors.cyan}${colors.bright}${message.split('\n')[0]}${colors.reset}`
-        )
-        return true
-      }
-
-      log.error('Commit failed or aborted.')
-      process.exit(1)
-    }
-
-    const commitType = await select('Select commit type:', getCommitTypes())
-
-    if (commitType === 'cancel') {
-      log.warn('Commit cancelled.')
-      process.exit(0)
-    }
-
-    const scope = askQuestion('Scope (optional, press Enter to skip): ').trim()
-    let description = ''
-
-    let suggestedDescription = state.workingBranch
-    const slashIndex = state.workingBranch.indexOf('/')
-    const hashIndex = state.workingBranch.indexOf('#')
-
-    if (slashIndex > 0) {
-      suggestedDescription = state.workingBranch.slice(slashIndex + 1)
-    } else if (hashIndex > 0) {
-      suggestedDescription = state.workingBranch.slice(hashIndex + 1)
-    }
-
-    suggestedDescription = suggestedDescription.replaceAll('-', ' ').replaceAll('_', ' ').trim()
-
-    const useSuggested = confirm(`Use suggested description: "${suggestedDescription}"?`)
-    if (useSuggested) {
-      description = suggestedDescription
-    } else {
-      while (!description) {
-        description = askQuestion('Commit message: ').trim()
-        if (!description) {
-          log.error('Commit message cannot be empty!')
-        }
-      }
-    }
-
-    // No prefix selection — keep description as entered
-
-    const commitMsg = scope
-      ? `${commitType}(${scope}): ${description}`
-      : `${commitType}: ${description}`
-
-    // Allow the user to review and edit the assembled message inline
-    const reviewChoice = await select('Review commit message:', [
-      { label: `Use: ${commitMsg}`, value: 'use' },
-      { label: 'Edit inline', value: 'edit' },
-      { label: 'Cancel', value: 'cancel' },
-    ])
-
-    if (reviewChoice === 'cancel') {
-      log.warn('Commit cancelled.')
-      process.exit(0)
-    }
-
-    let finalMsg = commitMsg
-    if (reviewChoice === 'edit') {
-      const edited = await editInline(commitMsg)
-      if (!edited?.trim()) {
-        log.warn('Commit cancelled.')
-        process.exit(0)
-      }
-      finalMsg = edited.trim()
-    }
-
-    const committed = await attemptCommit(finalMsg)
-    if (committed) {
-      const display = finalMsg.split('\n')[0] ?? finalMsg
-      log.success(`Committed: ${colors.cyan}${colors.bright}${display}${colors.reset}`)
-    } else {
-      log.error('Commit failed or aborted.')
-      process.exit(1)
-    }
+    return handleManualCommitFlow(state)
   }
 
   return true

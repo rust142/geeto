@@ -92,12 +92,6 @@ export interface GeminiResponse {
   error?: { message: string }
 }
 
-export interface BranchNamingResult {
-  workingBranch: string
-  shouldRestart: boolean
-  cancelled: boolean
-}
-
 export interface GeminiConfig {
   apiKey: string
 }

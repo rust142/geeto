@@ -7,23 +7,19 @@ import type { CopilotModel } from '../api/copilot.js'
 import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 
-import {
-  createPullRequest,
-  getDefaultBranch,
-  listPullRequests,
-  parseRepoFromUrl,
-} from '../api/github.js'
+import { createPullRequest, getDefaultBranch, listPullRequests } from '../api/github.js'
 import { askQuestion, confirm, editInline } from '../cli/input.js'
 import { select } from '../cli/menu.js'
-import { setupGithubConfigInteractive } from '../core/github-setup.js'
+import { getModelForProvider, showAIPreview, updateModelInState } from '../utils/ai-workflow.js'
 import { colors } from '../utils/colors.js'
-import { DEFAULT_GEMINI_MODEL, hasGithubConfig } from '../utils/config.js'
 import { isDryRun, logDryRun } from '../utils/dry-run.js'
 import { execAsync, execSilent } from '../utils/exec.js'
 import { generateTextWithProvider, getAIProviderShortName } from '../utils/git-ai.js'
 import { getCurrentBranch } from '../utils/git.js'
+import { getRepoFromRemote, validateGithubConfig } from '../utils/github-helpers.js'
 import { log } from '../utils/logging.js'
-import { loadState, saveState } from '../utils/state.js'
+import { loadPrompt } from '../utils/prompt-loader.js'
+import { loadState } from '../utils/state.js'
 
 /**
  * Get recent commit messages on current branch (for PR body)
@@ -92,28 +88,6 @@ const getFirstCommitSubject = (base: string): string => {
 }
 
 /**
- * Format a markdown line for terminal preview display
- */
-const formatMdLine = (line: string): string => {
-  const trimmed = line.trimStart()
-  // Headings — strip markdown markers for cleaner display
-  if (trimmed.startsWith('### ')) {
-    return `  ${colors.bright}${trimmed.slice(4)}${colors.reset}`
-  }
-  if (trimmed.startsWith('## ')) {
-    return `  ${colors.cyan}${colors.bright}${trimmed.slice(3)}${colors.reset}`
-  }
-  // Bullet points
-  if (trimmed.startsWith('- ')) {
-    return `    ${trimmed}`
-  }
-  // Empty line
-  if (!trimmed) return ''
-  // Normal text
-  return `  ${colors.gray}${trimmed}${colors.reset}`
-}
-
-/**
  * Get the diff between base branch and HEAD for AI generation
  */
 const getDiffForAI = (base: string, maxChars = 12000): string => {
@@ -145,17 +119,7 @@ const callAIForPR = async (
   const commitList = commits.length > 0 ? `\nRecent commits:\n${commits.join('\n')}` : ''
 
   const promptBase = [
-    'Generate a Pull Request title and body from this git diff.',
-    'Output ONLY in this exact format (no extra markers):',
-    '',
-    'TITLE: <concise PR title, max 72 chars, imperative mood>',
-    '',
-    'BODY:',
-    '## Summary',
-    '<1-2 sentence summary of what this PR does>',
-    '',
-    '## Changes',
-    '<bullet list of key changes>',
+    loadPrompt('pr-prompt.md'),
     '',
     `Branch: ${branchName} → ${baseBranch}`,
     commitList,
@@ -205,56 +169,6 @@ const callAIForPR = async (
 }
 
 /**
- * Show AI PR preview in terminal
- */
-const showAIPRPreview = (title: string, body: string): void => {
-  log.ai('Suggested PR:\n')
-  console.log(`  ${colors.cyan}${colors.bright}${title}${colors.reset}\n`)
-  for (const line of body.split('\n')) {
-    console.log(formatMdLine(line))
-  }
-  console.log('')
-}
-
-/**
- * Get current model string for a given provider from state
- */
-const getModelForProvider = (
-  provider: 'copilot' | 'gemini' | 'openrouter',
-  state: ReturnType<typeof loadState>
-): string | undefined => {
-  if (provider === 'copilot') return state?.copilotModel
-  if (provider === 'openrouter') return state?.openrouterModel
-  return state?.geminiModel ?? DEFAULT_GEMINI_MODEL
-}
-
-/**
- * Update model in state for a given provider and save
- */
-const updateModelInState = (
-  state: ReturnType<typeof loadState>,
-  provider: 'copilot' | 'gemini' | 'openrouter',
-  model: string
-): void => {
-  if (!state) return
-  switch (provider) {
-    case 'copilot': {
-      state.copilotModel = model as CopilotModel
-      break
-    }
-    case 'openrouter': {
-      state.openrouterModel = model as OpenRouterModel
-      break
-    }
-    default: {
-      state.geminiModel = model as GeminiModel
-      break
-    }
-  }
-  saveState(state)
-}
-
-/**
  * Interactive Create PR workflow
  */
 export const handleCreatePR = async (): Promise<void> => {
@@ -262,31 +176,11 @@ export const handleCreatePR = async (): Promise<void> => {
   log.step(`${colors.cyan}Create Pull Request${colors.reset}\n`)
 
   // Check GitHub config
-  if (!hasGithubConfig()) {
-    const ok = setupGithubConfigInteractive()
-    if (!ok) {
-      log.info('Setup cancelled. Run --setup-github later.')
-      return
-    }
-    console.log('')
-  }
+  if (!validateGithubConfig()) return
 
   // Resolve repo info from remote
-  let remoteUrl = ''
-  try {
-    remoteUrl = execSilent('git remote get-url origin').trim()
-  } catch {
-    log.error('No git remote "origin" found.')
-    log.info('Add a remote: git remote add origin <url>')
-    return
-  }
-
-  const repoInfo = parseRepoFromUrl(remoteUrl)
-  if (!repoInfo) {
-    log.error('Could not parse GitHub owner/repo from remote URL.')
-    log.info(`Remote: ${remoteUrl}`)
-    return
-  }
+  const repoInfo = getRepoFromRemote()
+  if (!repoInfo) return
 
   const current = getCurrentBranch()
   log.info(`Repo: ${colors.cyan}${repoInfo.owner}/${repoInfo.repo}${colors.reset}`)
@@ -397,7 +291,7 @@ export const handleCreatePR = async (): Promise<void> => {
 
       prTitle = aiResult.title
       prBody = aiResult.body
-      showAIPRPreview(prTitle, prBody)
+      showAIPreview('PR', prTitle, prBody)
       log.info('Incorrect? check .geeto/last-ai-suggestion.json (possible AI/context limit).')
 
       const action = await select('Accept this PR content?', [
