@@ -71,11 +71,7 @@ export const handlePrune = async (): Promise<void> => {
 
     console.log('')
     const scanSpinner = new ScrambleProgress()
-    scanSpinner.start([
-      'connecting to remote...',
-      `scanning stale branches on ${remote}...`,
-      'analyzing tracking refs...',
-    ])
+    scanSpinner.start([`Scanning stale branches on ${remote}`])
     const stale = await getStaleBranches(remote)
 
     if (stale.length === 0) {
@@ -104,11 +100,7 @@ export const handlePrune = async (): Promise<void> => {
     try {
       console.log('')
       const spinner = new ScrambleProgress()
-      spinner.start([
-        'connecting to remote...',
-        `pruning ${remote}...`,
-        'cleaning up references...',
-      ])
+      spinner.start([`Pruning ${remote}`])
       await execAsync(`git remote prune ${remote}`, true)
       spinner.succeed(
         `Pruned ${stale.length} branch${stale.length === 1 ? '' : 'es'} from ${remote}`

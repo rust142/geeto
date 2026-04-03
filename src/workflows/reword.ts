@@ -370,9 +370,7 @@ const regenerateDirect = async (
     if (correction) console.log('')
     const sp = new ScrambleProgress()
     sp.start([
-      'reviewing feedback...',
-      `regenerating with ${getAIProviderShortName(state.aiProvider ?? 'gemini')}${modelName ? ` (${modelName})` : ''}...`,
-      'formatting conventional commit...',
+      `Regenerating with ${getAIProviderShortName(state.aiProvider ?? 'gemini')}${modelName ? ` (${modelName})` : ''}`,
     ])
 
     try {
@@ -651,9 +649,7 @@ const generateNewMessages = async (
     const spinner = new ScrambleProgress()
     try {
       spinner.start([
-        'analyzing commit diff...',
-        `generating commit message with ${getAIProviderShortName(currentProvider)}${currentModel ? ` (${currentModel})` : ''}...`,
-        'formatting conventional commit...',
+        `Generating commit message with ${getAIProviderShortName(currentProvider)}${currentModel ? ` (${currentModel})` : ''}`,
       ])
 
       initialAiResult = await generateCommitMessageWithProvider(
@@ -1114,11 +1110,7 @@ const executeRebase = async (
         } else {
           console.log('')
           const pushProgress = new ScrambleProgress()
-          pushProgress.start([
-            'preparing force push...',
-            'pushing to remote...',
-            'confirming remote state...',
-          ])
+          pushProgress.start([`Force pushing to origin/${branch}`])
           try {
             await execAsync(`git push --force-with-lease origin "${branch}"`, true)
             pushProgress.succeed(`Force pushed ${branch} to remote`)

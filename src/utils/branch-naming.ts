@@ -114,9 +114,7 @@ export const handleBranchNaming = async (
 
     const spinner = new ScrambleProgress()
     spinner.start([
-      'analyzing task context...',
-      `generating branch name with ${getAIProviderShortName(aiProvider)}${modelDisplay ? ` (${modelDisplay})` : ''}...`,
-      'validating naming convention...',
+      `Generating branch name with ${getAIProviderShortName(aiProvider)}${modelDisplay ? ` (${modelDisplay})` : ''}`,
     ])
 
     // Only call provider to regenerate when not skipping (e.g., user selected Back)

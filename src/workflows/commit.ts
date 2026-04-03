@@ -384,24 +384,6 @@ export const handleCommitWorkflow = async (
     return false
   }
 
-  // Parse diff stats for count-up animation
-  let diffStatsStep: import('../utils/scramble.js').StepInput = 'analyzing diff...'
-  try {
-    const shortstat = execGit('git diff --cached --shortstat', true).trim()
-    const filesMatch = shortstat.match(/(\d+)\s+file/)
-    const insMatch = shortstat.match(/(\d+)\s+insertion/)
-    const delMatch = shortstat.match(/(\d+)\s+deletion/)
-    const counters: import('../utils/scramble.js').CounterDef[] = []
-    if (filesMatch) counters.push({ to: Number(filesMatch[1]), suffix: ' files' })
-    if (insMatch) counters.push({ to: Number(insMatch[1]), prefix: '+' })
-    if (delMatch) counters.push({ to: Number(delMatch[1]), prefix: '-' })
-    if (counters.length > 0) {
-      diffStatsStep = { text: 'analyzing diff', counts: counters }
-    }
-  } catch {
-    // ignore — diffStatsStep stays as plain string
-  }
-
   log.info(`Git diff size: ${diff.length} chars`)
   console.log('')
 
@@ -514,10 +496,7 @@ export const handleCommitWorkflow = async (
       }
 
       spinner.start([
-        'reading staged changes...',
-        diffStatsStep,
-        `generating commit message with ${getAIProviderShortName(currentProvider)}${currentModel ? ` (${currentModel})` : ''}...`,
-        'formatting conventional commit...',
+        `Generating commit message with ${getAIProviderShortName(currentProvider)}${currentModel ? ` (${currentModel})` : ''}`,
       ])
 
       initialAiResult = await generateCommitMessageWithProvider(
@@ -580,11 +559,7 @@ export const handleCommitWorkflow = async (
           }
           const spinner = new ScrambleProgress()
           spinner.start([
-            'reviewing feedback...',
-            `regenerating with ${getAIProviderShortName(
-              state.aiProvider ?? 'gemini'
-            )}${directModelName ? ` (${directModelName})` : ''}...`,
-            'formatting conventional commit...',
+            `Regenerating with ${getAIProviderShortName(state.aiProvider ?? 'gemini')}${directModelName ? ` (${directModelName})` : ''}`,
           ])
 
           try {

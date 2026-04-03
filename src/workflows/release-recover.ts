@@ -144,7 +144,7 @@ export const handleRecoverTags = async (): Promise<void> => {
     if (pushTags) {
       console.log('')
       const pushSpinner = new ScrambleProgress()
-      pushSpinner.start(['connecting to remote...', 'pushing tags...', 'verifying remote refs...'])
+      pushSpinner.start(['Pushing tags to remote'])
       try {
         await execAsync('git push --tags --no-verify', true)
         pushSpinner.succeed('Tags pushed to remote')

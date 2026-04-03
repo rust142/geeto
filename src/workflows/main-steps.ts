@@ -69,51 +69,11 @@ export async function handlePush(
         const branch = getCurrentBranch()
 
         const pushProgress = new ScrambleProgress()
-        pushProgress.start(['initializing push...'])
-
-        // Async pre-check so animation keeps running
-        let hasCommitsToPush = false
-        let objectCount = 0
-        try {
-          const lsResult = await execAsync(`git ls-remote --heads origin "${branch}"`, true)
-          const remoteRef = lsResult.stdout.trim()
-          if (remoteRef) {
-            const commitsAhead = exec(`git rev-list HEAD...origin/"${branch}" --count`, true).trim()
-            hasCommitsToPush = commitsAhead !== '0' && commitsAhead !== ''
-            if (hasCommitsToPush) {
-              try {
-                objectCount =
-                  Number(
-                    exec(`git rev-list --objects HEAD ^origin/"${branch}" | wc -l`, true).trim()
-                  ) || 0
-              } catch {
-                /* ignore */
-              }
-            }
-          } else {
-            hasCommitsToPush = true
-          }
-        } catch {
-          hasCommitsToPush = true
-        }
-
-        pushProgress.addSteps([
-          objectCount > 0
-            ? { text: 'collecting objects', countTo: objectCount }
-            : 'collecting objects...',
-          { text: 'compressing deltas', countTo: 100, suffix: '%' },
-          `uploading to origin/${branch}...`,
-          'verifying remote refs...',
-        ])
+        pushProgress.start([`Pushing to origin/${branch}`])
 
         try {
           await execAsync(`git push -u origin "${branch}"`, true)
-
-          if (hasCommitsToPush) {
-            pushProgress.succeed(`Pushed ${branch} to remote`)
-          } else {
-            pushProgress.stop()
-          }
+          pushProgress.succeed(`Pushed ${branch} to remote`)
         } catch (error) {
           pushProgress.fail('Push failed')
           log.error(describePushError(error))
@@ -126,51 +86,11 @@ export async function handlePush(
         const branch = getCurrentBranch()
 
         const pushProgress = new ScrambleProgress()
-        pushProgress.start(['initializing push...'])
-
-        // Async pre-check so animation keeps running
-        let hasCommitsToPush = false
-        let objectCount = 0
-        try {
-          const lsResult = await execAsync(`git ls-remote --heads origin "${branch}"`, true)
-          const remoteRef = lsResult.stdout.trim()
-          if (remoteRef) {
-            const commitsAhead = exec(`git rev-list HEAD...origin/"${branch}" --count`, true).trim()
-            hasCommitsToPush = commitsAhead !== '0' && commitsAhead !== ''
-            if (hasCommitsToPush) {
-              try {
-                objectCount =
-                  Number(
-                    exec(`git rev-list --objects HEAD ^origin/"${branch}" | wc -l`, true).trim()
-                  ) || 0
-              } catch {
-                /* ignore */
-              }
-            }
-          } else {
-            hasCommitsToPush = true
-          }
-        } catch {
-          hasCommitsToPush = true
-        }
-
-        pushProgress.addSteps([
-          objectCount > 0
-            ? { text: 'collecting objects', countTo: objectCount }
-            : 'collecting objects...',
-          { text: 'compressing deltas', countTo: 100, suffix: '%' },
-          `uploading to origin/${branch}...`,
-          'verifying remote refs...',
-        ])
+        pushProgress.start([`Pushing to origin/${branch}`])
 
         try {
           await execAsync(`git push -u origin "${branch}"`, true)
-
-          if (hasCommitsToPush) {
-            pushProgress.succeed(`Pushed ${branch} to remote`)
-          } else {
-            pushProgress.stop()
-          }
+          pushProgress.succeed(`Pushed ${branch} to remote`)
         } catch (error) {
           pushProgress.fail('Push failed')
           log.error(describePushError(error))
@@ -361,57 +281,11 @@ export async function handleMerge(
         const currentBranch = getCurrentBranch()
 
         const pushProgress = new ScrambleProgress()
-        pushProgress.start(['initializing push...'])
-
-        // Async pre-check so animation keeps running
-        let hasCommitsToPush = false
-        let objectCount = 0
-        try {
-          const lsResult = await execAsync(`git ls-remote --heads origin "${currentBranch}"`, true)
-          const remoteRef = lsResult.stdout.trim()
-          if (remoteRef) {
-            const commitsAhead = exec(
-              `git rev-list HEAD...origin/"${currentBranch}" --count`,
-              true
-            ).trim()
-            hasCommitsToPush = commitsAhead !== '0' && commitsAhead !== ''
-            if (hasCommitsToPush) {
-              try {
-                objectCount =
-                  Number(
-                    exec(
-                      `git rev-list --objects HEAD ^origin/"${currentBranch}" | wc -l`,
-                      true
-                    ).trim()
-                  ) || 0
-              } catch {
-                /* ignore */
-              }
-            }
-          } else {
-            hasCommitsToPush = true
-          }
-        } catch {
-          hasCommitsToPush = true
-        }
-
-        pushProgress.addSteps([
-          objectCount > 0
-            ? { text: 'collecting objects', countTo: objectCount }
-            : 'collecting objects...',
-          { text: 'compressing deltas', countTo: 100, suffix: '%' },
-          `uploading to origin/${targetBranch}...`,
-          'verifying remote refs...',
-        ])
+        pushProgress.start([`Pushing to origin/${currentBranch}`])
 
         try {
           await execAsync(`git push -u origin "${currentBranch}"`, true)
-
-          if (hasCommitsToPush) {
-            pushProgress.succeed(`Pushed ${currentBranch} to remote`)
-          } else {
-            pushProgress.succeed(`Branch ${currentBranch} is already up to date with remote`)
-          }
+          pushProgress.succeed(`Pushed ${currentBranch} to remote`)
         } catch (error) {
           pushProgress.fail('Push failed')
           log.error(describePushError(error))
@@ -449,11 +323,7 @@ export async function handleCleanup(featureBranch: string, state: GeetoState): P
             console.log('')
             try {
               const deleteProgress = new ScrambleProgress()
-              deleteProgress.start([
-                'removing remote branch...',
-                'updating remote refs...',
-                `cleaning up origin/${featureBranch}...`,
-              ])
+              deleteProgress.start([`Deleting origin/${featureBranch}`])
               await execAsync(`git push origin --delete ${featureBranch}`, true)
               deleteProgress.succeed(`Remote branch '${featureBranch}' deleted`)
             } catch {
@@ -495,11 +365,7 @@ export async function handleCleanup(featureBranch: string, state: GeetoState): P
                   console.log('')
                   try {
                     const deleteProgress = new ScrambleProgress()
-                    deleteProgress.start([
-                      'removing remote branch...',
-                      'updating remote refs...',
-                      `cleaning up origin/${featureBranch}...`,
-                    ])
+                    deleteProgress.start([`Deleting origin/${featureBranch}`])
                     await execAsync(`git push origin --delete ${featureBranch}`, true)
                     deleteProgress.succeed(`Remote branch '${featureBranch}' deleted`)
                   } catch {
