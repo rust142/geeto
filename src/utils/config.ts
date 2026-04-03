@@ -8,6 +8,7 @@ import type {
   BranchStrategyConfig,
   GeminiConfig,
   GitHubConfig,
+  GitLabConfig,
   OpenRouterConfig,
   TrelloConfig,
 } from '../types/index.js'
@@ -249,6 +250,7 @@ export const getBranchStrategyConfig = (): BranchStrategyConfig | null => {
     if (fs.existsSync(path)) {
       const content = fs.readFileSync(path, 'utf8')
       const separatorMatch = content.match(/separator\s*=\s*["']([^"']+)["']/)
+      const prefixSepMatch = content.match(/prefix_separator\s*=\s*["']([^"']+)["']/)
       const namingMatch = content.match(/last_naming_strategy\s*=\s*["']([^"']+)["']/)
       const trelloListMatch = content.match(/last_trello_list\s*=\s*["']([^"']+)["']/)
       const protectedMatch = content.match(/protected_branches\s*=\s*\[([^\]]*)\]/)
@@ -275,6 +277,7 @@ export const getBranchStrategyConfig = (): BranchStrategyConfig | null => {
 
         return {
           separator: (separatorMatch?.[1] as '-' | '_') ?? '-',
+          prefixSeparator: (prefixSepMatch?.[1] as '#' | '/') ?? undefined,
           lastNamingStrategy: namingMatch?.[1] as
             | 'title-full'
             | 'title-ai'
@@ -320,7 +323,7 @@ export const saveBranchStrategyConfig = (config: BranchStrategyConfig): void => 
 # Auto-generated on ${new Date().toISOString()}
 
 separator = "${config.separator}"
-${config.lastNamingStrategy ? `last_naming_strategy = "${config.lastNamingStrategy}"\n` : ''}${config.lastTrelloList ? `last_trello_list = "${config.lastTrelloList}"\n` : ''}${config.projectTool ? `project_tool = "${config.projectTool}"\n` : ''}${protectedLine}${allowedBasesLine}`
+${config.prefixSeparator ? `prefix_separator = "${config.prefixSeparator}"\n` : ''}${config.lastNamingStrategy ? `last_naming_strategy = "${config.lastNamingStrategy}"\n` : ''}${config.lastTrelloList ? `last_trello_list = "${config.lastTrelloList}"\n` : ''}${config.projectTool ? `project_tool = "${config.projectTool}"\n` : ''}${protectedLine}${allowedBasesLine}`
 
     fs.writeFileSync(path, configContent, 'utf8')
   } catch (error: unknown) {
@@ -370,6 +373,44 @@ export const getGithubConfig = (): GitHubConfig => {
  */
 export const hasGithubConfig = (): boolean => {
   const config = getGithubConfig()
+  return !!(config.token && config.token.trim().length > 0)
+}
+
+// ── GitLab Configuration ─────────────────────────────────────────────
+
+/**
+ * Get path to GitLab config (project-local)
+ */
+export const getGitlabConfigPath = (): string => {
+  return '.geeto/gitlab.toml'
+}
+
+/**
+ * Read GitLab config from project-local config file
+ */
+export const getGitlabConfig = (): GitLabConfig => {
+  try {
+    const path = getGitlabConfigPath()
+    if (fs.existsSync(path)) {
+      const content = fs.readFileSync(path, 'utf8')
+      const tokenMatch = content.match(/token\s*=\s*["']([^"']+)["']/)
+      const urlMatch = content.match(/url\s*=\s*["']([^"']+)["']/)
+      return {
+        token: tokenMatch?.[1] ?? '',
+        url: urlMatch?.[1] ?? 'https://gitlab.com',
+      }
+    }
+  } catch {
+    // Ignore errors
+  }
+  return { token: '', url: 'https://gitlab.com' }
+}
+
+/**
+ * Check if GitLab is configured (has token)
+ */
+export const hasGitlabConfig = (): boolean => {
+  const config = getGitlabConfig()
   return !!(config.token && config.token.trim().length > 0)
 }
 

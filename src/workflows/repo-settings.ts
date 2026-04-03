@@ -1,5 +1,5 @@
 /**
- * GitHub Repository Settings workflow
+ * Repository Settings workflow (GitHub + GitLab)
  * Update repo description, topics, homepage — AI-powered from README
  */
 
@@ -19,6 +19,7 @@ import {
   getAIProviderShortName,
   getModelValue,
 } from '../utils/git-ai.js'
+import { detectPlatformFromRemote, getPlatformCLI } from '../utils/github-helpers.js'
 import { log } from '../utils/logging.js'
 import { loadPrompt } from '../utils/prompt-loader.js'
 import { loadState } from '../utils/state.js'
@@ -68,14 +69,17 @@ const extractTopicsFromReadme = (): string[] => {
   return [...topics]
 }
 
-/** Get current repo info from gh CLI. */
-const getCurrentRepoInfo = (): {
+/** Get current repo info from platform CLI (gh or glab). */
+const getCurrentRepoInfo = (
+  cli: string
+): {
   description: string
   homepage: string
   topics: string[]
 } | null => {
   try {
-    const raw = execSilent('gh repo view --json description,homepageUrl,repositoryTopics')
+    // NOTE: glab may use different --json field names — adjust if GitLab output differs
+    const raw = execSilent(`${cli} repo view --json description,homepageUrl,repositoryTopics`)
     const data = JSON.parse(raw) as {
       description: string
       homepageUrl: string
@@ -92,27 +96,38 @@ const getCurrentRepoInfo = (): {
 }
 
 /**
- * Interactive GitHub repo settings workflow
+ * Interactive repository settings workflow (GitHub + GitLab)
  */
 export const handleRepoSettings = async (): Promise<void> => {
   log.banner()
-  log.step(`${colors.cyan}GitHub Repository Settings${colors.reset}\n`)
 
-  // Check gh CLI
+  // Detect platform from git remote
+  const platform = detectPlatformFromRemote()
+  const cli = platform ? getPlatformCLI(platform) : 'gh'
+  const cliLabel = platform === 'gitlab' ? 'GitLab CLI (glab)' : 'GitHub CLI (gh)'
+  const platformLabel = platform === 'gitlab' ? 'GitLab' : 'GitHub'
+
+  log.step(`${colors.cyan}${platformLabel} Repository Settings${colors.reset}\n`)
+
+  // Check platform CLI
   try {
-    execSilent('gh --version')
+    execSilent(`${cli} --version`)
   } catch {
-    log.error('GitHub CLI (gh) is not installed.')
-    log.info('Install it: https://cli.github.com')
+    log.error(`${cliLabel} is not installed.`)
+    log.info(
+      platform === 'gitlab'
+        ? 'Install it: https://gitlab.com/gitlab-org/cli'
+        : 'Install it: https://cli.github.com'
+    )
     return
   }
 
   // Check auth
   try {
-    execSilent('gh auth status')
+    execSilent(`${cli} auth status`)
   } catch {
-    log.error('Not authenticated with GitHub CLI.')
-    log.info('Run: gh auth login')
+    log.error(`Not authenticated with ${cliLabel}.`)
+    log.info(`Run: ${cli} auth login`)
     return
   }
 
@@ -120,9 +135,9 @@ export const handleRepoSettings = async (): Promise<void> => {
   const spinner = log.spinner()
   spinner.start('Fetching repo info...')
 
-  const repoInfo = getCurrentRepoInfo()
+  const repoInfo = getCurrentRepoInfo(cli)
   if (!repoInfo) {
-    spinner.fail('Failed to fetch repo info. Are you in a git repo with a GitHub remote?')
+    spinner.fail(`Failed to fetch repo info. Are you in a git repo with a ${platformLabel} remote?`)
     return
   }
 
@@ -427,12 +442,12 @@ export const handleRepoSettings = async (): Promise<void> => {
   // Apply changes
   console.log('')
   const applySpinner = log.spinner()
-  applySpinner.start('Updating GitHub repo settings...')
+  applySpinner.start(`Updating ${platformLabel} repo settings...`)
 
   try {
     // Apply description + homepage
     if (changes.description || changes.homepage) {
-      let cmd = 'gh repo edit'
+      let cmd = `${cli} repo edit`
       if (changes.description) {
         const escaped = changes.description.replaceAll("'", String.raw`'\''`)
         cmd += ` --description '${escaped}'`
@@ -447,28 +462,28 @@ export const handleRepoSettings = async (): Promise<void> => {
     if (changes.topics) {
       for (const topic of repoInfo.topics) {
         try {
-          await execAsync(`gh repo edit --remove-topic "${topic}"`, true)
+          await execAsync(`${cli} repo edit --remove-topic "${topic}"`, true)
         } catch {
           /* ignore */
         }
       }
       for (const topic of changes.topics) {
         try {
-          await execAsync(`gh repo edit --add-topic "${topic}"`, true)
+          await execAsync(`${cli} repo edit --add-topic "${topic}"`, true)
         } catch {
           /* ignore */
         }
       }
     }
 
-    applySpinner.succeed('GitHub repo settings updated!')
+    applySpinner.succeed(`${platformLabel} repo settings updated!`)
 
     // Show final state
     console.log('')
     const verifySpinner = log.spinner()
     verifySpinner.start('Verifying changes...')
 
-    const updated = getCurrentRepoInfo()
+    const updated = getCurrentRepoInfo(cli)
     if (updated) {
       verifySpinner.succeed('Verified')
       console.log('')
@@ -486,7 +501,7 @@ export const handleRepoSettings = async (): Promise<void> => {
       )
       console.log(`${colors.cyan}└${line}┘${colors.reset}`)
     } else {
-      verifySpinner.fail('Could not verify — check manually on GitHub')
+      verifySpinner.fail(`Could not verify — check manually on ${platformLabel}`)
     }
   } catch (error) {
     const stderr = (error as { stderr?: string }).stderr?.trim()

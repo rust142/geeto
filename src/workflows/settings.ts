@@ -62,6 +62,31 @@ const runInteractiveSetup = async (name: 'trello' | 'openrouter' | 'gemini') => 
   }
 }
 
+const handlePrefixFormatSetting = async (): Promise<boolean | void> => {
+  const config = getBranchStrategyConfig()
+  const current = config?.prefixSeparator ?? '(auto-detect)'
+
+  const choice = await select(`Branch prefix format (current: ${current}):`, [
+    { label: 'Hash:  dev#branch-name', value: '#' },
+    { label: 'Slash: dev/branch-name', value: '/' },
+    { label: 'Auto-detect from existing branches', value: 'auto' },
+    { label: 'Back to settings menu', value: 'back' },
+  ])
+
+  if (choice === 'back') return true
+
+  const updated = config ?? { separator: '-' as const }
+  updated.prefixSeparator = choice === 'auto' ? undefined : (choice as '#' | '/')
+  saveBranchStrategyConfig(updated)
+
+  log.success(
+    choice === 'auto'
+      ? 'Prefix format set to auto-detect'
+      : `Prefix format set to: ${choice === '#' ? 'dev#name' : 'dev/name'}`
+  )
+  return false
+}
+
 const handleSeparatorSetting = async (): Promise<boolean | void> => {
   const separatorChoice = await select('Choose branch name separator:', [
     { label: 'Hyphen (kebab-case): my-branch-name', value: 'hyphen' },
@@ -513,6 +538,7 @@ export const showSettingsMenu = async () => {
     log.info('Settings Menu')
 
     const settingChoice = await select('Choose a setting to configure:', [
+      { label: 'Branch prefix format (dev#name / dev/name)', value: 'prefix' },
       { label: 'Branch separator (hyphen/underscore)', value: 'separator' },
       { label: 'Protected branches', value: 'protected' },
       { label: 'Sync model configurations (fetch live sample models)', value: 'models' },
@@ -527,6 +553,12 @@ export const showSettingsMenu = async () => {
       break
     }
 
+    if (settingChoice === 'prefix') {
+      const back = await handlePrefixFormatSetting()
+      if (back) {
+        continue
+      }
+    }
     if (settingChoice === 'separator') {
       const back = await handleSeparatorSetting()
       if (back) {
@@ -581,6 +613,7 @@ export const showSettingsMenu = async () => {
 }
 
 export {
+  handlePrefixFormatSetting,
   handleSeparatorSetting,
   handleProtectedBranchesSetting,
   handleModelResetSetting,

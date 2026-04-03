@@ -1,13 +1,13 @@
 /**
- * Create Pull Request workflow
- * Push current branch & create a PR on GitHub
+ * Create Pull Request / Merge Request workflow
+ * Push current branch & create a PR on GitHub or MR on GitLab
  */
 
 import type { CopilotModel } from '../api/copilot.js'
 import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 
-import { createPullRequest, getDefaultBranch, listPullRequests } from '../api/github.js'
+import { getPlatformAPI } from '../api/platform.js'
 import { askQuestion, confirm, editInline } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { getModelForProvider, showAIPreview, updateModelInState } from '../utils/ai-workflow.js'
@@ -16,7 +16,7 @@ import { isDryRun, logDryRun } from '../utils/dry-run.js'
 import { execAsync, execSilent } from '../utils/exec.js'
 import { generateTextWithProvider, getAIProviderShortName } from '../utils/git-ai.js'
 import { getCurrentBranch } from '../utils/git.js'
-import { getRepoFromRemote, validateGithubConfig } from '../utils/github-helpers.js'
+import { getPlatformRepoFromRemote, validatePlatformConfig } from '../utils/github-helpers.js'
 import { log } from '../utils/logging.js'
 import { loadPrompt } from '../utils/prompt-loader.js'
 import { loadState } from '../utils/state.js'
@@ -173,33 +173,41 @@ const callAIForPR = async (
  */
 export const handleCreatePR = async (): Promise<void> => {
   log.banner()
-  log.step(`${colors.cyan}Create Pull Request${colors.reset}\n`)
 
-  // Check GitHub config
-  if (!validateGithubConfig()) return
+  // Detect platform & resolve repo info from remote
+  const platformRepo = getPlatformRepoFromRemote()
+  if (!platformRepo) return
+  if (!validatePlatformConfig(platformRepo.platform)) return
+  const api = getPlatformAPI(platformRepo.platform)
 
-  // Resolve repo info from remote
-  const repoInfo = getRepoFromRemote()
-  if (!repoInfo) return
+  const prLabel = platformRepo.platform === 'gitlab' ? 'MR' : 'PR'
+  const prLabelFull = platformRepo.platform === 'gitlab' ? 'Merge Request' : 'Pull Request'
+
+  log.step(`${colors.cyan}Create ${prLabelFull}${colors.reset}\n`)
 
   const current = getCurrentBranch()
-  log.info(`Repo: ${colors.cyan}${repoInfo.owner}/${repoInfo.repo}${colors.reset}`)
+  log.info(`Repo: ${colors.cyan}${platformRepo.owner}/${platformRepo.repo}${colors.reset}`)
   log.info(`Branch: ${colors.green}${current}${colors.reset}\n`)
 
-  // Check for existing PR
+  // Check for existing PR/MR
   const spinner = log.spinner()
-  spinner.start('Checking for existing PRs...')
-  const existingPRs = await listPullRequests(repoInfo.owner, repoInfo.repo, current)
+  spinner.start(`Checking for existing ${prLabel}s...`)
+  const existingPRs = await api.listPRs(
+    platformRepo.projectPath,
+    current,
+    platformRepo.owner,
+    platformRepo.repo
+  )
   spinner.stop()
 
   if (existingPRs.length > 0) {
     const pr = existingPRs[0]
     if (pr) {
-      log.warn('An open PR already exists for this branch:')
+      log.warn(`An open ${prLabel} already exists for this branch:`)
       console.log(`  ${colors.cyan}#${pr.number}${colors.reset} ${pr.title}`)
-      console.log(`  ${colors.gray}${pr.html_url}${colors.reset}\n`)
+      console.log(`  ${colors.gray}${pr.url}${colors.reset}\n`)
 
-      const cont = confirm('Create another PR anyway?')
+      const cont = confirm(`Create another ${prLabel} anyway?`)
       if (!cont) return
       console.log('')
     }
@@ -207,7 +215,11 @@ export const handleCreatePR = async (): Promise<void> => {
 
   // Get default branch for base
   spinner.start('Fetching repo info...')
-  const defaultBranch = await getDefaultBranch(repoInfo.owner, repoInfo.repo)
+  const defaultBranch = await api.getDefaultBranch(
+    platformRepo.projectPath,
+    platformRepo.owner,
+    platformRepo.repo
+  )
   spinner.stop()
 
   // Select base branch
@@ -262,7 +274,7 @@ export const handleCreatePR = async (): Promise<void> => {
     const providerLabel = getAIProviderShortName(aiProvider)
     const modelLabel = currentModel ? ` (${currentModel})` : ''
 
-    const useAI = confirm(`Use ${providerLabel}${modelLabel} for PR? (recommended)`)
+    const useAI = confirm(`Use ${providerLabel}${modelLabel} for ${prLabel}? (recommended)`)
     if (!useAI) break aiBlock
 
     aiUsed = true
@@ -291,10 +303,10 @@ export const handleCreatePR = async (): Promise<void> => {
 
       prTitle = aiResult.title
       prBody = aiResult.body
-      showAIPreview('PR', prTitle, prBody)
+      showAIPreview(prLabel, prTitle, prBody)
       log.info('Incorrect? check .geeto/last-ai-suggestion.json (possible AI/context limit).')
 
-      const action = await select('Accept this PR content?', [
+      const action = await select(`Accept this ${prLabel} content?`, [
         { label: 'Yes, use it', value: 'accept' },
         { label: 'Regenerate', value: 'regenerate' },
         { label: 'Correct AI (give feedback)', value: 'correct' },
@@ -319,7 +331,7 @@ export const handleCreatePR = async (): Promise<void> => {
           continue
         }
         case 'edit': {
-          const editedBody = await editInline(prBody, 'Edit PR Body', '.md')
+          const editedBody = await editInline(prBody, `Edit ${prLabel} Body`, '.md')
           if (editedBody !== null) prBody = editedBody
           if (process.stdin.isTTY) process.stdin.setRawMode(false)
           const editedTitle = askQuestion('Edit title (Enter to keep): ').trim()
@@ -381,14 +393,14 @@ export const handleCreatePR = async (): Promise<void> => {
 
     if (process.stdin.isTTY) process.stdin.setRawMode(false)
     log.info(`Suggested title: ${colors.cyan}${defaultTitle}${colors.reset}`)
-    const customTitle = askQuestion('PR title (Enter to use suggested): ').trim()
+    const customTitle = askQuestion(`${prLabel} title (Enter to use suggested): `).trim()
     prTitle = customTitle || defaultTitle
   }
 
   if (!prBody && !aiUsed) {
     console.log('')
     if (commits.length > 0) {
-      const bodyChoice = await select('PR description:', [
+      const bodyChoice = await select(`${prLabel} description:`, [
         { label: 'Auto-generate from commits', value: 'commits' },
         { label: 'Write custom description', value: 'custom' },
         { label: 'Empty (no description)', value: 'empty' },
@@ -400,7 +412,7 @@ export const handleCreatePR = async (): Promise<void> => {
           break
         }
         case 'custom': {
-          const edited = await editInline('', 'PR Description', '.md')
+          const edited = await editInline('', `${prLabel} Description`, '.md')
           prBody = edited?.trim() ?? ''
           break
         }
@@ -410,14 +422,14 @@ export const handleCreatePR = async (): Promise<void> => {
         }
       }
     } else {
-      const edited = await editInline('', 'PR Description', '.md')
+      const edited = await editInline('', `${prLabel} Description`, '.md')
       prBody = edited?.trim() ?? ''
     }
   }
 
   // Draft?
   console.log('')
-  const isDraft = await select('PR type:', [
+  const isDraft = await select(`${prLabel} type:`, [
     { label: 'Ready for review', value: 'ready' },
     { label: 'Draft', value: 'draft' },
   ])
@@ -425,7 +437,9 @@ export const handleCreatePR = async (): Promise<void> => {
   // Summary
   console.log('')
   console.log(`${colors.cyan}┌──────────────────────────────────────────────┐${colors.reset}`)
-  console.log(`${colors.cyan}│${colors.reset} ` + `${colors.bright}PR Summary${colors.reset}`)
+  console.log(
+    `${colors.cyan}│${colors.reset} ` + `${colors.bright}${prLabel} Summary${colors.reset}`
+  )
   console.log(`${colors.cyan}├──────────────────────────────────────────────┤${colors.reset}`)
   console.log(`${colors.cyan}│${colors.reset} Title: ${colors.bright}${prTitle}${colors.reset}`)
   console.log(
@@ -447,7 +461,7 @@ export const handleCreatePR = async (): Promise<void> => {
   console.log(`${colors.cyan}└──────────────────────────────────────────────┘${colors.reset}`)
 
   console.log('')
-  const proceed = confirm('Create this PR?')
+  const proceed = confirm(`Create this ${prLabel}?`)
   if (!proceed) {
     log.info('Cancelled.')
     return
@@ -472,38 +486,40 @@ export const handleCreatePR = async (): Promise<void> => {
 
   // Create PR
   if (isDryRun()) {
-    logDryRun(`GitHub API: Create PR "${prTitle}" (${current} → ${baseBranch})`)
-    log.success('PR would be created (dry-run)')
+    const platformName = platformRepo.platform === 'gitlab' ? 'GitLab' : 'GitHub'
+    logDryRun(`${platformName} API: Create ${prLabel} "${prTitle}" (${current} → ${baseBranch})`)
+    log.success(`${prLabel} would be created (dry-run)`)
     return
   }
 
   const prSpinner = log.spinner()
-  prSpinner.start('Creating pull request...')
+  prSpinner.start(`Creating ${prLabelFull.toLowerCase()}...`)
 
-  const pr = await createPullRequest({
-    owner: repoInfo.owner,
-    repo: repoInfo.repo,
+  const pr = await api.createPR({
+    projectPath: platformRepo.projectPath,
     title: prTitle,
     body: prBody,
-    head: current,
-    base: baseBranch,
+    sourceBranch: current,
+    targetBranch: baseBranch,
     draft: isDraft === 'draft',
+    owner: platformRepo.owner,
+    repo: platformRepo.repo,
   })
 
   if (pr) {
-    prSpinner.succeed('Pull request created!')
+    prSpinner.succeed(`${prLabelFull} created!`)
     console.log('')
     console.log(`  ${colors.green}#${pr.number}${colors.reset} ${pr.title}`)
-    console.log(`  ${colors.cyan}${pr.html_url}${colors.reset}`)
+    console.log(`  ${colors.cyan}${pr.url}${colors.reset}`)
 
     // Show clickable link
     console.log('')
     console.log(
-      `  \u001B]8;;${pr.html_url}\u0007` +
+      `  \u001B]8;;${pr.url}\u0007` +
         `${colors.cyan}Open in browser →${colors.reset}` +
         `\u001B]8;;\u0007`
     )
   } else {
-    prSpinner.fail('Failed to create pull request')
+    prSpinner.fail(`Failed to create ${prLabelFull.toLowerCase()}`)
   }
 }

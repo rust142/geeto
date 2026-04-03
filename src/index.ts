@@ -247,6 +247,13 @@ const COMMAND_REGISTRY: CommandEntry[] = [
     handler: 'setupGithubConfigInteractive',
     errorLabel: 'Settings',
   },
+  {
+    flag: '--setup-gitlab',
+    alias: undefined,
+    module: './core/gitlab-setup.js',
+    handler: 'setupGitlabConfigInteractive',
+    errorLabel: 'Settings',
+  },
 ]
 
 /** Flags that set the `startAt` step for the main workflow */
@@ -418,11 +425,11 @@ function showHelpMessage(): void {
   console.log(`    ${C}-st, --status${R}             Pretty git status overview`)
   console.log('')
 
-  console.log(`  ${B}GITHUB${R}`)
-  console.log(`    ${C}-pr, --pr${R}                 Create a Pull Request`)
+  console.log(`  ${B}GITHUB / GITLAB${R}`)
+  console.log(`    ${C}-pr, --pr${R}                 Create a Pull Request / Merge Request`)
   console.log(`    ${C}-i,  --issue${R}              Create an Issue`)
   console.log(`    ${C}-t,  --tag${R}                Release & tag manager with semver`)
-  console.log(`    ${C}-rp, --repo${R}               Update GitHub repo settings`)
+  console.log(`    ${C}-rp, --repo${R}               Update repo settings`)
   console.log('')
 
   console.log(`  ${B}TRELLO${R}`)
@@ -435,6 +442,7 @@ function showHelpMessage(): void {
   console.log(`    ${C}     --setup-gemini${R}       Configure Gemini AI`)
   console.log(`    ${C}     --setup-openrouter${R}   Configure OpenRouter AI`)
   console.log(`    ${C}     --setup-github${R}       Configure GitHub token`)
+  console.log(`    ${C}     --setup-gitlab${R}       Configure GitLab token`)
   console.log(`    ${C}     --setup-trello${R}       Configure Trello integration`)
   console.log(`    ${C}     --change-model${R}       Switch AI provider / model`)
   console.log(`    ${C}     --sync-models${R}        Fetch latest model list`)

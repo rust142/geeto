@@ -1,5 +1,5 @@
 /**
- * Release sync workflows — sync GitHub Releases for existing tags, delete releases
+ * Release sync workflows — sync GitHub/GitLab Releases for existing tags, delete releases
  */
 
 import { writeFileSync } from 'node:fs'
@@ -20,54 +20,66 @@ import {
   getAIProviderShortName,
   getModelValue,
 } from '../utils/git-ai.js'
+import { detectPlatformFromRemote, getPlatformCLI } from '../utils/github-helpers.js'
 import { log } from '../utils/logging.js'
 import { ScrambleProgress } from '../utils/scramble.js'
 import { loadState } from '../utils/state.js'
 
-// ─── GitHub Release helpers ───
+// ─── Release helpers ───
 
-export const getExistingGithubReleases = (): string[] => {
+export const getExistingGithubReleases = async (cli = 'gh'): Promise<string[]> => {
   try {
-    const output = execSilent(
-      'gh release list --limit 100 --json tagName --jq ".[].tagName"'
-    ).trim()
+    const result = await execAsync(
+      `${cli} release list --limit 100 --json tagName --jq ".[].tagName"`,
+      true
+    )
+    const output = result.stdout.trim()
     return output ? output.split('\n').filter(Boolean) : []
   } catch {
     return []
   }
 }
 
-// ─── Sync GitHub Releases for existing tags ───
+// ─── Sync Releases for existing tags ───
 
 export const handleSyncReleases = async (): Promise<void> => {
   const line = '─'.repeat(BOX_W)
 
-  // Check if gh CLI is available
+  // Detect platform (GitHub or GitLab)
+  const platform = detectPlatformFromRemote()
+  const cli = platform ? getPlatformCLI(platform) : 'gh'
+  const platformName = platform === 'gitlab' ? 'GitLab' : 'GitHub'
+
+  // Check if platform CLI is available
   try {
-    execSilent('gh --version')
+    execSilent(`${cli} --version`)
   } catch {
-    log.error('GitHub CLI (gh) is not installed. Install it: https://cli.github.com')
+    log.error(
+      `${platformName} CLI (${cli}) is not installed.${cli === 'gh' ? ' Install it: https://cli.github.com' : ' Install it: https://gitlab.com/gitlab-org/cli'}`
+    )
     return
   }
 
   console.log('')
   const spinner = new ScrambleProgress()
-  spinner.start(['Fetching GitHub releases'])
+  spinner.start([`Fetching tags and ${platformName} releases`])
 
   const localTags = getExistingTags()
-  const ghReleases = getExistingGithubReleases()
+  const ghReleases = await getExistingGithubReleases(cli)
   const missingTags = localTags.filter((t) => !ghReleases.includes(t))
 
-  spinner.succeed(`Found ${localTags.length} tags, ${ghReleases.length} GitHub releases`)
+  spinner.succeed(`Found ${localTags.length} tags, ${ghReleases.length} ${platformName} releases`)
 
   if (missingTags.length === 0) {
     console.log('')
-    log.success('All tags have GitHub Releases! Nothing to sync.')
+    log.success(`All tags have ${platformName} Releases! Nothing to sync.`)
     return
   }
 
   console.log('')
-  log.info(`${colors.bright}${missingTags.length}${colors.reset} tags missing GitHub Releases:`)
+  log.info(
+    `${colors.bright}${missingTags.length}${colors.reset} tags missing ${platformName} Releases:`
+  )
   for (const tag of missingTags) {
     console.log(`  ${colors.yellow}${tag}${colors.reset}`)
   }
@@ -178,7 +190,7 @@ export const handleSyncReleases = async (): Promise<void> => {
   console.log(`${colors.cyan}└${line}┘${colors.reset}`)
 
   console.log('')
-  const proceed = confirm(`Create ${tagsToRelease.length} GitHub Releases?`)
+  const proceed = confirm(`Create ${tagsToRelease.length} ${platformName} Releases?`)
   if (!proceed) return
 
   // Create releases one by one
@@ -264,14 +276,17 @@ export const handleSyncReleases = async (): Promise<void> => {
 
     console.log('')
     const createSpinner = new ScrambleProgress()
-    createSpinner.start(['Creating GitHub release'])
+    createSpinner.start([`Creating ${platformName} release`])
 
     const os = await import('node:os')
     const tempFile = `${os.tmpdir()}/geeto-sync-${Date.now()}.md`
     writeFileSync(tempFile, releaseBody, 'utf8')
 
     try {
-      await execAsync(`gh release create ${tag} --title "${tag}" --notes-file "${tempFile}"`, true)
+      await execAsync(
+        `${cli} release create ${tag} --title "${tag}" --notes-file "${tempFile}"`,
+        true
+      )
       createSpinner.succeed(`Release ${tag} created`)
       successCount++
     } catch (error) {
@@ -291,34 +306,41 @@ export const handleSyncReleases = async (): Promise<void> => {
 
   console.log('')
   if (successCount === tagsToRelease.length) {
-    log.success(`All ${successCount} GitHub Releases created!`)
+    log.success(`All ${successCount} ${platformName} Releases created!`)
   } else {
     log.warn(`${successCount}/${tagsToRelease.length} releases created`)
   }
 }
 
-// ─── Delete GitHub Releases ───
+// ─── Delete Releases ───
 
 export const handleDeleteReleases = async (): Promise<void> => {
-  // Check if gh CLI is available
+  // Detect platform (GitHub or GitLab)
+  const platform = detectPlatformFromRemote()
+  const cli = platform ? getPlatformCLI(platform) : 'gh'
+  const platformName = platform === 'gitlab' ? 'GitLab' : 'GitHub'
+
+  // Check if platform CLI is available
   try {
-    execSilent('gh --version')
+    execSilent(`${cli} --version`)
   } catch {
-    log.error('GitHub CLI (gh) is not installed. Install it: https://cli.github.com')
+    log.error(
+      `${platformName} CLI (${cli}) is not installed.${cli === 'gh' ? ' Install it: https://cli.github.com' : ' Install it: https://gitlab.com/gitlab-org/cli'}`
+    )
     return
   }
 
   console.log('')
   const spinner = new ScrambleProgress()
-  spinner.start(['Fetching GitHub releases'])
+  spinner.start([`Fetching ${platformName} releases`])
 
-  const ghReleases = getExistingGithubReleases()
+  const ghReleases = await getExistingGithubReleases(cli)
 
-  spinner.succeed(`Found ${ghReleases.length} GitHub releases`)
+  spinner.succeed(`Found ${ghReleases.length} ${platformName} releases`)
 
   if (ghReleases.length === 0) {
     console.log('')
-    log.info('No GitHub Releases to delete.')
+    log.info(`No ${platformName} Releases to delete.`)
     return
   }
 
@@ -337,7 +359,7 @@ export const handleDeleteReleases = async (): Promise<void> => {
 
   console.log('')
   const proceed = confirm(
-    `Delete ${selected.length} GitHub Release(s)${alsoDeleteTag ? ' + tags' : ''}?`
+    `Delete ${selected.length} ${platformName} Release(s)${alsoDeleteTag ? ' + tags' : ''}?`
   )
   if (!proceed) return
 
@@ -349,7 +371,7 @@ export const handleDeleteReleases = async (): Promise<void> => {
     releaseSpinner.start([`Deleting release ${release}`])
 
     try {
-      await execAsync(`gh release delete ${release} --yes`, true)
+      await execAsync(`${cli} release delete ${release} --yes`, true)
       if (alsoDeleteTag) {
         try {
           await execAsync(`git tag -d ${release}`, true)
