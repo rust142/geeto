@@ -1,5 +1,19 @@
 # Releases
 
+## v0.7.0-alpha.2 — April 4, 2026
+
+### What's New?
+
+#### Breaking Changes
+
+- The built-in inline file editor has been removed; files now open in the Vim editor by default.
+
+#### Bug Fixes
+
+- Improved label alignment by increasing the padding so names line up correctly.
+
+---
+
 ## v0.7.0-alpha.1 — April 3, 2026
 
 ### What's New?

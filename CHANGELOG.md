@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.7.0-alpha.2](https://github.com/rust142/geeto/compare/v0.7.0-alpha.1...v0.7.0-alpha.2) (2026-04-03)
+
+### Bug Fixes
+
+* fix(release): increase name padding for aligned labels ([f5ed633](https://github.com/rust142/geeto/commit/f5ed633))
+
+### Other Changes
+
+* refactor(cli): remove inline file editor and switch default to vim ([3d1d48a](https://github.com/rust142/geeto/commit/3d1d48a))
+
 ## [0.7.0-alpha.1](https://github.com/rust142/geeto/compare/v0.6.6...v0.7.0-alpha.1) (2026-04-03)
 
 ### Features
