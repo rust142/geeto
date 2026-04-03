@@ -52,7 +52,7 @@ export const handleSyncReleases = async (): Promise<void> => {
 
   console.log('')
   const spinner = new ScrambleProgress()
-  spinner.start(['connecting to github...', 'fetching releases...', 'comparing tags...'])
+  spinner.start(['Fetching GitHub releases'])
 
   const localTags = getExistingTags()
   const ghReleases = getExistingGithubReleases()
@@ -199,9 +199,7 @@ export const handleSyncReleases = async (): Promise<void> => {
       const aiSpinner = new ScrambleProgress()
       const modelDisplay = getModelValue(copilotModel ?? openrouterModel ?? geminiModel ?? '')
       aiSpinner.start([
-        'preparing release context...',
-        `generating notes with ${getAIProviderShortName(aiProvider)}${modelDisplay ? ` (${modelDisplay})` : ''}...`,
-        'processing results...',
+        `Generating release notes with ${getAIProviderShortName(aiProvider)}${modelDisplay ? ` (${modelDisplay})` : ''}`,
       ])
 
       const aiResult = await generateReleaseNotesWithProvider(
@@ -256,7 +254,7 @@ export const handleSyncReleases = async (): Promise<void> => {
     const releaseSpinner = new ScrambleProgress()
 
     // Ensure tag exists on remote before creating GitHub Release
-    releaseSpinner.start(['connecting to remote...', 'pushing tag...', 'verifying remote refs...'])
+    releaseSpinner.start([`Pushing tag ${tag} to remote`])
     try {
       await execAsync(`git push origin ${tag} --no-verify`, true)
       releaseSpinner.succeed(`Tag ${tag} pushed to remote`)
@@ -266,11 +264,7 @@ export const handleSyncReleases = async (): Promise<void> => {
 
     console.log('')
     const createSpinner = new ScrambleProgress()
-    createSpinner.start([
-      'preparing release data...',
-      'creating github release...',
-      'confirming creation...',
-    ])
+    createSpinner.start(['Creating GitHub release'])
 
     const os = await import('node:os')
     const tempFile = `${os.tmpdir()}/geeto-sync-${Date.now()}.md`
@@ -316,7 +310,7 @@ export const handleDeleteReleases = async (): Promise<void> => {
 
   console.log('')
   const spinner = new ScrambleProgress()
-  spinner.start(['connecting to github...', 'fetching releases...', 'processing results...'])
+  spinner.start(['Fetching GitHub releases'])
 
   const ghReleases = getExistingGithubReleases()
 
@@ -352,7 +346,7 @@ export const handleDeleteReleases = async (): Promise<void> => {
   for (const release of selected) {
     console.log('')
     const releaseSpinner = new ScrambleProgress()
-    releaseSpinner.start(['connecting to github...', 'deleting release...', 'cleaning up...'])
+    releaseSpinner.start([`Deleting release ${release}`])
 
     try {
       await execAsync(`gh release delete ${release} --yes`, true)

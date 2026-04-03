@@ -280,9 +280,7 @@ export const handleRelease = async (): Promise<void> => {
       const spinner = new ScrambleProgress()
       const modelDisplay = getModelValue(copilotModel ?? openrouterModel ?? geminiModel ?? '')
       spinner.start([
-        'preparing release context...',
-        `generating notes with ${getAIProviderShortName(aiProvider)}${modelDisplay ? ` (${modelDisplay})` : ''}...`,
-        'processing results...',
+        `Generating release notes with ${getAIProviderShortName(aiProvider)}${modelDisplay ? ` (${modelDisplay})` : ''}`,
       ])
 
       const result = await generateReleaseNotesWithProvider(
@@ -534,13 +532,7 @@ export const handleRelease = async (): Promise<void> => {
   if (pushChoice === 'both' || pushChoice === 'commit') {
     console.log('')
     const pushProgress = new ScrambleProgress()
-    pushProgress.start([
-      'initializing push...',
-      'collecting objects...',
-      { text: 'compressing deltas', countTo: 100, suffix: '%' },
-      'uploading to remote...',
-      'verifying remote refs...',
-    ])
+    pushProgress.start(['Pushing release to remote'])
 
     try {
       await execAsync(`git push`, true)
@@ -577,11 +569,7 @@ export const handleRelease = async (): Promise<void> => {
       writeFileSync(tempFile, releaseBody, 'utf8')
 
       const releaseSpinner = new ScrambleProgress()
-      releaseSpinner.start([
-        'preparing release data...',
-        'creating github release...',
-        'confirming creation...',
-      ])
+      releaseSpinner.start(['Creating GitHub release'])
 
       try {
         await execAsync(

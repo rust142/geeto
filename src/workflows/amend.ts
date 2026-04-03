@@ -249,11 +249,7 @@ export const handleAmend = async (): Promise<void> => {
       const forcePush = confirm('Force push to update remote?')
       if (forcePush) {
         const pushSpinner = new ScrambleProgress()
-        pushSpinner.start([
-          'preparing force push...',
-          'pushing to remote...',
-          'confirming remote state...',
-        ])
+        pushSpinner.start([`Force pushing to origin/${current}`])
         try {
           await execAsync(`git push --force-with-lease origin ${current}`, true)
           pushSpinner.succeed('Force pushed!')

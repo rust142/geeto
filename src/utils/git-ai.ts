@@ -358,7 +358,7 @@ export async function interactiveAIFallback(
           const { generateBranchName, generateCommitMessage } = gem
           const spinner = new ScrambleProgress()
           spinner.start([
-            `retrying with ${getAIProviderShortName(aiProvider)}${getModelValue(currentModel) ? ` (${getModelValue(currentModel)})` : ''}...`,
+            `Retrying with ${getAIProviderShortName(aiProvider)}${getModelValue(currentModel) ? ` (${getModelValue(currentModel)})` : ''}`,
           ])
           if (isCommit) {
             const res = await generateCommitMessage(
@@ -383,7 +383,7 @@ export async function interactiveAIFallback(
           const { generateBranchName, generateCommitMessage } = cop
           const spinner = new ScrambleProgress()
           spinner.start([
-            `retrying with ${getAIProviderShortName(aiProvider)}${getModelValue(currentModel) ? ` (${getModelValue(currentModel)})` : ''}...`,
+            `Retrying with ${getAIProviderShortName(aiProvider)}${getModelValue(currentModel) ? ` (${getModelValue(currentModel)})` : ''}`,
           ])
           if (isCommit) {
             const res = await generateCommitMessage(
@@ -408,7 +408,7 @@ export async function interactiveAIFallback(
           const { generateBranchName, generateCommitMessage } = or
           const spinner = new ScrambleProgress()
           spinner.start([
-            `retrying with ${getAIProviderShortName(aiProvider)}${getModelValue(currentModel) ? ` (${getModelValue(currentModel)})` : ''}...`,
+            `Retrying with ${getAIProviderShortName(aiProvider)}${getModelValue(currentModel) ? ` (${getModelValue(currentModel)})` : ''}`,
           ])
           if (isCommit) {
             const res = await generateCommitMessage(
@@ -458,7 +458,7 @@ export async function interactiveAIFallback(
         updateModel?.('gemini', chosen as GeminiModel)
         const spinner = new ScrambleProgress()
         spinner.start([
-          `${isCommit ? 'generating commit message' : 'generating branch name'} with Gemini (${chosen})...`,
+          `${isCommit ? 'Generating commit message' : 'Generating branch name'} with Gemini (${chosen})`,
         ])
 
         if (isCommit) {
@@ -495,7 +495,7 @@ export async function interactiveAIFallback(
         updateModel?.('copilot', chosen as CopilotModel)
         const spinner = new ScrambleProgress()
         spinner.start([
-          `${isCommit ? 'generating commit message' : 'generating branch name'} with GitHub (${chosen})...`,
+          `${isCommit ? 'Generating commit message' : 'Generating branch name'} with GitHub (${chosen})`,
         ])
 
         if (isCommit) {
@@ -528,7 +528,7 @@ export async function interactiveAIFallback(
         updateModel?.('openrouter', chosen as OpenRouterModel)
         const spinner = new ScrambleProgress()
         spinner.start([
-          `${isCommit ? 'generating commit message' : 'generating branch name'} with OpenRouter (${chosen})...`,
+          `${isCommit ? 'Generating commit message' : 'Generating branch name'} with OpenRouter (${chosen})`,
         ])
 
         if (isCommit) {
@@ -587,7 +587,7 @@ export async function interactiveAIFallback(
         updateModel?.('gemini', chosenModel as GeminiModel)
         const spinner = new ScrambleProgress()
         spinner.start([
-          `${isCommit ? 'generating commit message' : 'generating branch name'} with Gemini (${chosenModel})...`,
+          `${isCommit ? 'Generating commit message' : 'Generating branch name'} with Gemini (${chosenModel})`,
         ])
 
         if (isCommit) {
@@ -623,7 +623,7 @@ export async function interactiveAIFallback(
         updateModel?.('copilot', chosen as CopilotModel)
         const spinner = new ScrambleProgress()
         spinner.start([
-          `${isCommit ? 'generating commit message' : 'generating branch name'} with GitHub (${chosen})...`,
+          `${isCommit ? 'Generating commit message' : 'Generating branch name'} with GitHub (${chosen})`,
         ])
 
         if (isCommit) {
@@ -657,7 +657,7 @@ export async function interactiveAIFallback(
         updateModel?.('openrouter', chosen as OpenRouterModel)
         const spinner = new ScrambleProgress()
         spinner.start([
-          `${isCommit ? 'generating commit message' : 'generating branch name'} with OpenRouter (${chosen})...`,
+          `${isCommit ? 'Generating commit message' : 'Generating branch name'} with OpenRouter (${chosen})`,
         ])
 
         if (isCommit) {

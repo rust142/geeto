@@ -473,11 +473,7 @@ export const safePush = async (
             // Try to pull with rebase
             console.log('')
             const pullSpinner = new ScrambleProgress()
-            pullSpinner.start([
-              'connecting to remote...',
-              'pulling remote changes...',
-              'rebasing local commits...',
-            ])
+            pullSpinner.start([`Pulling with rebase from origin/${branch}`])
             exec(`git pull --rebase origin "${branch}"`)
             pullSpinner.succeed('Successfully pulled and rebased')
             // Retry push after successful pull
@@ -621,7 +617,7 @@ export const safePull = async (
     const branchArg = branch ? ` ${branch}` : ''
     console.log('')
     const pullSpinner = new ScrambleProgress()
-    pullSpinner.start(['connecting to remote...', 'pulling from remote...', 'merging changes...'])
+    pullSpinner.start(['Pulling from remote'])
     await execAsync(`git pull ${remote}${branchArg}`, true)
     pullSpinner.succeed('Pull completed')
 
