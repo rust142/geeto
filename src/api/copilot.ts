@@ -2,8 +2,6 @@
  * Copilot integration for AI-powered branch naming and commit messages
  */
 
-import path from 'node:path'
-
 import {
   generateBranchName as sdkGenerateBranchName,
   generateCommitMessage as sdkGenerateCommitMessage,
@@ -12,6 +10,7 @@ import {
   getAvailableModelChoices as sdkGetAvailableModels,
   isAvailable as sdkIsAvailable,
 } from './copilot-sdk.js'
+import { saveAISuggestion } from '../utils/ai-provider-helpers.js'
 import { log } from '../utils/logging.js'
 
 // Supported models on Copilot
@@ -62,24 +61,7 @@ export const generateBranchName = async (
     }
 
     // Persist original provider response so the user can inspect the unmodified AI output.
-    try {
-      const fs = await import('node:fs/promises')
-      const outDir = path.join(process.cwd(), '.geeto')
-      await fs.mkdir(outDir, { recursive: true })
-      const payload = {
-        provider: 'copilot',
-        model,
-        raw: sdkRes,
-        cleaned: sdkRes,
-        timestamp: new Date().toISOString(),
-      }
-      await fs.writeFile(
-        path.join(outDir, 'last-ai-suggestion.json'),
-        JSON.stringify(payload, null, 2)
-      )
-    } catch {
-      /* ignore file write failures */
-    }
+    await saveAISuggestion('copilot', model, sdkRes)
 
     return sdkRes
   } catch (error) {

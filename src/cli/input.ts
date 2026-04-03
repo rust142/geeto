@@ -151,6 +151,12 @@ export const confirm = (question: string, defaultYes: boolean = true): boolean =
         process.exit(0)
       }
 
+      // Escape (standalone, not arrow sequence) → cancel, return false
+      if (b === 27 && (n === 1 || buf[1] !== 0x5b)) {
+        renderFinal('N')
+        return false
+      }
+
       // Enter → confirm current selection (null = use default)
       if (b === 13 || b === 10) {
         const result = selected ?? defaultYes
@@ -290,6 +296,12 @@ export const askMultiline = (question: string, initialText = ''): string | null 
 
       // Ctrl+C → cancel
       if (b === 3) {
+        process.stdout.write('\n')
+        return null
+      }
+
+      // Escape (standalone, not arrow sequence) → cancel
+      if (b === 27 && (n === 1 || buf[1] !== 0x5b)) {
         process.stdout.write('\n')
         return null
       }

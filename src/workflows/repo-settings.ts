@@ -20,6 +20,7 @@ import {
   getModelValue,
 } from '../utils/git-ai.js'
 import { log } from '../utils/logging.js'
+import { loadPrompt } from '../utils/prompt-loader.js'
 import { loadState } from '../utils/state.js'
 
 /** Read README.md content. */
@@ -217,9 +218,7 @@ export const handleRepoSettings = async (): Promise<void> => {
       let correction = ''
 
       while (!descriptionDone) {
-        const basePrompt =
-          'Analyze this README and write a short GitHub repo description ' +
-          '(max 150 chars). Concise, informative. Output ONLY the text, no quotes.\n\n'
+        const basePrompt = loadPrompt('repo-description-prompt.md') + '\n\n'
         const prompt = correction
           ? `${basePrompt}User feedback: ${correction}\n\nREADME:\n${readme.slice(0, 3000)}`
           : `${basePrompt}${readme.slice(0, 3000)}`

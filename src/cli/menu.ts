@@ -119,7 +119,7 @@ export const select = async (question: string, options: SelectOption[]): Promise
       linesRendered++
       const hintText = searchMode
         ? `  (Esc cancel search, Enter select)`
-        : `  (↑↓/jk arrows, / search, Enter select, 'c' clear, 'q' quit)`
+        : `  (↑↓/jk arrows, / search, Enter select, Esc back, 'c' clear, 'q' quit)`
       console.log(`${colors.gray}${hintText}${colors.reset}`)
       linesRendered++
 
@@ -253,6 +253,12 @@ export const select = async (question: string, options: SelectOption[]): Promise
 
       // Normal navigation mode
       switch (keyStr) {
+        case '\u001B': {
+          // Escape key - back to parent menu
+          cleanup()
+          resolve('back')
+          break
+        }
         case '/': {
           searchMode = true
           renderMenu()
@@ -318,7 +324,7 @@ export const select = async (question: string, options: SelectOption[]): Promise
           console.log('')
           clearLines++
           console.log(
-            `${colors.gray}  (↑↓/jk arrows, / search, Enter select, 'c' clear, 'q' quit)${colors.reset}`
+            `${colors.gray}  (↑↓/jk arrows, / search, Enter select, Esc back, 'c' clear, 'q' quit)${colors.reset}`
           )
           clearLines++
           lastRenderedLines = clearLines
@@ -355,6 +361,7 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
     let filteredOptions = options
     const checked = new Set<string>()
     const totalSelectable = options.filter((o) => !o.disabled && !o.children).length
+    let lastRenderedLines = 0
 
     /** Group header values to filter out from results */
     const groupValues = new Set(options.filter((o) => o.children).map((o) => o.value))
@@ -461,57 +468,74 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
     const renderMenu = () => {
       const { start, end } = getVisibleRange()
 
-      // Restore cursor to right after question line and clear everything below
-      process.stdout.write('\u001B8\u001B[J')
+      // Clear previous render by moving cursor up line-by-line (reliable across all terminals)
+      if (rangeMode) {
+        process.stdout.write('\u001B[2K\r') // Clear current range input line
+      }
+      for (let i = 0; i < lastRenderedLines; i++) {
+        process.stdout.write('\u001B[1A\u001B[2K')
+      }
+
+      let linesRendered = 0
 
       if (searchMode) {
         console.log(`${colors.cyan}/ search:${colors.reset} ${searchQuery}`)
+        linesRendered++
       }
 
       console.log(
         `${colors.gray}  Selected: ${colors.cyan}${checked.size}${colors.gray}/${totalSelectable}${colors.reset}`
       )
+      linesRendered++
 
       // Scroll indicator: items above
       const above = start
       if (above > 0) {
         console.log(`${colors.gray}  ↑ ${above} more above${colors.reset}`)
+        linesRendered++
       }
 
       console.log('') // Blank line
+      linesRendered++
 
       for (let idx = start; idx < end; idx++) {
         const opt = filteredOptions[idx]
         if (!opt) continue
         console.log(renderItem(opt, idx))
+        linesRendered++
       }
 
       // Scroll indicator: items below
       const below = filteredOptions.length - end
       if (below > 0) {
         console.log('')
+        linesRendered++
         console.log(`${colors.gray}  ↓ ${below} more below${colors.reset}`)
+        linesRendered++
       }
 
       console.log('') // Separator before hint
+      linesRendered++
 
       // Hint line at bottom
       const hintText = rangeMode
         ? `  (Type numbers: "1 3 5" or "1-10", Enter apply, Esc cancel)`
         : searchMode
           ? `  (Esc cancel search, Space toggle, Enter confirm)`
-          : `  (↑↓/jk Space toggle, 'a' all, 'n' none, '#' range, / search, Enter confirm, 'q' quit)`
+          : `  (↑↓/jk Space toggle, 'a' all, 'n' none, '#' range, / search, Enter confirm, Esc back, 'q' quit)`
       console.log(`${colors.gray}${hintText}${colors.reset}`)
+      linesRendered++
 
       // Range input at the very bottom (no newline so cursor stays at end)
       if (rangeMode) {
         process.stdout.write(`${colors.cyan}# range:${colors.reset} ${rangeQuery}`)
       }
+
+      lastRenderedLines = linesRendered
     }
 
-    // Print question line and save cursor position (DEC save)
+    // Print question line
     console.log(`${colors.cyan}?${colors.reset} ${question}`)
-    process.stdout.write('\u001B7')
 
     // Initial render
     renderMenu()
@@ -691,6 +715,12 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
 
       // Normal navigation mode
       switch (keyStr) {
+        case '\u001B': {
+          // Escape key - cancel/back
+          cleanup()
+          resolve([])
+          break
+        }
         case '#': {
           rangeMode = true
           renderMenu()
@@ -771,7 +801,7 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
         case 'C': {
           console.clear()
           console.log(`${colors.cyan}?${colors.reset} ${question}`)
-          process.stdout.write('\u001B7') // Re-save cursor after clear
+          lastRenderedLines = 0
           renderMenu()
           break
         }

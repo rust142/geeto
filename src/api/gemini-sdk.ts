@@ -4,6 +4,13 @@
 import { GenerateContentResponse, GoogleGenAI, Model, Pager } from '@google/genai'
 
 import { GeminiModel } from './gemini.js'
+import {
+  buildPromptWithCorrection,
+  buildReleaseNotesPrompt,
+  cleanAIContent,
+  MIN_AI_RESPONSE_LENGTH,
+  normalizeBranchName,
+} from '../utils/ai-text.js'
 import { getGeminiConfig } from '../utils/config.js'
 import { log } from '../utils/logging.js'
 
@@ -46,10 +53,7 @@ export const generateBranchName = async (
   correction?: string,
   model?: GeminiModel
 ): Promise<string | null> => {
-  const promptBase = `Generate a git branch name suffix from this input. Output ONLY the kebab-case suffix (lowercase-with-hyphens), 3-50 chars, nothing else.`
-  const prompt = correction
-    ? `${promptBase}\n\nInput:\n${text}\n\nAdjustment: ${correction}`
-    : `${promptBase}\n\nInput:\n${text}`
+  const prompt = buildPromptWithCorrection('branch-name-prompt.md', text, 'Input', correction)
 
   const result = await client?.models.generateContent({
     model: model ?? 'gemini-2.5-flash',
@@ -63,14 +67,7 @@ export const generateBranchName = async (
         .trim()
         .split('\n')
         .find((l: string) => !!l) ?? ''
-    // sanitize to kebab-case
-    const cleaned = String(first)
-      .toLowerCase()
-      .replaceAll(/[^\d\sa-z-]/g, ' ')
-      .trim()
-      .replaceAll(/\s+/g, '-')
-      .replaceAll(/-+/g, '-')
-      .replaceAll(/^-|-$/g, '')
+    const cleaned = normalizeBranchName(first)
     return cleaned || null
   } catch (error) {
     log.error('Google GenAI Error: ' + String(error))
@@ -82,17 +79,7 @@ export const generateCommitMessage = async (
   correction?: string,
   model?: GeminiModel
 ): Promise<string | null> => {
-  const promptBase = `Generate a conventional commit message from this git diff. Output ONLY the commit message in this format:\n\n<type>(<scope>): <short summary>\n\n<Detailed multi-line body explaining the change. Wrap lines at ~72 characters. LIMITS: subject max 100 chars; body max 360 chars. Include why the change was made and any important notes. Separate subject and body by a single blank line. Do not include any extraneous commentary or markers. Use imperative mood.
-
-Example:
-refactor(ai): migrate providers to SDKs
-
-Replaces direct API/CLI calls for Copilot and Gemini with SDK integrations.
-This simplifies code, improves maintainability, and adds dynamic model
-fetching. Updates .gitignore for geeto binaries.`
-  const prompt = correction
-    ? `${promptBase}\n\nDiff:\n${diff}\n\nAdjustment: ${correction}`
-    : `${promptBase}\n\nDiff:\n${diff}`
+  const prompt = buildPromptWithCorrection('commit-message-prompt.md', diff, 'Diff', correction)
 
   const result = await client?.models.generateContent({
     model: model ?? 'gemini-2.5-flash',
@@ -101,13 +88,10 @@ fetching. Updates .gitignore for geeto binaries.`
 
   try {
     const content = (result as GenerateContentResponse).text
-    // Normalize full response: remove fenced blocks, trim surrounding quotes, collapse extra blank lines
-    const cleaned = String(content)
-      .replaceAll(/```[\S\s]*?```/g, '')
-      .replaceAll(/^"+|"+$/g, '')
-      .trim()
-    const normalized = cleaned.replaceAll(/\n\s*\n+/g, '\n\n').trim()
-    return normalized && normalized.length >= 8 ? normalized : null
+    return cleanAIContent(String(content), {
+      normalizeBlankLines: true,
+      minLength: MIN_AI_RESPONSE_LENGTH,
+    })
   } catch (error) {
     log.error('Google GenAI Error: ' + String(error))
     return null
@@ -293,44 +277,7 @@ export const generateReleaseNotes = async (
   correction?: string,
   model?: GeminiModel
 ): Promise<string | null> => {
-  const langLabel = language === 'id' ? 'Indonesian (Bahasa Indonesia)' : 'English'
-  const promptBase = `You are a release notes writer. Given a list of git commit messages, generate user-friendly release notes in ${langLabel}. Output ONLY the release notes content (no title/heading, no version number, no date — those are added separately).
-
-Rules:
-- Start with "### What's New?" as the top-level section
-- Group changes into subsections: "#### New Features", "#### Bug Fixes", "#### Other Improvements"
-- Only include subsections that have items (skip empty ones)
-- Use simple, non-technical language that end users can understand
-- Each item should be a bullet point starting with "-"
-- Strip conventional commit prefixes (feat:, fix:, chore:, etc.)
-- Keep it concise but informative
-- If there are breaking changes, add a "#### Breaking Changes" subsection at the top
-- Do NOT include commit hashes or author names
-
-Formatting (follow EXACTLY — this is markdownlint-compliant):
-- Always put ONE blank line after EVERY heading (### or ####) before the first bullet
-- Always put ONE blank line after the last bullet in a section before the next #### heading
-- Never have more than one consecutive blank line
-- Example output:
-
-### What's New?
-
-#### New Features
-
-- Feature description here
-- Another feature
-
-#### Bug Fixes
-
-- Fix description here
-
-#### Other Improvements
-
-- Improvement here`
-
-  const prompt = correction
-    ? `${promptBase}\n\nCommits:\n${commits}\n\nAdjustment: ${correction}`
-    : `${promptBase}\n\nCommits:\n${commits}`
+  const prompt = buildReleaseNotesPrompt(commits, language, correction)
 
   const result = await client?.models.generateContent({
     model: model ?? 'gemini-2.5-flash',
@@ -339,11 +286,7 @@ Formatting (follow EXACTLY — this is markdownlint-compliant):
 
   try {
     const content = (result as GenerateContentResponse).text
-    const cleaned = String(content)
-      .replaceAll(/```[\S\s]*?```/g, '')
-      .replaceAll(/^"+|"+$/g, '')
-      .trim()
-    return cleaned || null
+    return cleanAIContent(String(content))
   } catch (error) {
     log.error('Google GenAI Error: ' + String(error))
     return null
@@ -361,11 +304,7 @@ export const generateText = async (prompt: string, model?: GeminiModel): Promise
 
   try {
     const content = (result as GenerateContentResponse).text
-    const cleaned = String(content)
-      .replaceAll(/```[\S\s]*?```/g, '')
-      .replaceAll(/^"+|"+$/g, '')
-      .trim()
-    return cleaned || null
+    return cleanAIContent(String(content))
   } catch {
     return null
   }

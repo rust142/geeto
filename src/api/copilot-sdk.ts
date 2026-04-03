@@ -7,6 +7,13 @@ import path from 'node:path'
 import type { CopilotClient as _CopilotClient, Session } from '@github/copilot-sdk'
 import { CopilotClient } from '@github/copilot-sdk'
 
+import {
+  buildPromptWithCorrection,
+  buildReleaseNotesPrompt,
+  cleanAIContent,
+  MIN_AI_RESPONSE_LENGTH,
+  normalizeBranchName,
+} from '../utils/ai-text.js'
 import { exec } from '../utils/exec.js'
 import { log } from '../utils/logging.js'
 
@@ -14,6 +21,9 @@ import { log } from '../utils/logging.js'
 
 // Minimum Copilot CLI version required for SDK compatibility
 export const MIN_COPILOT_VERSION = '0.0.400'
+
+// Minimum Node.js version for Copilot SDK JS fallback (requires node:sqlite)
+const MIN_NODE_VERSION_FOR_COPILOT = '22.5.0'
 
 // Cache file path for storing copilot binary info
 const CACHE_FILE = path.join(os.homedir(), '.cache', 'geeto', 'copilot-bin.json')
@@ -32,6 +42,40 @@ export const parseParts = (v: string): number => {
   const parts = v.split('.').map((n) => Number.parseInt(n, 10))
   const [major = 0, minor = 0, patch = 0] = parts
   return major * 1_000_000 + minor * 1_000 + patch
+}
+
+/**
+ * Find the bundled native binary shipped with @github/copilot.
+ * The native binary (Mach-O / ELF) works without Node.js,
+ * bypassing the node:sqlite requirement entirely.
+ */
+const findBundledNativeBinary = (): string | null => {
+  const platform = os.platform()
+  const arch = os.arch()
+  const isWin = platform === 'win32'
+  const binName = isWin ? 'copilot.exe' : 'copilot'
+  const pkg = `@github/copilot-${platform}-${arch}`
+
+  // Walk up from this file (or cwd) to find node_modules
+  const searchRoots = [process.cwd()]
+  try {
+    // __dirname equivalent for ESM — find the package from copilot-sdk location
+    const sdkEntry = import.meta.resolve?.('@github/copilot-sdk')
+    if (sdkEntry) {
+      const sdkDir = path.dirname(sdkEntry.replace('file://', ''))
+      // Go up to node_modules parent
+      const nmIdx = sdkDir.lastIndexOf('node_modules')
+      if (nmIdx !== -1) searchRoots.unshift(sdkDir.slice(0, nmIdx))
+    }
+  } catch {
+    // ignore
+  }
+
+  for (const root of searchRoots) {
+    const binPath = path.join(root, 'node_modules', pkg, binName)
+    if (fs.existsSync(binPath)) return binPath
+  }
+  return null
 }
 
 /**
@@ -180,9 +224,11 @@ let client: _CopilotClient | null = null
  * Lazily start the Copilot SDK client.
  *
  * Resolution order:
- * 1. Bundled CLI – SDK resolves @github/copilot from node_modules (npm/bun install).
- * 2. System CLI  – Standalone Copilot CLI binary found on PATH or known locations
- *                  (used when bundled CLI is unavailable, e.g. Bun-compiled binary).
+ * 1. Bundled native binary – platform-specific Mach-O/ELF from @github/copilot-{platform}-{arch}.
+ *    Works on ANY Node/Bun version (no node:sqlite needed).
+ * 2. Bundled JS CLI – SDK default (@github/copilot/index.js). Requires Node 22.5+ for node:sqlite.
+ * 3. System CLI – Standalone Copilot CLI binary found on PATH or known locations
+ *    (used when bundled CLI is unavailable, e.g. Bun-compiled binary).
  */
 const ensureClient = async (): Promise<boolean> => {
   if (client) {
@@ -192,48 +238,66 @@ const ensureClient = async (): Promise<boolean> => {
   // Suppress Node.js experimental warnings from copilot subprocess
   process.env.NODE_NO_WARNINGS = '1'
 
-  // ── Attempt 1: bundled CLI (default SDK behaviour) ────────────────────
-  try {
-    client = new CopilotClient({ autoStart: true })
-    await client.start()
-    return true
-  } catch (bundledError: unknown) {
-    const bundledMsg = bundledError instanceof Error ? bundledError.message : String(bundledError)
+  const nodeVersion = process.versions.node
+  const nodeOk = parseParts(nodeVersion) >= parseParts(MIN_NODE_VERSION_FOR_COPILOT)
 
-    // Only fall through to system CLI when the bundled CLI cannot be resolved
-    // (e.g. running inside a bun-compiled binary where node_modules don't exist).
-    const isMissingModule =
-      bundledMsg.includes('Cannot find module') ||
-      bundledMsg.includes('ResolveMessage') ||
-      bundledMsg.includes('ENOENT')
-
-    if (!isMissingModule) {
-      // Not a resolution error — report and bail out
-      log.clearLine()
-      log.gap()
-      if (bundledMsg.includes('headless') || bundledMsg.includes('Unknown flag')) {
-        log.info('Copilot SDK: bundled CLI does not support --headless (Bun compat issue).')
+  // ── Attempt 1: bundled native binary (no Node.js dependency) ──────────
+  const nativeBin = findBundledNativeBinary()
+  if (nativeBin) {
+    try {
+      client = new CopilotClient({ cliPath: nativeBin, autoStart: true })
+      await client.start()
+      return true
+    } catch (nativeError: unknown) {
+      const nativeMsg = nativeError instanceof Error ? nativeError.message : String(nativeError)
+      client = null
+      // Fall through to JS fallback — only log in verbose situations
+      if (nativeMsg.includes('headless') || nativeMsg.includes('Unknown flag')) {
+        log.clearLine()
+        log.gap()
+        log.info('Copilot SDK: native binary does not support --headless.')
         log.info('Upgrade SDK: bun add @github/copilot-sdk@latest')
-      } else {
-        log.info(`Copilot SDK unavailable: ${bundledMsg}`)
+        log.gap()
+        return false
       }
-      log.gap()
-      client = null
-      return false
+      // Otherwise silently fall through to next attempt
     }
+  }
 
-    // ── Attempt 2: system Copilot CLI (standalone native binary) ────────
-    const systemCli = findBestCopilotBinary()
-    if (!systemCli) {
-      log.clearLine()
-      log.gap()
-      log.info('Copilot SDK: bundled CLI not found and no system Copilot CLI available.')
-      log.info('Install Copilot CLI: brew install copilot-cli')
-      log.gap()
+  // ── Attempt 2: bundled JS CLI (default SDK behaviour, needs Node 22.5+) ──
+  if (nodeOk) {
+    try {
+      client = new CopilotClient({ autoStart: true })
+      await client.start()
+      return true
+    } catch (bundledError: unknown) {
+      const bundledMsg = bundledError instanceof Error ? bundledError.message : String(bundledError)
       client = null
-      return false
-    }
 
+      // Only fall through to system CLI when the bundled CLI cannot be resolved
+      const isMissingModule =
+        bundledMsg.includes('Cannot find module') ||
+        bundledMsg.includes('ResolveMessage') ||
+        bundledMsg.includes('ENOENT')
+
+      if (!isMissingModule) {
+        log.clearLine()
+        log.gap()
+        if (bundledMsg.includes('headless') || bundledMsg.includes('Unknown flag')) {
+          log.info('Copilot SDK: bundled CLI does not support --headless (Bun compat issue).')
+          log.info('Upgrade SDK: bun add @github/copilot-sdk@latest')
+        } else {
+          log.info(`Copilot SDK unavailable: ${bundledMsg}`)
+        }
+        log.gap()
+        return false
+      }
+    }
+  }
+
+  // ── Attempt 3: system Copilot CLI (standalone native binary) ──────────
+  const systemCli = findBestCopilotBinary()
+  if (systemCli) {
     try {
       log.clearLine()
       log.gap()
@@ -249,9 +313,20 @@ const ensureClient = async (): Promise<boolean> => {
       log.info(`System Copilot CLI failed: ${sysMsg}`)
       log.gap()
       client = null
-      return false
     }
   }
+
+  // ── All attempts exhausted ────────────────────────────────────────────
+  log.clearLine()
+  log.gap()
+  if (!nodeOk && !nativeBin) {
+    log.warn(`Copilot requires Node.js ${MIN_NODE_VERSION_FOR_COPILOT}+ (you have ${nodeVersion}).`)
+    log.info('The node:sqlite module is not available in your current version.')
+  }
+  log.info('No working Copilot CLI found. Use Gemini / OpenRouter instead,')
+  log.info('or install Copilot CLI: brew install copilot-cli')
+  log.gap()
+  return false
 }
 
 const withSession = async (
@@ -314,10 +389,7 @@ export const generateBranchName = async (
   correction?: string,
   model?: string
 ): Promise<string | null> => {
-  const promptBase = `Generate a git branch name suffix from this input. Output ONLY the kebab-case suffix (lowercase-with-hyphens), 3-50 chars, nothing else.`
-  const prompt = correction
-    ? `${promptBase}\n\nInput:\n${text}\n\nAdjustment: ${correction}`
-    : `${promptBase}\n\nInput:\n${text}`
+  const prompt = buildPromptWithCorrection('branch-name-prompt.md', text, 'Input', correction)
 
   const result = await withSession(model, async (session) => {
     // sendAndWait returns the assistant message event with data.content
@@ -329,14 +401,7 @@ export const generateBranchName = async (
           .trim()
           .split('\n')
           .find((l: string) => !!l) ?? ''
-      // sanitize to kebab-case
-      const cleaned = String(first)
-        .toLowerCase()
-        .replaceAll(/[^\d\sa-z-]/g, ' ')
-        .trim()
-        .replaceAll(/\s+/g, '-')
-        .replaceAll(/-+/g, '-')
-        .replaceAll(/^-|-$/g, '')
+      const cleaned = normalizeBranchName(first)
       return cleaned || null
     } catch (error) {
       log.clearLine()
@@ -354,29 +419,16 @@ export const generateCommitMessage = async (
   correction?: string,
   model?: string
 ): Promise<string | null> => {
-  const promptBase = `Generate a conventional commit message from this git diff. Output ONLY the commit message in this format:\n\n<type>(<scope>): <short summary>\n\n<Detailed multi-line body explaining the change. Wrap lines at ~72 characters. LIMITS: subject max 100 chars; body max 360 chars. Include why the change was made and any important notes. Separate subject and body by a single blank line. Do not include any extraneous commentary or markers. Use imperative mood.
-
-Example:
-refactor(ai): migrate providers to SDKs
-
-Replaces direct API/CLI calls for Copilot and Gemini with SDK integrations.
-This simplifies code, improves maintainability, and adds dynamic model
-fetching. Updates .gitignore for geeto binaries.`
-  const prompt = correction
-    ? `${promptBase}\n\nDiff:\n${diff}\n\nAdjustment: ${correction}`
-    : `${promptBase}\n\nDiff:\n${diff}`
+  const prompt = buildPromptWithCorrection('commit-message-prompt.md', diff, 'Diff', correction)
 
   const result = await withSession(model, async (session) => {
     try {
       const response = await session.sendAndWait({ prompt })
       const content = response?.data?.content ?? ''
-      // Normalize full response: remove fenced blocks, trim surrounding quotes, collapse extra blank lines
-      const cleaned = String(content)
-        .replaceAll(/```[\S\s]*?```/g, '')
-        .replaceAll(/^"+|"+$/g, '')
-        .trim()
-      const normalized = cleaned.replaceAll(/\n\s*\n+/g, '\n\n').trim()
-      return normalized && normalized.length >= 8 ? normalized : null
+      return cleanAIContent(String(content), {
+        normalizeBlankLines: true,
+        minLength: MIN_AI_RESPONSE_LENGTH,
+      })
     } catch (error) {
       log.clearLine()
       log.gap()
@@ -569,54 +621,13 @@ export const generateReleaseNotes = async (
   correction?: string,
   model?: string
 ): Promise<string | null> => {
-  const langLabel = language === 'id' ? 'Indonesian (Bahasa Indonesia)' : 'English'
-  const promptBase = `You are a release notes writer. Given a list of git commit messages, generate user-friendly release notes in ${langLabel}. Output ONLY the release notes content (no title/heading, no version number, no date — those are added separately).
-
-Rules:
-- Start with "### What's New?" as the top-level section
-- Group changes into subsections: "#### New Features", "#### Bug Fixes", "#### Other Improvements"
-- Only include subsections that have items (skip empty ones)
-- Use simple, non-technical language that end users can understand
-- Each item should be a bullet point starting with "-"
-- Strip conventional commit prefixes (feat:, fix:, chore:, etc.)
-- Keep it concise but informative
-- If there are breaking changes, add a "#### Breaking Changes" subsection at the top
-- Do NOT include commit hashes or author names
-
-Formatting (follow EXACTLY — this is markdownlint-compliant):
-- Always put ONE blank line after EVERY heading (### or ####) before the first bullet
-- Always put ONE blank line after the last bullet in a section before the next #### heading
-- Never have more than one consecutive blank line
-- Example output:
-
-### What's New?
-
-#### New Features
-
-- Feature description here
-- Another feature
-
-#### Bug Fixes
-
-- Fix description here
-
-#### Other Improvements
-
-- Improvement here`
-
-  const prompt = correction
-    ? `${promptBase}\n\nCommits:\n${commits}\n\nAdjustment: ${correction}`
-    : `${promptBase}\n\nCommits:\n${commits}`
+  const prompt = buildReleaseNotesPrompt(commits, language, correction)
 
   const result = await withSession(model, async (session) => {
     try {
       const response = await session.sendAndWait({ prompt })
       const content = response?.data?.content ?? ''
-      const cleaned = String(content)
-        .replaceAll(/```[\S\s]*?```/g, '')
-        .replaceAll(/^"+|"+$/g, '')
-        .trim()
-      return cleaned || null
+      return cleanAIContent(String(content))
     } catch (error) {
       log.clearLine()
       log.gap()
@@ -634,11 +645,7 @@ export const generateText = async (prompt: string, model?: string): Promise<stri
     try {
       const response = await session.sendAndWait({ prompt })
       const content = response?.data?.content ?? ''
-      const cleaned = String(content)
-        .replaceAll(/```[\S\s]*?```/g, '')
-        .replaceAll(/^"+|"+$/g, '')
-        .trim()
-      return cleaned || null
+      return cleanAIContent(String(content))
     } catch {
       return null
     }

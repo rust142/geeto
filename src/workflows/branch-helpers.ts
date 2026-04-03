@@ -400,7 +400,6 @@ export async function handleTrelloCase(
         }
         state.aiProvider = prov as 'gemini' | 'copilot' | 'openrouter'
 
-        log.info(`Selected AI Provider: ${getAIProviderShortName(state.aiProvider ?? 'gemini')}`)
         const chosen = await chooseModelForProvider(
           state.aiProvider as 'gemini' | 'copilot' | 'openrouter',
           'Choose model:',

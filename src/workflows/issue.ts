@@ -7,35 +7,17 @@ import type { CopilotModel } from '../api/copilot.js'
 import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 
-import { createIssue, listLabels, parseRepoFromUrl } from '../api/github.js'
+import { createIssue, listLabels } from '../api/github.js'
 import { askMultiline, askQuestion, confirm, editInline } from '../cli/input.js'
 import { multiSelect, select } from '../cli/menu.js'
-import { setupGithubConfigInteractive } from '../core/github-setup.js'
+import { getModelForProvider, showAIPreview, updateModelInState } from '../utils/ai-workflow.js'
 import { colors } from '../utils/colors.js'
-import { DEFAULT_GEMINI_MODEL, hasGithubConfig } from '../utils/config.js'
 import { isDryRun, logDryRun } from '../utils/dry-run.js'
-import { execSilent } from '../utils/exec.js'
 import { generateTextWithProvider, getAIProviderShortName } from '../utils/git-ai.js'
+import { getRepoFromRemote, validateGithubConfig } from '../utils/github-helpers.js'
 import { log } from '../utils/logging.js'
-import { loadState, saveState } from '../utils/state.js'
-
-/**
- * Format a markdown line for terminal preview display
- */
-const formatMdLine = (line: string): string => {
-  const trimmed = line.trimStart()
-  if (trimmed.startsWith('### ')) {
-    return `  ${colors.bright}${trimmed.slice(4)}${colors.reset}`
-  }
-  if (trimmed.startsWith('## ')) {
-    return `  ${colors.cyan}${colors.bright}${trimmed.slice(3)}${colors.reset}`
-  }
-  if (trimmed.startsWith('- ')) {
-    return `    ${trimmed}`
-  }
-  if (!trimmed) return ''
-  return `  ${colors.gray}${trimmed}${colors.reset}`
-}
+import { loadPrompt } from '../utils/prompt-loader.js'
+import { loadState } from '../utils/state.js'
 
 /**
  * Call AI to generate an issue title and body from a brief description
@@ -46,25 +28,7 @@ const callAIForIssue = async (
   model: string | undefined,
   correction?: string
 ): Promise<{ title: string; body: string } | null> => {
-  const promptBase = [
-    'Generate a GitHub Issue title and body from this description.',
-    'IMPORTANT: Always write in English regardless of the input language.',
-    'Output ONLY in this exact format (no extra markers):',
-    '',
-    'TITLE: <concise issue title, max 72 chars>',
-    '',
-    'BODY:',
-    '## Description',
-    '<clear description of the issue>',
-    '',
-    '## Expected Behavior / Goal',
-    '<what should happen or what is the goal>',
-    '',
-    '## Additional Context',
-    '<any relevant details>',
-    '',
-    `User description:\n${description}`,
-  ].join('\n')
+  const promptBase = loadPrompt('issue-prompt.md') + `\n\nUser description:\n${description}`
 
   const prompt = correction ? `${promptBase}\n\nAdjustment: ${correction}` : promptBase
 
@@ -104,45 +68,6 @@ const callAIForIssue = async (
 }
 
 /**
- * Show AI issue preview in terminal
- */
-const showAIIssuePreview = (title: string, body: string): void => {
-  log.ai('Suggested Issue:\n')
-  console.log(`  ${colors.cyan}${colors.bright}${title}${colors.reset}\n`)
-  for (const line of body.split('\n')) {
-    console.log(formatMdLine(line))
-  }
-  console.log('')
-}
-
-/**
- * Get current model string for a given provider from state
- */
-const getModelForProvider = (
-  provider: 'copilot' | 'gemini' | 'openrouter',
-  state: ReturnType<typeof loadState>
-): string | undefined => {
-  if (provider === 'copilot') return state?.copilotModel
-  if (provider === 'openrouter') return state?.openrouterModel
-  return state?.geminiModel ?? DEFAULT_GEMINI_MODEL
-}
-
-/**
- * Update model in state and persist
- */
-const updateModelInState = (
-  state: ReturnType<typeof loadState>,
-  provider: 'copilot' | 'gemini' | 'openrouter',
-  model: string
-): void => {
-  if (!state) return
-  if (provider === 'copilot') state.copilotModel = model
-  else if (provider === 'openrouter') state.openrouterModel = model
-  else state.geminiModel = model
-  saveState(state)
-}
-
-/**
  * Interactive Create Issue workflow
  */
 export const handleCreateIssue = async (): Promise<void> => {
@@ -150,31 +75,11 @@ export const handleCreateIssue = async (): Promise<void> => {
   log.step(`${colors.cyan}Create GitHub Issue${colors.reset}\n`)
 
   // Check GitHub config
-  if (!hasGithubConfig()) {
-    const ok = setupGithubConfigInteractive()
-    if (!ok) {
-      log.info('Setup cancelled. Run --setup-github later.')
-      return
-    }
-    console.log('')
-  }
+  if (!validateGithubConfig()) return
 
   // Resolve repo info from remote
-  let remoteUrl = ''
-  try {
-    remoteUrl = execSilent('git remote get-url origin').trim()
-  } catch {
-    log.error('No git remote "origin" found.')
-    log.info('Add a remote: git remote add origin <url>')
-    return
-  }
-
-  const repoInfo = parseRepoFromUrl(remoteUrl)
-  if (!repoInfo) {
-    log.error('Could not parse GitHub owner/repo from remote URL.')
-    log.info(`Remote: ${remoteUrl}`)
-    return
-  }
+  const repoInfo = getRepoFromRemote()
+  if (!repoInfo) return
 
   log.info(`Repo: ${colors.cyan}${repoInfo.owner}/${repoInfo.repo}${colors.reset}`)
 
@@ -225,7 +130,7 @@ export const handleCreateIssue = async (): Promise<void> => {
 
       title = aiResult.title
       body = aiResult.body
-      showAIIssuePreview(title, body)
+      showAIPreview('Issue', title, body)
 
       const action = await select('Accept this issue content?', [
         { label: 'Yes, use it', value: 'accept' },
