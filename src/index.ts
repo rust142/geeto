@@ -465,6 +465,44 @@ function showHelpMessage(): void {
 
 // ─── Command Execution ───────────────────────────────────────────────
 
+/**
+ * Static module map for compiled binary compatibility.
+ * Bun's compiler can only resolve string-literal dynamic imports — variable
+ * paths like `import(cmd.module)` won't be bundled. This map provides
+ * explicit string-literal imports that the compiler CAN resolve.
+ */
+const MODULE_LOADERS: Record<
+  string,
+  () => Promise<Record<string, (...args: unknown[]) => unknown>>
+> = {
+  './workflows/abort.js': () => import('./workflows/abort.js'),
+  './workflows/pull.js': () => import('./workflows/pull.js'),
+  './workflows/prune.js': () => import('./workflows/prune.js'),
+  './workflows/fetch.js': () => import('./workflows/fetch.js'),
+  './workflows/status.js': () => import('./workflows/status.js'),
+  './workflows/revert.js': () => import('./workflows/revert.js'),
+  './workflows/alias.js': () => import('./workflows/alias.js'),
+  './workflows/reword.js': () => import('./workflows/reword.js'),
+  './workflows/cleanup.js': () => import('./workflows/cleanup.js'),
+  './workflows/switch.js': () => import('./workflows/switch.js'),
+  './workflows/compare.js': () => import('./workflows/compare.js'),
+  './workflows/cherry-pick.js': () => import('./workflows/cherry-pick.js'),
+  './workflows/pr.js': () => import('./workflows/pr.js'),
+  './workflows/issue.js': () => import('./workflows/issue.js'),
+  './workflows/history.js': () => import('./workflows/history.js'),
+  './workflows/stash.js': () => import('./workflows/stash.js'),
+  './workflows/amend.js': () => import('./workflows/amend.js'),
+  './workflows/stats.js': () => import('./workflows/stats.js'),
+  './workflows/undo.js': () => import('./workflows/undo.js'),
+  './workflows/release.js': () => import('./workflows/release.js'),
+  './workflows/repo-settings.js': () => import('./workflows/repo-settings.js'),
+  './workflows/trello-menu.js': () => import('./workflows/trello-menu.js'),
+  './workflows/settings.js': () => import('./workflows/settings.js'),
+  './core/github-setup.js': () => import('./core/github-setup.js'),
+  './core/gitlab-setup.js': () => import('./core/gitlab-setup.js'),
+  './workflows/doctor.js': () => import('./workflows/doctor.js'),
+}
+
 async function handleDryRunSetup(args: ParsedArgs): Promise<void> {
   const { setDryRun, printDryRunBanner, printDryRunSummary } = await import('./utils/dry-run.js')
 
@@ -516,7 +554,9 @@ async function executeCommand(args: ParsedArgs): Promise<void> {
   for (const cmd of COMMAND_REGISTRY) {
     if (args.activeFlags.has(cmd.flag)) {
       try {
-        const mod = (await import(cmd.module)) as Record<string, (...args: unknown[]) => unknown>
+        const loader = MODULE_LOADERS[cmd.module]
+        if (!loader) throw new Error(`No module loader for ${cmd.module}`)
+        const mod = (await loader()) as Record<string, (...args: unknown[]) => unknown>
         const handlerFn = mod[cmd.handler]
         if (handlerFn) {
           await handlerFn()
