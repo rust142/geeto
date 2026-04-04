@@ -5,7 +5,6 @@
     "": {
       "name": "geeto",
       "dependencies": {
-        "@github/copilot-sdk": "^0.1.25",
         "@google/genai": "^1.42.0",
         "@openrouter/sdk": "^0.5.1",
       },
@@ -40,9 +39,6 @@
         "typescript": "^5",
       },
     },
-  },
-  "patchedDependencies": {
-    "@github/copilot-sdk@0.1.25": "patches/@github%2Fcopilot-sdk@0.1.25.patch",
   },
   "packages": {
     "@babel/code-frame": ["@babel/code-frame@7.29.0", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.28.5", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-9NhCeYjq9+3uxgdtp20LSiJXJvN0FeCtNGpJxuMFZ1Kv3cWUNb6DOhJwUvcVCzKGR66cw4njwM6hrJLqgOwbcw=="],
@@ -266,22 +262,6 @@
     "@gitbeaker/requester-utils": ["@gitbeaker/requester-utils@38.12.1", "", { "dependencies": { "qs": "^6.11.1", "xcase": "^2.0.1" } }, "sha512-Rc/DgngS0YPN+AY1s9UnexKSy4Lh0bkQVAq9p7PRbRpXb33SlTeCg8eg/8+A/mrMcHgYmP0XhH8lkizyA5tBUQ=="],
 
     "@gitbeaker/rest": ["@gitbeaker/rest@38.12.1", "", { "dependencies": { "@gitbeaker/core": "^38.12.1", "@gitbeaker/requester-utils": "^38.12.1" } }, "sha512-9KMSDtJ/sIov+5pcH+CAfiJXSiuYgN0KLKQFg0HHWR2DwcjGYkcbmhoZcWsaOWOqq4kihN1l7wX91UoRxxKKTQ=="],
-
-    "@github/copilot": ["@github/copilot@0.0.411", "", { "optionalDependencies": { "@github/copilot-darwin-arm64": "0.0.411", "@github/copilot-darwin-x64": "0.0.411", "@github/copilot-linux-arm64": "0.0.411", "@github/copilot-linux-x64": "0.0.411", "@github/copilot-win32-arm64": "0.0.411", "@github/copilot-win32-x64": "0.0.411" }, "bin": { "copilot": "npm-loader.js" } }, "sha512-I3/7gw40Iu1O+kTyNPKJHNqDRyOebjsUW6wJsvSVrOpT0TNa3/lfm8xdS2XUuJWkp+PgEG/PRwF7u3DVNdP7bQ=="],
-
-    "@github/copilot-darwin-arm64": ["@github/copilot-darwin-arm64@0.0.411", "", { "os": "darwin", "cpu": "arm64", "bin": { "copilot-darwin-arm64": "copilot" } }, "sha512-dtr+iHxTS4f8HlV2JT9Fp0FFoxuiPWCnU3XGmrHK+rY6bX5okPC2daU5idvs77WKUGcH8yHTZtfbKYUiMxKosw=="],
-
-    "@github/copilot-darwin-x64": ["@github/copilot-darwin-x64@0.0.411", "", { "os": "darwin", "cpu": "x64", "bin": { "copilot-darwin-x64": "copilot" } }, "sha512-zhdbQCbPi1L4iHClackSLx8POfklA+NX9RQLuS48HlKi/0KI/JlaDA/bdbIeMR79wjif5t9gnc/m+RTVmHlRtA=="],
-
-    "@github/copilot-linux-arm64": ["@github/copilot-linux-arm64@0.0.411", "", { "os": "linux", "cpu": "arm64", "bin": { "copilot-linux-arm64": "copilot" } }, "sha512-oZYZ7oX/7O+jzdTUcHkfD1A8YnNRW6mlUgdPjUg+5rXC43bwIdyatAnc0ObY21m9h8ghxGqholoLhm5WnGv1LQ=="],
-
-    "@github/copilot-linux-x64": ["@github/copilot-linux-x64@0.0.411", "", { "os": "linux", "cpu": "x64", "bin": { "copilot-linux-x64": "copilot" } }, "sha512-nnXrKANmmGnkwa3ROlKdAhVNOx8daeMSE8Xh0o3ybKckFv4s38blhKdcxs0RJQRxgAk4p7XXGlDDKNRhurqF1g=="],
-
-    "@github/copilot-sdk": ["@github/copilot-sdk@0.1.25", "", { "dependencies": { "@github/copilot": "^0.0.411", "vscode-jsonrpc": "^8.2.1", "zod": "^4.3.6" } }, "sha512-hIgYLPXzWw9bNgrsD5BLKmgVH20ow5Or5UyVXfVe3YgeiaTgFxC4jWSAVHLGB6ufHZUrvbjppcq2dWK63FmDRA=="],
-
-    "@github/copilot-win32-arm64": ["@github/copilot-win32-arm64@0.0.411", "", { "os": "win32", "cpu": "arm64", "bin": { "copilot-win32-arm64": "copilot.exe" } }, "sha512-h+Bovb2YVCQSeELZOO7zxv8uht45XHcvAkFbRsc1gf9dl109sSUJIcB4KAhs8Aznk28qksxz7kvdSgUWyQBlIA=="],
-
-    "@github/copilot-win32-x64": ["@github/copilot-win32-x64@0.0.411", "", { "os": "win32", "cpu": "x64", "bin": { "copilot-win32-x64": "copilot.exe" } }, "sha512-xmOgi1lGvUBHQJWmq5AK1EP95+Y8xR4TFoK9OCSOaGbQ+LFcX2jF7iavnMolfWwddabew/AMQjsEHlXvbgMG8Q=="],
 
     "@google/genai": ["@google/genai@1.42.0", "", { "dependencies": { "google-auth-library": "^10.3.0", "p-retry": "^4.6.2", "protobufjs": "^7.5.4", "ws": "^8.18.0" }, "peerDependencies": { "@modelcontextprotocol/sdk": "^1.25.2" }, "optionalPeers": ["@modelcontextprotocol/sdk"] }, "sha512-+3nlMTcrQufbQ8IumGkOphxD5Pd5kKyJOzLcnY0/1IuE8upJk5aLmoexZ2BJhBp1zAjRJMEB4a2CJwKI9e2EYw=="],
 
@@ -1368,8 +1348,6 @@
     "util-deprecate": ["util-deprecate@1.0.2", "", {}, "sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw=="],
 
     "validate-npm-package-license": ["validate-npm-package-license@3.0.4", "", { "dependencies": { "spdx-correct": "^3.0.0", "spdx-expression-parse": "^3.0.0" } }, "sha512-DpKm2Ui/xN7/HQKCtpZxoRWBhZ9Z0kqtygG8XCgNQ8ZlDnxuQmWhj566j8fN4Cu3/JmbhsDo7fcAJq4s9h27Ew=="],
-
-    "vscode-jsonrpc": ["vscode-jsonrpc@8.2.1", "", {}, "sha512-kdjOSJ2lLIn7r1rtrMbbNCHjyMPfRnowdKjBQ+mGq6NAW5QY2bEZC/khaC5OR8svbbjvLEaIXkOq45e2X9BIbQ=="],
 
     "vscode-languageserver-textdocument": ["vscode-languageserver-textdocument@1.0.12", "", {}, "sha512-cxWNPesCnQCcMPeenjKKsOCKQZ/L6Tv19DTRIGuLWe32lyzWhihGVJ/rcckZXJxfdKCFvRLS3fpBIsV/ZGX4zA=="],
 

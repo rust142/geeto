@@ -19,7 +19,7 @@ import { log } from '../utils/logging.js'
 export type CopilotModel = string
 
 /**
- * Return Copilot model choices — persisted file first, fallback to live SDK.
+ * Return Copilot model choices — persisted file first, fallback to live API.
  */
 export const getCopilotModels = async (): Promise<
   Array<{ label: string; value: CopilotModel }>
@@ -38,14 +38,14 @@ export const getCopilotModels = async (): Promise<
       }
     }
   } catch {
-    // Fall through to live SDK
+    // Fall through to live API
   }
 
-  // Fallback to live SDK
+  // Fallback to live API
   try {
     const ok = await sdkIsAvailable()
     if (!ok) {
-      log.info('Copilot SDK not available; returning no Copilot models.')
+      log.info('Copilot API not available; returning no models.')
       return []
     }
     const live = await sdkGetAvailableModels()
@@ -60,17 +60,17 @@ export const getCopilotModels = async (): Promise<
 }
 
 /**
- * Generate branch name from title using Copilot SDK
+ * Generate branch name from title using Copilot API
  */
 export const generateBranchName = async (
   text: string,
   correction?: string,
-  model: CopilotModel = 'claude-haiku-4.5'
+  model: CopilotModel = 'gpt-5-mini'
 ): Promise<string | null> => {
   try {
     const ok = await sdkIsAvailable()
     if (!ok) {
-      log.warn('Copilot SDK not available; install @github/copilot-sdk to enable Copilot features.')
+      log.warn('Copilot API not available. Run `gh auth login` to authenticate.')
       return null
     }
 
@@ -92,17 +92,17 @@ export const generateBranchName = async (
 }
 
 /**
- * Generate commit message from git diff using Copilot SDK
+ * Generate commit message from git diff using Copilot API
  */
 export const generateCommitMessage = async (
   diff: string,
   correction?: string,
-  model: CopilotModel = 'claude-haiku-4.5'
+  model: CopilotModel = 'gpt-5-mini'
 ): Promise<string | null> => {
   try {
     const ok = await sdkIsAvailable()
     if (!ok) {
-      log.warn('Copilot SDK not available; install @github/copilot-sdk to enable Copilot features.')
+      log.warn('Copilot API not available. Run `gh auth login` to authenticate.')
       return null
     }
     const sdkRes = await sdkGenerateCommitMessage(diff, correction, model)
@@ -119,12 +119,12 @@ export const generateReleaseNotes = async (
   commits: string,
   language: 'en' | 'id',
   correction?: string,
-  model: CopilotModel = 'claude-haiku-4.5'
+  model: CopilotModel = 'gpt-5-mini'
 ): Promise<string | null> => {
   try {
     const ok = await sdkIsAvailable()
     if (!ok) {
-      log.warn('Copilot SDK not available; install @github/copilot-sdk to enable Copilot features.')
+      log.warn('Copilot API not available. Run `gh auth login` to authenticate.')
       return null
     }
     return await sdkGenerateReleaseNotes(commits, language, correction, model)
@@ -138,7 +138,7 @@ export const generateReleaseNotes = async (
 
 export const generateText = async (
   prompt: string,
-  model: CopilotModel = 'claude-haiku-4.5'
+  model: CopilotModel = 'gpt-5-mini'
 ): Promise<string | null> => {
   try {
     const ok = await sdkIsAvailable()

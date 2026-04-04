@@ -1,35 +1,29 @@
-import { exec } from '../utils/exec.js'
-import { log } from '../utils/logging.js'
+/**
+ * Copilot adapter — availability checks via REST API.
+ *
+ * Since v0.8.0, Geeto uses the Copilot REST API directly.
+ * No Copilot CLI binary needed.
+ */
 
 /**
- * Try SDK availability first; fallback to CLI ping for model enable checks.
+ * Check if Copilot API is accessible for the given model.
  */
-export const pingModel = async (model: string): Promise<boolean> => {
+export const pingModel = async (_model: string): Promise<boolean> => {
   try {
     const sdk = await import('./copilot-sdk.js')
-    if (sdk && typeof sdk.isAvailable === 'function') {
-      const ok = await sdk.isAvailable()
-      if (ok) {
-        return true
-      }
-    }
+    return await sdk.isAvailable()
   } catch {
-    // ignore
-  }
-
-  try {
-    exec(`copilot -p "ping" --model ${model}`, true)
-    return true
-  } catch (error) {
-    log.info('Copilot CLI ping failed: ' + String(error))
     return false
   }
 }
 
-export const isCliAvailable = (): boolean => {
+/**
+ * Check if Copilot API is available (replaces old CLI version check).
+ */
+export const isCliAvailable = async (): Promise<boolean> => {
   try {
-    exec('copilot --version', true)
-    return true
+    const sdk = await import('./copilot-sdk.js')
+    return await sdk.isAvailable()
   } catch {
     return false
   }

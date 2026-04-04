@@ -142,7 +142,8 @@
     "juga",
     "untuk",
     "pedoman",
-    "kontribusi"
+    "kontribusi",
+    "githubcopilot"
   ],
   "ignorePaths": [
     "node_modules/**",
