@@ -1,5 +1,16 @@
 # Releases
 
+## v0.7.0-alpha.3 — April 4, 2026
+
+### What's New?
+
+#### New Features
+
+- Save and manage AI models so they persist across sessions and are easier to use.
+- Add a doctor workflow with automatic task generation to help organize and track next steps.
+
+---
+
 ## v0.7.0-alpha.2 — April 4, 2026
 
 ### What's New?

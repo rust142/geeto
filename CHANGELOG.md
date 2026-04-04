@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.7.0-alpha.3](https://github.com/rust142/geeto/compare/v0.7.0-alpha.2...v0.7.0-alpha.3) (2026-04-04)
+
+### Features
+
+* feat(core): persist/manage AI models, add doctor workflow & task generation ([d903928](https://github.com/rust142/geeto/commit/d903928))
+
 ## [0.7.0-alpha.2](https://github.com/rust142/geeto/compare/v0.7.0-alpha.1...v0.7.0-alpha.2) (2026-04-03)
 
 ### Bug Fixes
