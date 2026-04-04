@@ -1,5 +1,21 @@
 # Releases
 
+## v0.7.0-alpha.4 — April 4, 2026
+
+### What's New?
+
+#### New Features
+
+- Generate embedded prompts to improve suggestion accuracy
+
+- Improve Copilot SDK handling for more reliable operation
+
+#### Bug Fixes
+
+- Fix compatibility with Bun binaries by adding a static module map
+
+---
+
 ## v0.7.0-alpha.3 — April 4, 2026
 
 ### What's New?

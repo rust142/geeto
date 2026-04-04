@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.7.0-alpha.4](https://github.com/rust142/geeto/compare/v0.7.0-alpha.3...v0.7.0-alpha.4) (2026-04-04)
+
+### Features
+
+* feat(build): generate embedded prompts and improve Copilot SDK handling ([2d8b99e](https://github.com/rust142/geeto/commit/2d8b99e))
+
+### Bug Fixes
+
+* fix(index): add static module map for Bun binary compatibility ([9bebd98](https://github.com/rust142/geeto/commit/9bebd98))
+
 ## [0.7.0-alpha.3](https://github.com/rust142/geeto/compare/v0.7.0-alpha.2...v0.7.0-alpha.3) (2026-04-04)
 
 ### Features
