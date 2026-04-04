@@ -1,5 +1,48 @@
 # Changelog
 
+## [0.7.0-alpha.4](https://github.com/rust142/geeto/compare/v0.7.0-alpha.3...v0.7.0-alpha.4) (2026-04-04)
+
+### Features
+
+* feat(build): generate embedded prompts and improve Copilot SDK handling ([2d8b99e](https://github.com/rust142/geeto/commit/2d8b99e))
+
+### Bug Fixes
+
+* fix(index): add static module map for Bun binary compatibility ([9bebd98](https://github.com/rust142/geeto/commit/9bebd98))
+
+## [0.7.0-alpha.3](https://github.com/rust142/geeto/compare/v0.7.0-alpha.2...v0.7.0-alpha.3) (2026-04-04)
+
+### Features
+
+* feat(core): persist/manage AI models, add doctor workflow & task generation ([d903928](https://github.com/rust142/geeto/commit/d903928))
+
+## [0.7.0-alpha.2](https://github.com/rust142/geeto/compare/v0.7.0-alpha.1...v0.7.0-alpha.2) (2026-04-03)
+
+### Bug Fixes
+
+* fix(release): increase name padding for aligned labels ([f5ed633](https://github.com/rust142/geeto/commit/f5ed633))
+
+### Other Changes
+
+* refactor(cli): remove inline file editor and switch default to vim ([3d1d48a](https://github.com/rust142/geeto/commit/3d1d48a))
+
+## [0.7.0-alpha.1](https://github.com/rust142/geeto/compare/v0.6.6...v0.7.0-alpha.1) (2026-04-03)
+
+### Features
+
+* feat(platform): add GitLab integration and unified platform API ([87694dd](https://github.com/rust142/geeto/commit/87694dd))
+* feat(cli): centralize AI prompts and refactor AI/CLI workflows ([6273c94](https://github.com/rust142/geeto/commit/6273c94))
+* feat(cli/menu): add grouped multi-select with folder headers and file staging ([9c48220](https://github.com/rust142/geeto/commit/9c48220))
+
+### Bug Fixes
+
+* fix(install): clean up old geeto installations before reinstall ([dcf2630](https://github.com/rust142/geeto/commit/dcf2630))
+
+### Other Changes
+
+* refactor(input): simplify confirm prompt rendering ([5257b85](https://github.com/rust142/geeto/commit/5257b85))
+* refactor(scramble): simplify ScrambleProgress to single-line spinner ([33fede5](https://github.com/rust142/geeto/commit/33fede5))
+
 ## [0.6.6](https://github.com/rust142/geeto/compare/v0.6.5...v0.6.6) (2026-02-26)
 
 ### Features

@@ -10,6 +10,7 @@ import {
   generateText as sdkGenerateText,
   isAvailable as sdkIsAvailable,
 } from './openrouter-sdk.js'
+import { saveAISuggestion } from '../utils/ai-provider-helpers.js'
 import { log } from '../utils/logging.js'
 
 // Supported models on OpenRouter
@@ -91,24 +92,7 @@ export const generateBranchName = async (
     const branchName = cleaned
 
     // Persist original provider response so the user can inspect the unmodified AI output.
-    try {
-      const fs = await import('node:fs/promises')
-      const outDir = path.join(process.cwd(), '.geeto')
-      await fs.mkdir(outDir, { recursive: true })
-      const payload = {
-        provider: 'openrouter',
-        model,
-        raw: sdkRes,
-        cleaned: cleaned,
-        timestamp: new Date().toISOString(),
-      }
-      await fs.writeFile(
-        path.join(outDir, 'last-ai-suggestion.json'),
-        JSON.stringify(payload, null, 2)
-      )
-    } catch {
-      /* ignore file write failures */
-    }
+    await saveAISuggestion('openrouter', model, sdkRes, cleaned)
 
     return branchName && branchName.length >= 3 ? branchName : null
   } catch (error) {

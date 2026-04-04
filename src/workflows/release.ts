@@ -9,6 +9,24 @@ import type { CopilotModel } from '../api/copilot.js'
 import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 
+import {
+  generateChangelogEntry,
+  generateReleaseMd,
+  normalizeReleaseMarkdown,
+} from './release-notes.js'
+import { handleRecoverTags } from './release-recover.js'
+import { handleDeleteReleases, handleSyncReleases } from './release-sync.js'
+import {
+  bumpPrerelease,
+  categorizeCommits,
+  formatSemver,
+  getCommitsSinceTag,
+  getCurrentVersion,
+  getExistingTags,
+  parseSemver,
+  promoteToStable,
+  updatePackageVersion,
+} from './release-utils.js'
 import { askQuestion, confirm, editInline } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
@@ -20,826 +38,10 @@ import {
   getAIProviderShortName,
   getModelValue,
 } from '../utils/git-ai.js'
+import { detectPlatformFromRemote, getPlatformCLI } from '../utils/github-helpers.js'
 import { log } from '../utils/logging.js'
 import { ScrambleProgress } from '../utils/scramble.js'
 import { loadState } from '../utils/state.js'
-
-// ─── Types ───
-
-interface SemVer {
-  major: number
-  minor: number
-  patch: number
-}
-
-interface CommitEntry {
-  hash: string
-  short: string
-  subject: string
-  author: string
-  date: string
-}
-
-interface CategorizedCommits {
-  features: CommitEntry[]
-  fixes: CommitEntry[]
-  breaking: CommitEntry[]
-  other: CommitEntry[]
-}
-
-// ─── Helpers ───
-
-/**
- * Normalize markdown spacing for consistent markdownlint-friendly output.
- * Ensures: one blank line after ### and #### headings, one blank line between sections,
- * no double blank lines, trailing newline.
- */
-const normalizeReleaseMarkdown = (md: string): string => {
-  const lines = md.split('\n')
-  const result: string[] = []
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i] ?? ''
-    const nextLine = lines[i + 1] ?? ''
-
-    result.push(line)
-
-    // After a heading (### or ####), ensure exactly one blank line before content
-    if ((line.startsWith('###') || line.startsWith('####')) && nextLine.trim() !== '') {
-      result.push('')
-    }
-
-    // After a bullet line, if next line is a heading, ensure blank line
-    if (line.startsWith('-') && (nextLine.startsWith('###') || nextLine.startsWith('####'))) {
-      result.push('')
-    }
-  }
-
-  // Collapse multiple blank lines into one
-  return result
-    .join('\n')
-    .replaceAll(/\n{3,}/g, '\n\n')
-    .trim()
-}
-
-const parseSemver = (version: string): SemVer | null => {
-  const match = version.match(/^(\d+)\.(\d+)\.(\d+)/)
-  if (!match) return null
-  return {
-    major: Number.parseInt(match[1] ?? '0', 10),
-    minor: Number.parseInt(match[2] ?? '0', 10),
-    patch: Number.parseInt(match[3] ?? '0', 10),
-  }
-}
-
-const getCurrentVersion = (): string => {
-  try {
-    const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as {
-      version?: string
-    }
-    return pkg.version ?? '0.0.0'
-  } catch {
-    return '0.0.0'
-  }
-}
-
-const getExistingTags = (): string[] => {
-  try {
-    // Sort by creation date (newest first), NOT version number.
-    // Version sort breaks when older dummy/test tags have higher semver (e.g. v2.0.0 before v0.3.x).
-    const output = execSilent('git tag --list --sort=-creatordate').trim()
-    return output ? output.split('\n').filter(Boolean) : []
-  } catch {
-    return []
-  }
-}
-
-const getCommitsSinceTag = (tag?: string): CommitEntry[] => {
-  try {
-    const sep = '<<GTO>>'
-    const range = tag ? `${tag}..HEAD` : 'HEAD'
-    const output = execSilent(
-      `git log ${range} --format="%H${sep}%h${sep}%s${sep}%an${sep}%ci" --no-merges`
-    ).trim()
-    if (!output) return []
-    return output
-      .split('\n')
-      .filter(Boolean)
-      .map((line) => {
-        const parts = line.split(sep)
-        return {
-          hash: parts[0] ?? '',
-          short: parts[1] ?? '',
-          subject: parts[2] ?? '',
-          author: parts[3] ?? '',
-          date: parts[4] ?? '',
-        }
-      })
-  } catch {
-    return []
-  }
-}
-
-const categorizeCommits = (commits: CommitEntry[]): CategorizedCommits => {
-  const result: CategorizedCommits = {
-    features: [],
-    fixes: [],
-    breaking: [],
-    other: [],
-  }
-
-  for (const c of commits) {
-    if (c.subject.includes('BREAKING CHANGE') || c.subject.includes('!:')) {
-      result.breaking = [...result.breaking, c]
-    } else if (c.subject.startsWith('feat')) {
-      result.features = [...result.features, c]
-    } else if (c.subject.startsWith('fix')) {
-      result.fixes = [...result.fixes, c]
-    } else {
-      result.other = [...result.other, c]
-    }
-  }
-
-  return result
-}
-
-const getRepoUrl = (): string => {
-  try {
-    return execSilent('git config --get remote.origin.url')
-      .trim()
-      .replace(/\.git$/, '')
-      .replace(/^git@github\.com:/, 'https://github.com/')
-  } catch {
-    return ''
-  }
-}
-
-const updatePackageVersion = (newVersion: string): void => {
-  const content = readFileSync('package.json', 'utf8')
-  const pkg = JSON.parse(content) as Record<string, unknown>
-  pkg.version = newVersion
-  writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n', 'utf8')
-
-  // Also update the compiled-binary-safe version constant
-  try {
-    const versionTs = readFileSync('src/version.ts', 'utf8')
-    writeFileSync(
-      'src/version.ts',
-      versionTs.replace(/VERSION = '[^']*'/, `VERSION = '${newVersion}'`),
-      'utf8'
-    )
-  } catch {
-    /* version.ts update is best-effort */
-  }
-}
-
-// ─── stripConventional helpers ───
-
-const stripFeatPrefix = (s: string): string => {
-  const idx = s.indexOf(': ')
-  if (idx !== -1 && s.slice(0, idx).startsWith('feat')) return s.slice(idx + 2)
-  return s.replace(/^feat:\s*/, '')
-}
-
-const stripFixPrefix = (s: string): string => {
-  const idx = s.indexOf(': ')
-  if (idx !== -1 && s.slice(0, idx).startsWith('fix')) return s.slice(idx + 2)
-  return s.replace(/^fix:\s*/, '')
-}
-
-const stripBreakingPrefix = (s: string): string => {
-  const idx = s.indexOf('!: ')
-  if (idx !== -1) return s.slice(idx + 3)
-  return s.replace(/BREAKING CHANGE:\s*/, '')
-}
-
-const stripConventionalPrefix = (s: string): string => {
-  const idx = s.indexOf(': ')
-  if (idx !== -1) return s.slice(idx + 2)
-  return s
-}
-
-// ─── RELEASE.MD generator (user-facing, simple language) ───
-
-const generateReleaseMd = (
-  version: string,
-  commits: CommitEntry[],
-  prevVersion: string
-): string => {
-  const now = new Date()
-  const date = now.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
-  const cat = categorizeCommits(commits)
-
-  // Each version is a ## section so multiple versions stack in a single file
-  const header = [
-    `## v${version} — ${date}`,
-    '',
-    `> Previous version: v${prevVersion}`,
-    '',
-    "### What's New?",
-    '',
-  ]
-
-  const featureSection =
-    cat.features.length > 0
-      ? ['#### New Features', '', ...cat.features.map((f) => `- ${stripFeatPrefix(f.subject)}`), '']
-      : []
-
-  const fixSection =
-    cat.fixes.length > 0
-      ? ['#### Bug Fixes', '', ...cat.fixes.map((f) => `- ${stripFixPrefix(f.subject)}`), '']
-      : []
-
-  const breakingSection =
-    cat.breaking.length > 0
-      ? [
-          '#### Important Changes',
-          '',
-          '> Note: Some changes in this version may require adjustments.',
-          '',
-          ...cat.breaking.map((b) => `- ${stripBreakingPrefix(b.subject)}`),
-          '',
-        ]
-      : []
-
-  const otherSection =
-    cat.other.length > 0
-      ? [
-          '#### Other Improvements',
-          '',
-          ...cat.other.map((o) => `- ${stripConventionalPrefix(o.subject)}`),
-          '',
-        ]
-      : []
-
-  const empty = commits.length === 0 ? ['No significant changes in this version.', ''] : []
-
-  return [
-    ...header,
-    ...featureSection,
-    ...fixSection,
-    ...breakingSection,
-    ...otherSection,
-    ...empty,
-    '---',
-    '',
-  ].join('\n')
-}
-
-// ─── CHANGELOG.md generator (developer-facing, per-commit) ───
-
-const generateChangelogEntry = (
-  version: string,
-  commits: CommitEntry[],
-  prevVersion: string
-): string => {
-  const repoUrl = getRepoUrl()
-  const dateStr = new Date().toISOString().slice(0, 10)
-  const cat = categorizeCommits(commits)
-
-  const commitLink = (c: CommitEntry): string =>
-    repoUrl ? `[${c.short}](${repoUrl}/commit/${c.short})` : c.short
-
-  const versionLink = repoUrl
-    ? `[${version}](${repoUrl}/compare/v${prevVersion}...v${version})`
-    : version
-
-  const header = [`## ${versionLink} (${dateStr})`, '']
-
-  const breakingSection =
-    cat.breaking.length > 0
-      ? [
-          '### BREAKING CHANGES',
-          '',
-          ...cat.breaking.map((c) => `* ${c.subject} (${commitLink(c)})`),
-          '',
-        ]
-      : []
-
-  const featureSection =
-    cat.features.length > 0
-      ? ['### Features', '', ...cat.features.map((c) => `* ${c.subject} (${commitLink(c)})`), '']
-      : []
-
-  const fixSection =
-    cat.fixes.length > 0
-      ? ['### Bug Fixes', '', ...cat.fixes.map((c) => `* ${c.subject} (${commitLink(c)})`), '']
-      : []
-
-  const otherSection =
-    cat.other.length > 0
-      ? ['### Other Changes', '', ...cat.other.map((c) => `* ${c.subject} (${commitLink(c)})`), '']
-      : []
-
-  return [...header, ...breakingSection, ...featureSection, ...fixSection, ...otherSection].join(
-    '\n'
-  )
-}
-
-// ─── Sync GitHub Releases for existing tags ───
-
-const getExistingGithubReleases = (): string[] => {
-  try {
-    const output = execSilent(
-      'gh release list --limit 100 --json tagName --jq ".[].tagName"'
-    ).trim()
-    return output ? output.split('\n').filter(Boolean) : []
-  } catch {
-    return []
-  }
-}
-
-const handleSyncReleases = async (): Promise<void> => {
-  const line = '─'.repeat(BOX_W)
-
-  // Check if gh CLI is available
-  try {
-    execSilent('gh --version')
-  } catch {
-    log.error('GitHub CLI (gh) is not installed. Install it: https://cli.github.com')
-    return
-  }
-
-  console.log('')
-  const spinner = new ScrambleProgress()
-  spinner.start(['connecting to github...', 'fetching releases...', 'comparing tags...'])
-
-  const localTags = getExistingTags()
-  const ghReleases = getExistingGithubReleases()
-  const missingTags = localTags.filter((t) => !ghReleases.includes(t))
-
-  spinner.succeed(`Found ${localTags.length} tags, ${ghReleases.length} GitHub releases`)
-
-  if (missingTags.length === 0) {
-    console.log('')
-    log.success('All tags have GitHub Releases! Nothing to sync.')
-    return
-  }
-
-  console.log('')
-  log.info(`${colors.bright}${missingTags.length}${colors.reset} tags missing GitHub Releases:`)
-  for (const tag of missingTags) {
-    console.log(`  ${colors.yellow}${tag}${colors.reset}`)
-  }
-
-  console.log('')
-  const action = await select('What do you want to do?', [
-    { label: 'Create releases for all missing tags', value: 'all' },
-    { label: 'Select which tags to release', value: 'select' },
-    { label: 'Cancel', value: 'cancel' },
-  ])
-
-  if (action === 'cancel') return
-
-  let tagsToRelease = missingTags
-
-  if (action === 'select') {
-    const { multiSelect } = await import('../cli/menu.js')
-    const choices = missingTags.map((t) => ({ label: t, value: t }))
-    const selected = await multiSelect('Select tags to create releases for:', choices)
-    if (selected.length === 0) {
-      log.info('No tags selected.')
-      return
-    }
-    tagsToRelease = selected
-  }
-
-  // Choose release notes mode: AI or template
-  console.log('')
-  const notesMode = await select('How should release notes be generated?', [
-    { label: 'AI-generated (recommended)', value: 'ai' },
-    { label: 'Auto-generate (template-based)', value: 'auto' },
-  ])
-
-  // AI setup if needed
-  let useAI = notesMode === 'ai'
-  let language: 'en' | 'id' = 'en'
-  let aiProvider: 'gemini' | 'copilot' | 'openrouter' = 'copilot'
-  let copilotModel: CopilotModel | undefined
-  let openrouterModel: OpenRouterModel | undefined
-  let geminiModel: GeminiModel | undefined
-
-  if (useAI) {
-    language = (await select('Release notes language:', [
-      { label: 'English', value: 'en' },
-      { label: 'Indonesian (Bahasa Indonesia)', value: 'id' },
-    ])) as 'en' | 'id'
-
-    // Check saved config
-    const savedState = loadState()
-    if (
-      savedState?.aiProvider &&
-      savedState.aiProvider !== 'manual' &&
-      (savedState.copilotModel || savedState.openrouterModel || savedState.geminiModel)
-    ) {
-      aiProvider = savedState.aiProvider as 'gemini' | 'copilot' | 'openrouter'
-      copilotModel = savedState.copilotModel
-      openrouterModel = savedState.openrouterModel
-      geminiModel = savedState.geminiModel
-    } else {
-      let providerChosen = false
-      while (!providerChosen) {
-        aiProvider = (await select('Choose AI Provider:', [
-          { label: 'GitHub (Recommended)', value: 'copilot' },
-          { label: 'Gemini', value: 'gemini' },
-          { label: 'OpenRouter', value: 'openrouter' },
-        ])) as 'gemini' | 'copilot' | 'openrouter'
-
-        const chosen = await chooseModelForProvider(
-          aiProvider,
-          undefined,
-          'Back to AI provider menu'
-        )
-        if (!chosen || chosen === 'back') continue
-
-        switch (aiProvider) {
-          case 'gemini': {
-            geminiModel = chosen as GeminiModel
-            break
-          }
-          case 'copilot': {
-            copilotModel = chosen as CopilotModel
-            break
-          }
-          case 'openrouter': {
-            openrouterModel = chosen as OpenRouterModel
-            break
-          }
-        }
-        providerChosen = true
-      }
-    }
-  }
-
-  // Preview and confirm
-  console.log('')
-  console.log(`${colors.cyan}┌${line}┐${colors.reset}`)
-  console.log(`${colors.cyan}│${colors.reset} ${colors.bright}Sync Plan${colors.reset}`)
-  console.log(`${colors.cyan}├${line}┤${colors.reset}`)
-  for (const tag of tagsToRelease) {
-    const ver = tag.replace(/^v/, '')
-    console.log(
-      `${colors.cyan}│${colors.reset}  ${colors.green}+${colors.reset} Create release for ${colors.yellow}${ver}${colors.reset}`
-    )
-  }
-  console.log(
-    `${colors.cyan}│${colors.reset}  ${colors.gray}Mode: ${useAI ? 'AI-generated' : 'Template-based'}${colors.reset}`
-  )
-  console.log(`${colors.cyan}└${line}┘${colors.reset}`)
-
-  console.log('')
-  const proceed = confirm(`Create ${tagsToRelease.length} GitHub Releases?`)
-  if (!proceed) return
-
-  // Create releases one by one
-  const allTags = getExistingTags()
-  let successCount = 0
-
-  for (const tag of tagsToRelease) {
-    const ver = tag.replace(/^v/, '')
-    const tagIdx = allTags.indexOf(tag)
-    const prevTag = allTags[tagIdx + 1]
-    const commits = getCommitsSinceTag(prevTag)
-    const commitList = commits.map((c) => c.subject).join('\n')
-
-    let releaseBody: string
-
-    if (useAI && commits.length > 0) {
-      console.log('')
-      const aiSpinner = new ScrambleProgress()
-      const modelDisplay = getModelValue(copilotModel ?? openrouterModel ?? geminiModel ?? '')
-      aiSpinner.start([
-        'preparing release context...',
-        `generating notes with ${getAIProviderShortName(aiProvider)}${modelDisplay ? ` (${modelDisplay})` : ''}...`,
-        'processing results...',
-      ])
-
-      const aiResult = await generateReleaseNotesWithProvider(
-        aiProvider,
-        commitList,
-        language,
-        undefined,
-        copilotModel,
-        openrouterModel,
-        geminiModel
-      )
-
-      if (aiResult) {
-        aiSpinner.succeed(`Notes generated for ${tag}`)
-        releaseBody = normalizeReleaseMarkdown(aiResult)
-
-        // Preview notes for user review
-        console.log('')
-        console.log(`${colors.cyan}┌${'─'.repeat(BOX_W)}┐${colors.reset}`)
-        console.log(
-          `${colors.cyan}│${colors.reset} ${colors.bright}Release Notes — ${tag}${colors.reset}`
-        )
-        console.log(`${colors.cyan}├${'─'.repeat(BOX_W)}┤${colors.reset}`)
-        for (const noteLine of releaseBody.split('\n')) {
-          console.log(`${colors.cyan}│${colors.reset} ${noteLine}`)
-        }
-        console.log(`${colors.cyan}└${'─'.repeat(BOX_W)}┘${colors.reset}`)
-
-        console.log('')
-        const reviewAction = await select(`Publish release for ${tag}?`, [
-          { label: 'Yes, publish', value: 'accept' },
-          { label: 'Skip this tag', value: 'skip' },
-        ])
-
-        if (reviewAction === 'skip') continue
-      } else {
-        aiSpinner.fail(`AI failed for ${tag}, using template`)
-        useAI = false
-        releaseBody = generateReleaseMd(ver, commits, prevTag?.replace(/^v/, '') ?? '0.0.0')
-          .replace(/^## .*\n+/, '')
-          .replace(/\n---\n*$/, '')
-          .trim()
-      }
-    } else {
-      releaseBody = generateReleaseMd(ver, commits, prevTag?.replace(/^v/, '') ?? '0.0.0')
-        .replace(/^## .*\n+/, '')
-        .replace(/\n---\n*$/, '')
-        .trim()
-    }
-
-    console.log('')
-    const releaseSpinner = new ScrambleProgress()
-
-    // Ensure tag exists on remote before creating GitHub Release
-    releaseSpinner.start(['connecting to remote...', 'pushing tag...', 'verifying remote refs...'])
-    try {
-      await execAsync(`git push origin ${tag} --no-verify`, true)
-      releaseSpinner.succeed(`Tag ${tag} pushed to remote`)
-    } catch {
-      // Tag might already exist on remote — that's fine, continue
-    }
-
-    console.log('')
-    const createSpinner = new ScrambleProgress()
-    createSpinner.start([
-      'preparing release data...',
-      'creating github release...',
-      'confirming creation...',
-    ])
-
-    const os = await import('node:os')
-    const tempFile = `${os.tmpdir()}/geeto-sync-${Date.now()}.md`
-    writeFileSync(tempFile, releaseBody, 'utf8')
-
-    try {
-      await execAsync(`gh release create ${tag} --title "${tag}" --notes-file "${tempFile}"`, true)
-      createSpinner.succeed(`Release ${tag} created`)
-      successCount++
-    } catch (error) {
-      const stderr = (error as { stderr?: string }).stderr?.trim()
-      createSpinner.fail(`Failed to create release for ${tag}`)
-      if (stderr) log.error(`  ${stderr.split('\n')[0]}`)
-    }
-
-    // Cleanup temp file
-    try {
-      const { unlinkSync } = await import('node:fs')
-      unlinkSync(tempFile)
-    } catch {
-      /* ignore */
-    }
-  }
-
-  console.log('')
-  if (successCount === tagsToRelease.length) {
-    log.success(`All ${successCount} GitHub Releases created!`)
-  } else {
-    log.warn(`${successCount}/${tagsToRelease.length} releases created`)
-  }
-}
-
-// ─── Delete GitHub Releases ───
-
-const handleDeleteReleases = async (): Promise<void> => {
-  // Check if gh CLI is available
-  try {
-    execSilent('gh --version')
-  } catch {
-    log.error('GitHub CLI (gh) is not installed. Install it: https://cli.github.com')
-    return
-  }
-
-  console.log('')
-  const spinner = new ScrambleProgress()
-  spinner.start(['connecting to github...', 'fetching releases...', 'processing results...'])
-
-  const ghReleases = getExistingGithubReleases()
-
-  spinner.succeed(`Found ${ghReleases.length} GitHub releases`)
-
-  if (ghReleases.length === 0) {
-    console.log('')
-    log.info('No GitHub Releases to delete.')
-    return
-  }
-
-  console.log('')
-  const { multiSelect } = await import('../cli/menu.js')
-  const choices = ghReleases.map((t) => ({ label: t, value: t }))
-  const selected = await multiSelect('Select releases to delete:', choices)
-
-  if (selected.length === 0) {
-    log.info('No releases selected.')
-    return
-  }
-
-  console.log('')
-  const alsoDeleteTag = confirm('Also delete the associated git tags?')
-
-  console.log('')
-  const proceed = confirm(
-    `Delete ${selected.length} GitHub Release(s)${alsoDeleteTag ? ' + tags' : ''}?`
-  )
-  if (!proceed) return
-
-  let successCount = 0
-
-  for (const release of selected) {
-    console.log('')
-    const releaseSpinner = new ScrambleProgress()
-    releaseSpinner.start(['connecting to github...', 'deleting release...', 'cleaning up...'])
-
-    try {
-      await execAsync(`gh release delete ${release} --yes`, true)
-      if (alsoDeleteTag) {
-        try {
-          await execAsync(`git tag -d ${release}`, true)
-          await execAsync(`git push origin --delete ${release} --no-verify`, true)
-        } catch {
-          /* Tag deletion is best-effort */
-        }
-      }
-      releaseSpinner.succeed(`Release ${release} deleted${alsoDeleteTag ? ' + tag' : ''}`)
-      successCount++
-    } catch (error) {
-      const stderr = (error as { stderr?: string }).stderr?.trim()
-      releaseSpinner.fail(`Failed to delete ${release}`)
-      if (stderr) log.error(`  ${stderr.split('\n')[0]}`)
-    }
-  }
-
-  console.log('')
-  if (successCount === selected.length) {
-    log.success(`All ${successCount} releases deleted!`)
-  } else {
-    log.warn(`${successCount}/${selected.length} releases deleted`)
-  }
-}
-
-// ─── Recover missing tags ───
-
-const handleRecoverTags = async (): Promise<void> => {
-  const line = '─'.repeat(BOX_W)
-
-  console.log('')
-  const spinner = log.spinner()
-  spinner.start('Scanning release commits...')
-
-  // Find all release commits: "chore(release): vX.Y.Z"
-  let gitLog: string
-  try {
-    gitLog = exec('git log --all --oneline --grep="^chore(release): v" --format="%H %s"', true)
-  } catch {
-    spinner.fail('Failed to scan git log')
-    return
-  }
-
-  const releasePattern = /^([a-f0-9]+) chore\(release\): v(.+)$/
-  const releaseCommits: { hash: string; version: string; tag: string }[] = []
-
-  for (const logLine of gitLog.split('\n').filter(Boolean)) {
-    const match = logLine.match(releasePattern)
-    if (match?.[1] && match[2]) {
-      releaseCommits.push({
-        hash: match[1],
-        version: match[2],
-        tag: `v${match[2]}`,
-      })
-    }
-  }
-
-  if (releaseCommits.length === 0) {
-    spinner.fail('No release commits found')
-    return
-  }
-
-  // Compare with existing tags
-  const existingTags = new Set(getExistingTags())
-  const missingTags = releaseCommits.filter((rc) => !existingTags.has(rc.tag))
-
-  spinner.succeed(`Found ${releaseCommits.length} release commits, ${existingTags.size} tags`)
-
-  if (missingTags.length === 0) {
-    console.log('')
-    log.success('All release commits have matching tags! Nothing to recover.')
-    return
-  }
-
-  // Show missing tags
-  console.log('')
-  log.info(
-    `${colors.bright}${missingTags.length}${colors.reset} tags missing (release commit exists but no tag):`
-  )
-  for (const mt of missingTags) {
-    console.log(
-      `  ${colors.yellow}${mt.tag}${colors.reset} ${colors.gray}← ${mt.hash.slice(0, 7)}${colors.reset}`
-    )
-  }
-
-  console.log('')
-  const action = await select('What do you want to do?', [
-    { label: 'Recover all missing tags', value: 'all' },
-    { label: 'Select which tags to recover', value: 'select' },
-    { label: 'Cancel', value: 'cancel' },
-  ])
-
-  if (action === 'cancel') return
-
-  let tagsToRecover = missingTags
-
-  if (action === 'select') {
-    const { multiSelect } = await import('../cli/menu.js')
-    const choices = missingTags.map((mt) => ({
-      label: `${mt.tag} (${mt.hash.slice(0, 7)})`,
-      value: mt.tag,
-    }))
-    const selected = await multiSelect('Select tags to recover:', choices)
-    if (selected.length === 0) {
-      log.info('No tags selected.')
-      return
-    }
-    tagsToRecover = missingTags.filter((mt) => selected.includes(mt.tag))
-  }
-
-  // Preview
-  console.log('')
-  console.log(`${colors.cyan}┌${line}┐${colors.reset}`)
-  console.log(`${colors.cyan}│${colors.reset} ${colors.bright}Recovery Plan${colors.reset}`)
-  console.log(`${colors.cyan}├${line}┤${colors.reset}`)
-  for (const mt of tagsToRecover) {
-    console.log(
-      `${colors.cyan}│${colors.reset}  ${colors.green}+${colors.reset} ${colors.yellow}${mt.tag}${colors.reset} → commit ${colors.gray}${mt.hash.slice(0, 7)}${colors.reset}`
-    )
-  }
-  console.log(`${colors.cyan}└${line}┘${colors.reset}`)
-
-  console.log('')
-  const proceed = confirm(`Create ${tagsToRecover.length} tags?`)
-  if (!proceed) return
-
-  let successCount = 0
-
-  for (const mt of tagsToRecover) {
-    console.log('')
-    const tagSpinner = log.spinner()
-    tagSpinner.start(`Creating tag ${colors.yellow}${mt.tag}${colors.reset}...`)
-
-    try {
-      exec(`git tag -a ${mt.tag} ${mt.hash} -m "Release ${mt.tag}"`, true)
-      tagSpinner.succeed(`Tag ${mt.tag} created`)
-      successCount++
-    } catch (error) {
-      const errMsg = error instanceof Error ? error.message : String(error)
-      tagSpinner.fail(`Failed to create ${mt.tag}`)
-      log.error(`  ${errMsg.split('\n')[0]}`)
-    }
-  }
-
-  console.log('')
-  if (successCount === tagsToRecover.length) {
-    log.success(`All ${successCount} tags recovered!`)
-  } else {
-    log.warn(`${successCount}/${tagsToRecover.length} tags recovered`)
-  }
-
-  // Offer to push tags to remote
-  if (successCount > 0) {
-    console.log('')
-    const pushTags = confirm('Push recovered tags to remote?')
-    if (pushTags) {
-      console.log('')
-      const pushSpinner = new ScrambleProgress()
-      pushSpinner.start(['connecting to remote...', 'pushing tags...', 'verifying remote refs...'])
-      try {
-        await execAsync('git push --tags --no-verify', true)
-        pushSpinner.succeed('Tags pushed to remote')
-      } catch (error) {
-        const stderr = (error as { stderr?: string }).stderr?.trim()
-        pushSpinner.fail('Failed to push tags')
-        if (stderr) log.error(`  ${stderr.split('\n')[0]}`)
-      }
-    }
-  }
-}
 
 // ─── Main handler ───
 
@@ -848,11 +50,16 @@ export const handleRelease = async (): Promise<void> => {
   log.step(`${colors.cyan}Release / Tag Manager${colors.reset}\n`)
 
   // Main menu: create new release, sync, or manage releases
+  // Detect platform for CLI commands
+  const platform = detectPlatformFromRemote()
+  const cli = platform ? getPlatformCLI(platform) : 'gh'
+  const platformName = platform === 'gitlab' ? 'GitLab' : 'GitHub'
+
   const mode = await select('What do you want to do?', [
     { label: 'Create a new release', value: 'create' },
-    { label: 'Sync GitHub Releases for existing tags', value: 'sync' },
+    { label: `Sync ${platformName} Releases for existing tags`, value: 'sync' },
     { label: 'Recover missing tags from release commits', value: 'recover' },
-    { label: 'Delete GitHub Releases', value: 'delete' },
+    { label: `Delete ${platformName} Releases`, value: 'delete' },
   ])
 
   if (mode === 'sync') {
@@ -909,39 +116,91 @@ export const handleRelease = async (): Promise<void> => {
 
   // Version bump selection
   console.log('')
-  const { major, minor, patch } = semver
-  const bumpType = await select('Version bump:', [
+  const { major, minor, patch, prerelease } = semver
+  const nextPatch = `${major}.${minor}.${patch + 1}`
+
+  // Padded label builder for aligned columns
+  const vpad = (name: string, ver: string, desc: string) =>
+    `${name.padEnd(12)}${colors.gray}${ver.padEnd(20)}${colors.reset}${desc}`
+
+  // Build dynamic menu based on whether current version is a prerelease
+  const bumpOptions = []
+
+  if (prerelease) {
+    const [preLabel] = prerelease.split('.')
+    const bumped = bumpPrerelease(semver)
+    const stable = promoteToStable(semver)
+    bumpOptions.push(
+      {
+        label: vpad(`Next ${preLabel}`, formatSemver(bumped), 'bump prerelease'),
+        value: 'pre-bump',
+      },
+      {
+        label: vpad('Stable', formatSemver(stable), 'promote to stable'),
+        value: 'promote',
+      }
+    )
+  }
+
+  bumpOptions.push(
     {
-      label: `Patch  ${colors.gray}${major}.${minor}.${patch + 1}${colors.reset} — bug fixes`,
+      label: vpad('Patch', nextPatch, 'bug fixes'),
       value: 'patch',
     },
     {
-      label: `Minor  ${colors.gray}${major}.${minor + 1}.0${colors.reset} — new features`,
+      label: vpad('Minor', `${major}.${minor + 1}.0`, 'new features'),
       value: 'minor',
     },
     {
-      label: `Major  ${colors.gray}${major + 1}.0.0${colors.reset} — breaking changes`,
+      label: vpad('Major', `${major + 1}.0.0`, 'breaking changes'),
       value: 'major',
-    },
-    { label: 'Custom — enter version manually', value: 'custom' },
-    { label: 'Cancel', value: 'cancel' },
-  ])
+    }
+  )
+
+  if (!prerelease) {
+    const nextMinor = `${major}.${minor + 1}.0`
+    bumpOptions.push(
+      {
+        label: vpad('Alpha', `${nextMinor}-alpha.1`, 'early development'),
+        value: 'alpha',
+      },
+      {
+        label: vpad('Beta', `${nextMinor}-beta.1`, 'feature testing'),
+        value: 'beta',
+      },
+      {
+        label: vpad('RC', `${nextMinor}-rc.1`, 'release candidate'),
+        value: 'rc',
+      }
+    )
+  }
+
+  bumpOptions.push({ label: 'Cancel', value: 'cancel' })
+
+  const bumpType = await select('Version bump:', bumpOptions)
 
   if (bumpType === 'cancel') return
 
   let newVersion: string
-  switch (bumpType) {
-    case 'custom': {
-      if (process.stdin.isTTY) {
-        process.stdin.setRawMode(false)
-      }
-      const input = askQuestion('Enter version (e.g. 1.2.3): ').trim()
-      if (!parseSemver(input)) {
-        log.error('Invalid semver format.')
-        return
-      }
-      newVersion = input
+  let isPreVersion = false
 
+  switch (bumpType) {
+    case 'pre-bump': {
+      const bumped = bumpPrerelease(semver)
+      newVersion = formatSemver(bumped)
+      isPreVersion = true
+      break
+    }
+    case 'promote': {
+      const stable = promoteToStable(semver)
+      newVersion = formatSemver(stable)
+      break
+    }
+    case 'alpha':
+    case 'beta':
+    case 'rc': {
+      newVersion = `${major}.${minor + 1}.0-${bumpType}.1`
+      isPreVersion = true
       break
     }
     case 'major': {
@@ -1082,9 +341,7 @@ export const handleRelease = async (): Promise<void> => {
       const spinner = new ScrambleProgress()
       const modelDisplay = getModelValue(copilotModel ?? openrouterModel ?? geminiModel ?? '')
       spinner.start([
-        'preparing release context...',
-        `generating notes with ${getAIProviderShortName(aiProvider)}${modelDisplay ? ` (${modelDisplay})` : ''}...`,
-        'processing results...',
+        `Generating release notes with ${getAIProviderShortName(aiProvider)}${modelDisplay ? ` (${modelDisplay})` : ''}`,
       ])
 
       const result = await generateReleaseNotesWithProvider(
@@ -1336,13 +593,7 @@ export const handleRelease = async (): Promise<void> => {
   if (pushChoice === 'both' || pushChoice === 'commit') {
     console.log('')
     const pushProgress = new ScrambleProgress()
-    pushProgress.start([
-      'initializing push...',
-      'collecting objects...',
-      { text: 'compressing deltas', countTo: 100, suffix: '%' },
-      'uploading to remote...',
-      'verifying remote refs...',
-    ])
+    pushProgress.start(['Pushing release to remote'])
 
     try {
       await execAsync(`git push`, true)
@@ -1358,12 +609,12 @@ export const handleRelease = async (): Promise<void> => {
     }
   }
 
-  // 6. Create GitHub Release (if tag was pushed and gh CLI is available)
-  let ghReleaseCreated = false
+  // 6. Create Release (if tag was pushed and platform CLI is available)
+  let releaseCreated = false
   if (pushChoice === 'both') {
     try {
-      execSilent('gh --version')
-      // gh CLI is available — create a GitHub Release
+      execSilent(`${cli} --version`)
+      // Platform CLI is available — create a Release
 
       // Build release body from AI notes or template
       const releaseBody = aiReleaseNotes
@@ -1379,22 +630,19 @@ export const handleRelease = async (): Promise<void> => {
       writeFileSync(tempFile, releaseBody, 'utf8')
 
       const releaseSpinner = new ScrambleProgress()
-      releaseSpinner.start([
-        'preparing release data...',
-        'creating github release...',
-        'confirming creation...',
-      ])
+      releaseSpinner.start([`Creating ${platformName} release`])
 
       try {
+        const preFlag = isPreVersion ? ' --prerelease' : ''
         await execAsync(
-          `gh release create v${newVersion} --title "v${newVersion}" --notes-file "${tempFile}"`,
+          `${cli} release create v${newVersion} --title "v${newVersion}" --notes-file "${tempFile}"${preFlag}`,
           true
         )
-        releaseSpinner.succeed('GitHub Release created')
-        ghReleaseCreated = true
+        releaseSpinner.succeed(`${platformName} Release created`)
+        releaseCreated = true
       } catch (error) {
         const stderr = (error as { stderr?: string }).stderr?.trim()
-        releaseSpinner.fail('Failed to create GitHub Release')
+        releaseSpinner.fail(`Failed to create ${platformName} Release`)
         if (stderr) log.error(`  ${stderr.split('\n')[0]}`)
       }
 
@@ -1406,7 +654,7 @@ export const handleRelease = async (): Promise<void> => {
         /* ignore cleanup errors */
       }
     } catch {
-      // gh CLI not available — skip silently
+      // Platform CLI not available — skip silently
     }
   }
 
@@ -1429,9 +677,9 @@ export const handleRelease = async (): Promise<void> => {
   console.log(
     `${colors.cyan}│${colors.reset}  ${colors.green}✓${colors.reset} Tag v${newVersion} created`
   )
-  if (ghReleaseCreated) {
+  if (releaseCreated) {
     console.log(
-      `${colors.cyan}│${colors.reset}  ${colors.green}✓${colors.reset} GitHub Release published`
+      `${colors.cyan}│${colors.reset}  ${colors.green}✓${colors.reset} ${platformName} Release published`
     )
   }
   console.log(`${colors.cyan}└${line}┘${colors.reset}`)

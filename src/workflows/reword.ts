@@ -13,6 +13,7 @@ import path from 'node:path'
 import type { CopilotModel } from '../api/copilot.js'
 import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
+import type { GeetoState } from '../types/index.js'
 
 import { askQuestion, confirm, editInline } from '../cli/input.js'
 import { multiSelect, select } from '../cli/menu.js'
@@ -303,35 +304,128 @@ const getRepoUrl = (): string => {
 const hyperlink = (url: string, text: string): string =>
   `\u001B]8;;${url}\u0007${text}\u001B]8;;\u0007`
 
-// ── Main handler ───────────────────────────────────────────────────
+// ── Reword context ─────────────────────────────────────────────────
 
-export const handleReword = async (): Promise<void> => {
-  log.banner()
-  log.step(`${colors.cyan}Edit Commit Messages${colors.reset}\n`)
+interface RewordContext {
+  branch: string
+  isProtected: boolean
+  commits: CommitInfo[]
+  repoUrl: string
+}
 
-  const branch = getCurrentBranch()
-  const isProtected = ['main', 'master', 'develop', 'production', 'staging'].includes(branch)
-  console.log(`  ${colors.gray}Branch: ${branch}${colors.reset}`)
+// ── Small helpers ──────────────────────────────────────────────────
 
-  if (isProtected) {
-    console.log(
-      `  ${colors.red}⚠${colors.reset} ${colors.bright}Protected branch${colors.reset} — rewriting history here affects all collaborators.`
-    )
+/** Resolve current AI provider and model from persisted state. */
+const resolveAIProvider = (
+  state: GeetoState
+): { provider: 'gemini' | 'copilot' | 'openrouter'; model: string | undefined } => {
+  const provider: 'gemini' | 'copilot' | 'openrouter' =
+    (state.aiProvider === 'manual' ? undefined : state.aiProvider) ?? 'gemini'
+
+  if (provider === 'copilot') return { provider, model: state.copilotModel as unknown as string }
+  if (provider === 'openrouter')
+    return { provider, model: state.openrouterModel as unknown as string }
+  return { provider, model: (state.geminiModel as unknown as string) ?? DEFAULT_GEMINI_MODEL }
+}
+
+/** Normalize AI output and extract title + body into final commit message. */
+const buildFinalMessage = (raw: string): string => {
+  const normalized = normalizeAIOutput(raw)
+  const extracted = extractCommitTitle(normalized)
+
+  let title: string
+  let bodyText: string | null = null
+
+  if (extracted) {
+    title = extracted
+    bodyText = extractCommitBody(normalized, title)
+    if (bodyText) bodyText = formatCommitBody(bodyText)
+  } else {
+    const first = normalized.split('\n').find((l) => l.trim())
+    title = first?.trim() ?? normalized
   }
 
-  // Check working tree
-  if (!isWorkingTreeClean()) {
-    log.error('Working tree has uncommitted changes.')
-    log.info('Please commit or stash changes before rewording.')
-    return
+  return bodyText ? `${title}\n\n${bodyText}` : title
+}
+
+/** Regenerate commit message directly via the current provider (with retry). */
+const regenerateDirect = async (
+  state: GeetoState,
+  diff: string,
+  correction: string
+): Promise<string | null> => {
+  const maxAttempts = 2
+  let aiResult: string | null = null
+
+  for (let attempt = 0; attempt < maxAttempts && !aiResult; attempt++) {
+    let modelName = ''
+    if (state.aiProvider === 'copilot' && state.copilotModel) {
+      modelName = state.copilotModel as string
+    } else if (state.aiProvider === 'openrouter' && state.openrouterModel) {
+      modelName = state.openrouterModel as string
+    } else if (state.aiProvider === 'gemini') {
+      modelName = (state.geminiModel as string) ?? DEFAULT_GEMINI_MODEL
+    }
+
+    if (correction) console.log('')
+    const sp = new ScrambleProgress()
+    sp.start([
+      `Regenerating with ${getAIProviderShortName(state.aiProvider ?? 'gemini')}${modelName ? ` (${modelName})` : ''}`,
+    ])
+
+    try {
+      switch (state.aiProvider) {
+        case 'copilot': {
+          const { generateCommitMessage } = await import('../api/copilot.js')
+          aiResult = await generateCommitMessage(
+            diff,
+            correction,
+            state.copilotModel as CopilotModel
+          )
+          break
+        }
+        case 'openrouter': {
+          const { generateCommitMessage } = await import('../api/openrouter.js')
+          aiResult = await generateCommitMessage(
+            diff,
+            correction,
+            state.openrouterModel as OpenRouterModel
+          )
+          break
+        }
+        case 'gemini': {
+          const { generateCommitMessage } = await import('../api/gemini.js')
+          aiResult = await generateCommitMessage(diff, correction, state.geminiModel as GeminiModel)
+          break
+        }
+        default: {
+          aiResult = null
+          break
+        }
+      }
+      sp.stop()
+    } catch {
+      sp.stop()
+      aiResult = null
+    }
+
+    if (!aiResult && attempt < maxAttempts - 1) {
+      log.ai('Regenerate returned no suggestion; retrying...')
+    }
   }
 
-  // Load commits
-  const commits = getRecentCommits(30)
-  if (commits.length === 0) {
-    log.warn('No commits found.')
-    return
-  }
+  return aiResult
+}
+
+// ── Extracted workflow steps ───────────────────────────────────────
+
+/**
+ * Show commit log with format consistency indicators and let user
+ * pick which commits to reword. Returns sorted (oldest-first) array
+ * or null when nothing was selected.
+ */
+const selectCommitsToReword = async (ctx: RewordContext): Promise<CommitInfo[] | null> => {
+  const { commits, repoUrl } = ctx
 
   // Detect commit format consistency (skip merge commits)
   const isMerge = (subject: string): boolean => /^Merge\s/.test(subject)
@@ -356,18 +450,14 @@ export const handleReword = async (): Promise<void> => {
 
   // Priority-based inconsistency detection:
   // conventional (1st) > bracket-tag (2nd) > no-prefix / other (3rd)
-  // - conventional: NEVER gets ⚠ (gold standard)
-  // - bracket-tag: ⚠ only when conventional is the majority
-  // - no-prefix/other: ⚠ when ANY conventional or bracket-tag exists
   const hasConventional = (formatCounts.get('conventional') ?? 0) > 0
   const hasBracketTag = (formatCounts.get('bracket-tag') ?? 0) > 0
   const hasStructured = hasConventional || hasBracketTag
 
   const isInconsistent = (fmt: CommitFormat | null): boolean => {
-    if (fmt === null) return false // merge commits — always skip
-    if (fmt === 'conventional') return false // gold standard — never flag
-    if (fmt === 'bracket-tag') return majorityFormat === 'conventional' // only flag if conventional is majority
-    // no-prefix / other: flag if any structured format exists
+    if (fmt === null) return false
+    if (fmt === 'conventional') return false
+    if (fmt === 'bracket-tag') return majorityFormat === 'conventional'
     return hasStructured
   }
 
@@ -381,7 +471,6 @@ export const handleReword = async (): Promise<void> => {
     console.log(
       `  ${colors.gray}Team pattern: ${formatLabel(majorityFormat)} (${majorityCount}/${totalNonMerge})${colors.reset}`
     )
-    // If bracket-tag is majority, gently suggest conventional commits
     if (majorityFormat === 'bracket-tag' && !hasConventional) {
       console.log(
         `  ${colors.gray}💡 Tip: conventional commits is the recommended project standard${colors.reset}`
@@ -389,7 +478,6 @@ export const handleReword = async (): Promise<void> => {
     }
     console.log('')
   } else if (majorityFormat !== 'conventional' && totalNonMerge > 0) {
-    // No inconsistencies but not using conventional — soft tip
     console.log(
       `  ${colors.gray}💡 Tip: conventional commits is the recommended project standard${colors.reset}`
     )
@@ -398,7 +486,6 @@ export const handleReword = async (): Promise<void> => {
 
   // Compute column widths
   const maxHash = Math.max(...commits.map((c) => c.shortHash.length))
-  const repoUrl = getRepoUrl()
 
   // Build multi-select options
   const options = commits.map((c, i) => {
@@ -406,18 +493,16 @@ export const handleReword = async (): Promise<void> => {
     const refs = formatRefs(c.refs)
     const subj = c.subject.length > 60 ? c.subject.slice(0, 57) + '...' : c.subject
 
-    // Show indicator only when inconsistencies exist
     const fmt = formats[i] ?? null
     const indicator =
       inconsistentCount > 0
         ? isInconsistent(fmt)
           ? `${colors.red}⚠${colors.reset} `
           : fmt === null
-            ? '  ' // merge commit — no indicator
+            ? '  '
             : `${colors.green}✓${colors.reset} `
         : ''
 
-    // Wrap hash in OSC 8 hyperlink when repo URL is available
     const hashDisplay = repoUrl
       ? hyperlink(`${repoUrl}/commit/${c.hash}`, `${colors.yellow}${hashCol}${colors.reset}`)
       : `${colors.yellow}${hashCol}${colors.reset}`
@@ -450,7 +535,7 @@ export const handleReword = async (): Promise<void> => {
 
   if (selected.length === 0) {
     log.info('No commits selected.')
-    return
+    return null
   }
 
   // Sort selected: oldest first (for rebase ordering)
@@ -461,15 +546,26 @@ export const handleReword = async (): Promise<void> => {
     if (item) selectedCommits.push(item)
   }
 
-  // Collect new messages for each commit
+  return selectedCommits
+}
+
+/**
+ * For each selected commit, let the user choose AI / manual / skip
+ * and collect new commit messages. Returns a Map of hash → new message.
+ */
+const generateNewMessages = async (
+  selectedCommits: CommitInfo[],
+  ctx: RewordContext
+): Promise<Map<string, string>> => {
+  const { repoUrl, branch } = ctx
+  const newMessages = new Map<string, string>()
+
   console.log('')
   log.info(`Editing ${selectedCommits.length} commit message(s)...`)
   console.log('')
 
-  const newMessages = new Map<string, string>()
-
   // Load provider/model state for AI generation
-  const state = loadState() ?? {
+  const state: GeetoState = loadState() ?? {
     step: 0,
     workingBranch: '',
     targetBranch: '',
@@ -544,16 +640,7 @@ export const handleReword = async (): Promise<void> => {
     }
 
     // Determine current provider/model
-    let currentProvider: 'gemini' | 'copilot' | 'openrouter' =
-      (state.aiProvider === 'manual' ? undefined : state.aiProvider) ?? 'gemini'
-    let currentModel: string | undefined
-    if (currentProvider === 'copilot') {
-      currentModel = state.copilotModel as unknown as string
-    } else if (currentProvider === 'openrouter') {
-      currentModel = state.openrouterModel as unknown as string
-    } else {
-      currentModel = (state.geminiModel as unknown as string) ?? DEFAULT_GEMINI_MODEL
-    }
+    let { provider: currentProvider, model: currentModel } = resolveAIProvider(state)
 
     // Initial AI generation
     let correction = editGuidance.trim()
@@ -562,9 +649,7 @@ export const handleReword = async (): Promise<void> => {
     const spinner = new ScrambleProgress()
     try {
       spinner.start([
-        'analyzing commit diff...',
-        `generating commit message with ${getAIProviderShortName(currentProvider)}${currentModel ? ` (${currentModel})` : ''}...`,
-        'formatting conventional commit...',
+        `Generating commit message with ${getAIProviderShortName(currentProvider)}${currentModel ? ` (${currentModel})` : ''}`,
       ])
 
       initialAiResult = await generateCommitMessageWithProvider(
@@ -608,71 +693,7 @@ export const handleReword = async (): Promise<void> => {
       ) {
         aiResult = initialAiResult
       } else if (forceDirect) {
-        let directAttempt = 0
-        const maxDirectAttempts = 2
-        while (directAttempt < maxDirectAttempts && !aiResult) {
-          let directModelName = ''
-          if (state.aiProvider === 'copilot' && state.copilotModel) {
-            directModelName = state.copilotModel as string
-          } else if (state.aiProvider === 'openrouter' && state.openrouterModel) {
-            directModelName = state.openrouterModel as string
-          } else if (state.aiProvider === 'gemini') {
-            directModelName = (state.geminiModel as string) ?? DEFAULT_GEMINI_MODEL
-          }
-
-          if (correction) console.log('')
-          const sp = new ScrambleProgress()
-          sp.start([
-            'reviewing feedback...',
-            `regenerating with ${getAIProviderShortName(state.aiProvider ?? 'gemini')}${directModelName ? ` (${directModelName})` : ''}...`,
-            'formatting conventional commit...',
-          ])
-
-          try {
-            switch (state.aiProvider) {
-              case 'copilot': {
-                const { generateCommitMessage } = await import('../api/copilot.js')
-                aiResult = await generateCommitMessage(
-                  diff,
-                  correction,
-                  state.copilotModel as CopilotModel
-                )
-                break
-              }
-              case 'openrouter': {
-                const { generateCommitMessage } = await import('../api/openrouter.js')
-                aiResult = await generateCommitMessage(
-                  diff,
-                  correction,
-                  state.openrouterModel as OpenRouterModel
-                )
-                break
-              }
-              case 'gemini': {
-                const { generateCommitMessage } = await import('../api/gemini.js')
-                aiResult = await generateCommitMessage(
-                  diff,
-                  correction,
-                  state.geminiModel as GeminiModel
-                )
-                break
-              }
-              default: {
-                aiResult = null
-                break
-              }
-            }
-            sp.stop()
-          } catch {
-            sp.stop()
-            aiResult = null
-          }
-
-          directAttempt += 1
-          if (!aiResult && directAttempt < maxDirectAttempts) {
-            log.ai('Regenerate returned no suggestion; retrying...')
-          }
-        }
+        aiResult = await regenerateDirect(state, diff, correction)
       } else {
         const provForFallback = (state.aiProvider ?? 'gemini') as
           | 'gemini'
@@ -776,23 +797,7 @@ export const handleReword = async (): Promise<void> => {
 
       switch (acceptChoice) {
         case 'accept': {
-          const normalized = normalizeAIOutput(commitMessage)
-          const extracted = extractCommitTitle(normalized)
-
-          let title: string
-          let bodyText: string | null = null
-
-          if (extracted) {
-            title = extracted
-            bodyText = extractCommitBody(normalized, title)
-            if (bodyText) bodyText = formatCommitBody(bodyText)
-          } else {
-            const first = normalized.split('\n').find((l) => l.trim())
-            title = first?.trim() ?? normalized
-          }
-
-          const finalMsg = bodyText ? `${title}\n\n${bodyText}` : title
-          newMessages.set(commit.hash, finalMsg.trim())
+          newMessages.set(commit.hash, buildFinalMessage(commitMessage).trim())
           log.success(`Message set for ${commit.shortHash}`)
           commitDone = true
           break
@@ -913,23 +918,7 @@ export const handleReword = async (): Promise<void> => {
         case 'edit': {
           const edited = await editInline(commitMessage, `Edit: ${commit.shortHash}`)
           if (edited?.trim()) {
-            const editedNorm = normalizeAIOutput(edited.trim())
-            const editedTitle = extractCommitTitle(editedNorm)
-
-            let title: string
-            let bodyText: string | null = null
-
-            if (editedTitle) {
-              title = editedTitle
-              bodyText = extractCommitBody(editedNorm, title)
-              if (bodyText) bodyText = formatCommitBody(bodyText)
-            } else {
-              const first = editedNorm.split('\n').find((l) => l.trim())
-              title = first?.trim() ?? editedNorm
-            }
-
-            const finalMsg = bodyText ? `${title}\n\n${bodyText}` : title
-            newMessages.set(commit.hash, finalMsg.trim())
+            newMessages.set(commit.hash, buildFinalMessage(edited.trim()).trim())
             log.success(`Message set for ${commit.shortHash}`)
             commitDone = true
           }
@@ -944,10 +933,19 @@ export const handleReword = async (): Promise<void> => {
     console.log('')
   }
 
-  if (newMessages.size === 0) {
-    log.info('No messages changed.')
-    return
-  }
+  return newMessages
+}
+
+/**
+ * Preview proposed changes, confirm with the user, then execute
+ * git rebase -i with auto-generated editor scripts.
+ */
+const executeRebase = async (
+  selectedCommits: CommitInfo[],
+  newMessages: Map<string, string>,
+  ctx: RewordContext
+): Promise<void> => {
+  const { commits, repoUrl, branch, isProtected } = ctx
 
   // Preview changes — complete before/after summary
   const line = '─'.repeat(BOX_W)
@@ -1076,7 +1074,6 @@ export const handleReword = async (): Promise<void> => {
   try {
     parentRef = execSilent(`git rev-parse ${oldestHash}^`).trim()
   } catch {
-    // Oldest commit might be the root commit
     parentRef = '--root'
   }
 
@@ -1094,7 +1091,6 @@ export const handleReword = async (): Promise<void> => {
 
     if (result.status === 0) {
       log.success(`Reworded ${newMessages.size} commit(s)!`)
-      // Show updated commits
       for (const [hash] of newMessages) {
         const short = hash.slice(0, 7)
         const newMsg = getCommitMessage(hash)?.split('\n')[0]
@@ -1105,7 +1101,7 @@ export const handleReword = async (): Promise<void> => {
         }
       }
 
-      // Offer force push (reword requires force push to update remote)
+      // Offer force push
       console.log('')
       const shouldPush = confirm('Force push to update remote? (recommended)')
       if (shouldPush) {
@@ -1114,11 +1110,7 @@ export const handleReword = async (): Promise<void> => {
         } else {
           console.log('')
           const pushProgress = new ScrambleProgress()
-          pushProgress.start([
-            'preparing force push...',
-            'pushing to remote...',
-            'confirming remote state...',
-          ])
+          pushProgress.start([`Force pushing to origin/${branch}`])
           try {
             await execAsync(`git push --force-with-lease origin "${branch}"`, true)
             pushProgress.succeed(`Force pushed ${branch} to remote`)
@@ -1130,7 +1122,7 @@ export const handleReword = async (): Promise<void> => {
         }
       }
 
-      // Team warning — history has been rewritten
+      // Team warning
       console.log('')
       console.log(
         `  ${colors.yellow}⚠${colors.reset} ${colors.bright}History rewritten!${colors.reset} All commit hashes on ${colors.cyan}${branch}${colors.reset} have changed.`
@@ -1155,11 +1147,55 @@ export const handleReword = async (): Promise<void> => {
     log.error(`Rebase error: ${msg}`)
     log.info('Run: git rebase --abort  to undo')
   } finally {
-    // Cleanup temp files
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true })
     } catch {
       // ignore
     }
   }
+}
+
+// ── Main handler ───────────────────────────────────────────────────
+
+export const handleReword = async (): Promise<void> => {
+  log.banner()
+  log.step(`${colors.cyan}Edit Commit Messages${colors.reset}\n`)
+
+  const branch = getCurrentBranch()
+  const isProtected = ['main', 'master', 'develop', 'production', 'staging'].includes(branch)
+  console.log(`  ${colors.gray}Branch: ${branch}${colors.reset}`)
+
+  if (isProtected) {
+    console.log(
+      `  ${colors.red}⚠${colors.reset} ${colors.bright}Protected branch${colors.reset} — rewriting history here affects all collaborators.`
+    )
+  }
+
+  // Check working tree
+  if (!isWorkingTreeClean()) {
+    log.error('Working tree has uncommitted changes.')
+    log.info('Please commit or stash changes before rewording.')
+    return
+  }
+
+  // Load commits
+  const commits = getRecentCommits(30)
+  if (commits.length === 0) {
+    log.warn('No commits found.')
+    return
+  }
+
+  const repoUrl = getRepoUrl()
+  const ctx: RewordContext = { branch, isProtected, commits, repoUrl }
+
+  const selectedCommits = await selectCommitsToReword(ctx)
+  if (!selectedCommits) return
+
+  const newMessages = await generateNewMessages(selectedCommits, ctx)
+  if (newMessages.size === 0) {
+    log.info('No messages changed.')
+    return
+  }
+
+  await executeRebase(selectedCommits, newMessages, ctx)
 }

@@ -1,48 +1,41 @@
 /**
- * Copilot CLI setup helper (moved from `setup.ts`)
+ * Copilot setup helper — ensures GitHub CLI is installed and authenticated.
+ *
+ * Since Geeto now uses the Copilot REST API directly (no Copilot CLI binary
+ * needed), setup only requires: 1) gh CLI installed, 2) gh auth login done.
  */
 
+import fs from 'node:fs'
 import os from 'node:os'
+import path from 'node:path'
 
-import { findBestCopilotBinary, MIN_COPILOT_VERSION, parseParts } from '../api/copilot-sdk.js'
 import { confirm } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { ensureGeetoIgnored } from '../utils/config.js'
-import { commandExists, exec, execAsync } from '../utils/exec.js'
+import { commandExists, exec } from '../utils/exec.js'
 import { log } from '../utils/logging.js'
 import { getGhCliInstallCommand, getLinuxDistro } from '../utils/platform.js'
 
-/**
- * Check Copilot CLI version and warn if outdated.
- * Uses shared utility from copilot-sdk.ts.
- */
-export const checkCopilotVersion = (): boolean => {
-  const best = findBestCopilotBinary()
+/** Save recommended default Copilot models if no model file exists */
+const saveDefaultCopilotModels = (): void => {
+  try {
+    const outDir = path.join(process.cwd(), '.geeto')
+    const modelFile = path.join(outDir, 'copilot-model.json')
+    if (fs.existsSync(modelFile)) return // Already has saved models
 
-  if (!best) {
-    return false
+    const defaultModels = [
+      { label: 'Claude Sonnet 4', value: 'claude-sonnet-4' },
+      { label: 'Claude Haiku 4.5', value: 'claude-haiku-4.5' },
+      { label: 'GPT-4.1', value: 'gpt-4.1' },
+      { label: 'GPT-5 Mini', value: 'gpt-5-mini' },
+    ]
+
+    if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true })
+    fs.writeFileSync(modelFile, JSON.stringify(defaultModels, null, 2), 'utf8')
+    log.info('Saved recommended Copilot models to .geeto/copilot-model.json')
+  } catch {
+    /* ignore */
   }
-
-  const currentNum = parseParts(best.version)
-  const minNum = parseParts(MIN_COPILOT_VERSION)
-
-  if (currentNum < minNum) {
-    log.error(
-      `Copilot CLI version ${best.version} is outdated. Minimum required: ${MIN_COPILOT_VERSION}`
-    )
-    log.info('The Copilot SDK requires CLI version 0.0.400+ for session/server support.')
-    log.info('Please upgrade with: sudo npm install -g @github/copilot')
-    log.info('Or visit: https://github.com/github/copilot-cli/releases')
-    return false
-  }
-
-  // Update PATH so CopilotClient can find the newest binary
-  const binDir = best.path.slice(0, best.path.lastIndexOf('/'))
-  if (!process.env.PATH?.startsWith(binDir)) {
-    process.env.PATH = `${binDir}:${process.env.PATH}`
-  }
-
-  return true
 }
 
 // Helper: Setup GitHub CLI if needed
@@ -234,11 +227,24 @@ const authenticateGitHub = async (): Promise<boolean> => {
 }
 
 /**
- * Interactive installer and authenticator for Copilot CLI
+ * Check Copilot API access by testing token against the models endpoint.
+ */
+const checkCopilotAPIAccess = async (): Promise<boolean> => {
+  try {
+    const sdk = await import('../api/copilot-sdk.js')
+    return await sdk.isAvailable()
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Interactive setup for Copilot AI provider.
+ *
+ * Since v0.8.0, Geeto uses the Copilot REST API directly.
+ * Setup only requires GitHub CLI authenticated — no Copilot CLI binary needed.
  */
 export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
-  const platform = os.platform()
-
   // Ensure GitHub CLI is installed (install automatically if needed)
   const ghInstalled = setupGitHubCLI()
   if (!ghInstalled) {
@@ -262,228 +268,29 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
     }
   }
 
-  // Now check/setup Copilot CLI
-  // Check if Copilot CLI is available
-  const copilotAvailable = commandExists('copilot')
+  // Verify Copilot API access (requires active Copilot subscription)
+  const spinner = log.spinner()
+  spinner.start('Checking Copilot API access...')
 
-  if (copilotAvailable) {
-    // Note about premium models that may require enablement.
-    log.success('Copilot ready to use')
-
-    checkCopilotVersion()
-
-    ensureGeetoIgnored()
-    return true
-  }
-
-  // Show informational text only if we reach installer flow
-  log.info('Copilot CLI allows local AI workflows via the copilot command-line tool.')
-  log.info('This helper will attempt to install and/or authenticate the Copilot CLI for you.')
-
-  const shouldSetup = confirm('Setup Copilot CLI now?')
-  if (!shouldSetup) {
-    return false
-  }
-
-  let installOptions: Array<{ label: string; value: string }> = []
-  let installCommand = ''
-
-  if (platform === 'win32') {
-    installOptions = [
-      { label: 'Download from GitHub releases (manual)', value: 'download' },
-      { label: 'npm: npm install -g @github/copilot', value: 'npm' },
-      { label: 'Winget: winget install GitHub.Copilot', value: 'winget' },
-    ]
-  } else if (platform === 'darwin') {
-    installOptions = [
-      { label: 'Homebrew: brew install copilot-cli', value: 'brew' },
-      { label: 'npm: npm install -g @github/copilot', value: 'npm' },
-      { label: 'Curl installer: curl -fsSL https://gh.io/copilot-install | bash', value: 'curl' },
-      { label: 'Download from GitHub releases (manual)', value: 'download' },
-    ]
+  const apiOk = await checkCopilotAPIAccess()
+  if (apiOk) {
+    spinner.succeed('Copilot API accessible')
   } else {
-    installOptions = [
-      { label: 'Download from GitHub releases (manual)', value: 'download' },
-      { label: 'npm: npm install -g @github/copilot', value: 'npm' },
-      { label: 'Curl installer: curl -fsSL https://gh.io/copilot-install | bash', value: 'curl' },
-    ]
-  }
+    spinner.fail('Copilot API not accessible')
+    log.gap()
+    log.info('This may mean:')
+    log.info('  • Your GitHub account needs an active Copilot subscription')
+    log.info('  • Visit: https://github.com/features/copilot/plans')
 
-  console.log('')
-  const choice = await select('Choose Copilot CLI installation method:', installOptions)
-
-  switch (choice) {
-    case 'download': {
-      log.info('Please download and install Copilot CLI from:')
-      log.info('  https://github.com/github/copilot-cli/releases')
-      log.info('Then restart this setup.\n')
+    const shouldContinue = confirm('Continue setup anyway? (models can be configured manually)')
+    if (!shouldContinue) {
       return false
     }
-    case 'npm': {
-      if (!commandExists('npm')) {
-        log.error('npm not found. Please install Node.js first.')
-        return false
-      }
-      installCommand = 'npm install -g @github/copilot'
-      break
-    }
-    case 'winget': {
-      if (!commandExists('winget')) {
-        log.error('Winget not found. Please install Windows Package Manager first.')
-        return false
-      }
-      installCommand = 'winget install GitHub.Copilot'
-      break
-    }
-    case 'brew': {
-      if (!commandExists('brew')) {
-        log.error('Homebrew not found. Please install Homebrew first.')
-        return false
-      }
-      installCommand = 'brew install copilot-cli'
-      break
-    }
-    case 'curl': {
-      installCommand = 'curl -fsSL https://gh.io/copilot-install | bash'
-      break
-    }
-    default: {
-      break
-    }
   }
 
-  if (installCommand) {
-    console.log('')
+  ensureGeetoIgnored()
+  saveDefaultCopilotModels()
 
-    const spinner = log.spinner()
-    spinner.start(`Installing Copilot via ${choice}...`)
-
-    try {
-      // Use async exec to allow spinner to animate during installation
-      await execAsync(installCommand, true)
-      spinner.succeed('Copilot CLI installed successfully!')
-    } catch (error) {
-      spinner.fail(`Failed to install Copilot CLI`)
-      // Special handling for npm ENOTEMPTY error
-      const errorMsg = String(error)
-      if (choice === 'npm' && errorMsg.includes('ENOTEMPTY')) {
-        console.log('')
-        log.warn('Directory conflict detected. Retrying with force reinstall...')
-
-        const retrySpinner = log.spinner()
-        retrySpinner.start('Cleaning up and reinstalling...')
-
-        try {
-          // First uninstall, then reinstall
-          await execAsync('npm uninstall -g @github/copilot', true)
-          await execAsync('npm install -g @github/copilot --force', true)
-          retrySpinner.succeed('Copilot CLI installed successfully!')
-          console.log('')
-        } catch (retryError) {
-          retrySpinner.stop()
-          console.log('')
-          log.error(`Failed to install Copilot CLI: ${retryError}`)
-          log.info('Manual fix: Run these commands in your terminal:')
-          log.info('  npm uninstall -g @github/copilot')
-          log.info('  npm cache clean --force')
-          log.info('  npm install -g @github/copilot')
-          log.info('Or visit: https://github.com/github/copilot-cli')
-          return false
-        }
-      } else {
-        // Other errors
-        console.log('')
-        log.error(`Failed to install Copilot CLI: ${error}`)
-        log.info('You can try installing manually:')
-        if (choice === 'npm') {
-          log.info('  npm install -g @github/copilot --force')
-        } else {
-          log.info(`  ${installCommand}`)
-        }
-        log.info('Or visit: https://github.com/github/copilot-cli')
-        return false
-      }
-    }
-
-    // Add npm global bin to PATH if npm was used
-    if (choice === 'npm') {
-      if (platform === 'win32') {
-        const npmBinPath = String.raw`${os.homedir()}\\AppData\\Roaming\\npm`
-        if (!process.env.PATH?.includes(npmBinPath)) {
-          process.env.PATH = `${process.env.PATH};${npmBinPath}`
-          log.info('Added npm global bin to PATH')
-        }
-      } else {
-        const possibleNpmPaths = [
-          '/usr/local/bin',
-          '/usr/bin',
-          String.raw`${os.homedir()}/.npm-global/bin`,
-        ]
-        let npmPathAdded = false
-        for (const npmPath of possibleNpmPaths) {
-          if (!process.env.PATH?.includes(npmPath)) {
-            process.env.PATH = `${process.env.PATH}:${npmPath}`
-            npmPathAdded = true
-          }
-        }
-        if (npmPathAdded) {
-          log.info('Added npm paths to PATH')
-        }
-      }
-    }
-
-    // For brew, add brew paths
-    if (choice === 'brew') {
-      const brewPaths = ['/opt/homebrew/bin', '/usr/local/bin']
-      let brewPathAdded = false
-      for (const brewPath of brewPaths) {
-        if (!process.env.PATH?.includes(brewPath)) {
-          process.env.PATH = `${process.env.PATH}:${brewPath}`
-          brewPathAdded = true
-        }
-      }
-      if (brewPathAdded) {
-        log.info('Added Homebrew paths to PATH')
-      }
-    }
-
-    // Re-check availability via CLI or SDK-managed client
-    let copilotNowAvailable = commandExists('copilot')
-    try {
-      const sdk = await import('../api/copilot-sdk.js')
-      if (sdk && typeof sdk.isAvailable === 'function') {
-        copilotNowAvailable = copilotNowAvailable || (await sdk.isAvailable())
-      }
-    } catch {
-      // ignore
-    }
-
-    if (!copilotNowAvailable) {
-      log.error('Copilot CLI command not found after installation')
-      log.info('You may need to restart your terminal for PATH changes to take effect.')
-      return false
-    }
-
-    log.info('Copilot CLI is ready to use!')
-
-    checkCopilotVersion()
-
-    ensureGeetoIgnored()
-
-    return true
-  }
-
-  // Check if Copilot CLI is working after installation
-  try {
-    exec('copilot --version', true)
-    log.success('Copilot CLI configured and ready to use')
-
-    checkCopilotVersion()
-    ensureGeetoIgnored()
-    return true
-  } catch {
-    // CLI not working
-  }
-
-  return false
+  log.success('Copilot ready to use')
+  return true
 }

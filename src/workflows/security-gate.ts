@@ -15,6 +15,7 @@ import { exec } from '../utils/exec.js'
 import { generateCommitMessageWithProvider } from '../utils/git-ai.js'
 import { getCurrentBranch, getStagedFiles } from '../utils/git.js'
 import { log } from '../utils/logging.js'
+import { loadPromptWithVars } from '../utils/prompt-loader.js'
 import { loadState } from '../utils/state.js'
 
 interface SecurityIssue {
@@ -160,80 +161,12 @@ function buildSecurityPrompt(data: {
 }): string {
   const { diff, files, hasDependencies } = data
 
-  const prompt = `You are an AI Security Reviewer for application code.
-
-**Context:**
-- Files changed: ${files.length}
-- Changed files: ${files.slice(0, 10).join(', ')}${files.length > 10 ? ' ...' : ''}
-- Dependency changes: ${hasDependencies ? 'Yes' : 'No'}
-
-**Code Changes (diff):**
-\`\`\`diff
-${diff}
-\`\`\`
-
-**Your Task:**
-Analyze the code for potential security and quality issues.
-
-**Security Analysis - Look for:**
-1. Hardcoded secrets (API keys, passwords, tokens)
-2. Exposed credentials or sensitive data
-3. Risky dependencies or known vulnerabilities
-4. Vulnerable code patterns:
-  - SQL injection risks
-  - XSS (Cross-Site Scripting) vulnerabilities
-  - Command injection
-  - Path traversal
-  - Insecure random number generation
-  - Weak cryptography
-  - Authentication/authorization bypasses
-5. Configuration issues (exposed debug mode, unsafe CORS, etc.)
-
-**Quality Analysis - Look for:**
-1. Overly complex logic (nested loops, deep conditionals)
-2. Code duplication
-3. Violations of common best practices
-4. Missing error handling
-5. Inconsistent naming or patterns
-
-**Important:**
-- Focus on REAL issues, not theoretical ones
-- Provide practical explanations: WHY is it dangerous or problematic?
-- Suggest realistic, actionable fixes
-- Do NOT block the workflow - focus on education and risk mitigation
-- If no issues found, say so clearly
-
-**Output Format (use this exact structure):**
-
-SECURITY_WARNINGS:
-[If found, list each warning as:]
-- SEVERITY: [high/medium/low]
-- TITLE: [short title]
-- DESCRIPTION: [why is this dangerous?]
-- LOCATION: [file:line or general area]
-- SUGGESTION: [how to fix it]
-
-[If no security warnings:]
-- None detected
-
-QUALITY_ISSUES:
-[If found, list each issue as:]
-- SEVERITY: [high/medium/low]
-- TITLE: [short title]
-- DESCRIPTION: [what's the problem?]
-- LOCATION: [file:line or general area]
-- SUGGESTION: [how to improve it]
-
-[If no quality issues:]
-- None detected
-
-OVERALL_RISK: [high/medium/low/none]
-
-SUMMARY:
-[1-2 sentence summary of findings]
-`
-
-  return prompt
+  return loadPromptWithVars('security-gate-prompt.md', {
+    filesCount: String(files.length),
+    changedFiles: files.slice(0, 10).join(', ') + (files.length > 10 ? ' ...' : ''),
+    hasDependencies: hasDependencies ? 'Yes' : 'No',
+    diff,
+  })
 }
 
 /**
@@ -529,6 +462,13 @@ export async function showSecurityGateMenu(): Promise<void> {
     }
   }
 
+  // Reload state after potential AI provider setup
+  const currentState = loadState()
+  if (!currentState?.aiProvider) {
+    log.error('AI provider not configured.')
+    return
+  }
+
   const currentBranch = getCurrentBranch()
   log.info(`Current branch: ${colors.cyan}${currentBranch}${colors.reset}`)
 
@@ -588,14 +528,14 @@ export async function showSecurityGateMenu(): Promise<void> {
 
   log.info(`Files to analyze: ${scanData.files.length}`)
   if (scanData.hasDependencies) {
-    log.warn('⚠ Dependency changes detected - will check for known vulnerabilities')
+    log.warn('Dependency changes detected - will check for known vulnerabilities')
   }
 
   // Run security scan
   const aiResponse = await runSecurityScan(
     scanData,
-    state!.aiProvider as 'gemini' | 'copilot' | 'openrouter',
-    state!.copilotModel ?? state!.openrouterModel ?? state!.geminiModel
+    currentState.aiProvider as 'gemini' | 'copilot' | 'openrouter',
+    currentState.copilotModel ?? currentState.openrouterModel ?? currentState.geminiModel
   )
 
   if (!aiResponse) {

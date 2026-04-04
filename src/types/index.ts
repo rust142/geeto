@@ -5,6 +5,10 @@ import type { OpenRouterModel } from '../api/openrouter.js'
 export interface SelectOption {
   label: string
   value: string
+  /** When true, item is shown but cannot be selected (e.g. separators). */
+  disabled?: boolean
+  /** Child values — toggling this item toggles all children (group header). */
+  children?: string[]
 }
 
 export interface GeetoState {
@@ -64,6 +68,7 @@ export interface TrelloList {
 
 export interface BranchStrategyConfig {
   separator: '-' | '_'
+  prefixSeparator?: '#' | '/'
   lastNamingStrategy?: 'title-full' | 'title-ai' | 'ai' | 'trello' | 'manual'
   lastTrelloList?: string // Last selected Trello list ID
   protectedBranches?: string[] // Custom protected branches (beyond defaults)
@@ -88,12 +93,6 @@ export interface GeminiResponse {
   error?: { message: string }
 }
 
-export interface BranchNamingResult {
-  workingBranch: string
-  shouldRestart: boolean
-  cancelled: boolean
-}
-
 export interface GeminiConfig {
   apiKey: string
 }
@@ -104,4 +103,12 @@ export interface OpenRouterConfig {
 
 export interface GitHubConfig {
   token: string
+}
+
+export type Platform = 'github' | 'gitlab'
+
+export interface GitLabConfig {
+  token: string
+  /** GitLab instance URL (default: https://gitlab.com) */
+  url?: string
 }

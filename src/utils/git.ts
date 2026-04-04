@@ -1,5 +1,6 @@
 /** Git helpers */
 
+import { getBranchStrategyConfig } from './config.js'
 import { exec, execSilent } from './exec.js'
 import {
   generateBranchNameWithProvider,
@@ -142,6 +143,10 @@ export const getStagedFiles = (): string[] => {
  * Get recommended prefix separator based on existing branches
  */
 export const getRecommendedPrefixSeparator = (): '/' | '#' => {
+  // Check config first
+  const config = getBranchStrategyConfig()
+  if (config?.prefixSeparator) return config.prefixSeparator
+
   try {
     const branches = getLocalBranches()
     let slashCount = 0

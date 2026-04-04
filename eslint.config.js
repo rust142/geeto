@@ -7,6 +7,7 @@ import eslintPluginSecurity from 'eslint-plugin-security'
 import eslintPluginUnicorn from 'eslint-plugin-unicorn'
 
 export default [
+  { ignores: ['scripts/**'] },
   eslintPluginUnicorn.configs.recommended,
   eslintPluginPromise.configs['flat/recommended'],
   eslintPluginSecurity.configs.recommended,

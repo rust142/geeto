@@ -99,6 +99,39 @@ main() {
     local current_version
     current_version=$(geeto --version 2>/dev/null || echo "unknown")
     echo -e "  ${YELLOW}⚡ Geeto is already installed (${current_version})${NC}"
+    echo -e "  ${GRAY}Cleaning up old installation...${NC}"
+
+    # Remove old binaries from common locations
+    local old_paths=(
+      "/usr/local/bin/geeto"
+      "/usr/bin/geeto"
+      "$HOME/.bun/bin/geeto"
+      "$HOME/.local/bin/geeto"
+      "$HOME/.geeto/bin/geeto"
+      "$HOME/.geeto/bin/geeto.exe"
+    )
+
+    # Also check npm/bun global prefix
+    if command -v npm &>/dev/null; then
+      local npm_bin
+      npm_bin="$(npm prefix -g 2>/dev/null || true)/bin/geeto"
+      [ -n "$npm_bin" ] && old_paths+=("$npm_bin")
+    fi
+
+    for old_path in "${old_paths[@]}"; do
+      if [ -f "$old_path" ] || [ -L "$old_path" ]; then
+        if [ -w "$(dirname "$old_path")" ]; then
+          rm -f "$old_path" >>"$LOGFILE" 2>&1 || true
+        else
+          sudo rm -f "$old_path" >>"$LOGFILE" 2>&1 || true
+        fi
+        echo -e "  ${GRAY}  removed: ${old_path}${NC}"
+      fi
+    done
+
+    # Clear shell hash table so 'geeto' resolves to new path
+    hash -r 2>/dev/null || true
+
     echo -e "  ${GRAY}Reinstalling / upgrading...${NC}"
     echo ""
   fi
@@ -214,6 +247,9 @@ main() {
   cleanup_tmp
 
   # ── Done ────────────────────────────────────────────────────────
+  # Clear shell hash table so new binary is found immediately
+  hash -r 2>/dev/null || true
+
   echo ""
   echo -e "  ${GREEN}${BOLD}✨ Geeto installed successfully!${NC}"
   echo ""

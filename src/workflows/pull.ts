@@ -100,7 +100,7 @@ export const handlePull = async (): Promise<void> => {
   // Fetch to get latest state
   console.log('')
   const fetchProgress = new ScrambleProgress()
-  fetchProgress.start(['fetching latest from remote...'])
+  fetchProgress.start(['Fetching from remote'])
   try {
     const fetchRemote = tracking?.remote ?? 'origin'
     await execAsync(`git fetch ${fetchRemote} --quiet`, true)
@@ -198,35 +198,9 @@ export const handlePull = async (): Promise<void> => {
     }
   }
 
-  // Execute pull — count objects before animation (sync, but local = fast)
-  let pullObjectCount = 0
-  let pullDeltaCount = 0
-  try {
-    const objCount =
-      Number(
-        exec(
-          `git rev-list --objects ${remote}/${currentBranch} ^HEAD 2>/dev/null | wc -l`,
-          true
-        ).trim()
-      ) || 0
-    if (objCount > 0) pullObjectCount = objCount
-    if (counts?.behind) pullDeltaCount = counts.behind
-  } catch {
-    /* ignore */
-  }
-
   console.log('')
   const pullProgress = new ScrambleProgress()
-  pullProgress.start([
-    'fetching remote refs...',
-    pullObjectCount > 0
-      ? { text: 'downloading objects', countTo: pullObjectCount }
-      : 'downloading objects...',
-    pullDeltaCount > 0
-      ? { text: 'resolving deltas', countTo: pullDeltaCount }
-      : 'resolving deltas...',
-    `merging ${remote}/${currentBranch} → ${currentBranch}...`,
-  ])
+  pullProgress.start([`Pulling from ${remote}/${currentBranch}`])
 
   try {
     const result = await execAsync(pullCmd, true)

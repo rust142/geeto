@@ -1,312 +1,146 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
-import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
-import type { CopilotClient as _CopilotClient, Session } from '@github/copilot-sdk'
-import { CopilotClient } from '@github/copilot-sdk'
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 
+/**
+ * Copilot AI provider — direct REST API client.
+ *
+ * Uses GitHub Copilot Chat Completions API (api.individual.githubcopilot.com)
+ * instead of the @github/copilot-sdk. This removes the dependency on the
+ * Copilot CLI binary and avoids protocol version mismatch issues.
+ *
+ * Auth: uses `gh auth token` (GitHub CLI) or GITHUB_TOKEN env var.
+ */
+
+import {
+  buildPromptWithCorrection,
+  buildReleaseNotesPrompt,
+  cleanAIContent,
+  MIN_AI_RESPONSE_LENGTH,
+  normalizeBranchName,
+} from '../utils/ai-text.js'
 import { exec } from '../utils/exec.js'
 import { log } from '../utils/logging.js'
 
-// Copilot SDK wrapper (lazy-load, optional)
+// ── API Configuration ───────────────────────────────────────────────────
+const COPILOT_API_BASE = 'https://api.individual.githubcopilot.com'
+const CHAT_ENDPOINT = `${COPILOT_API_BASE}/chat/completions`
+const MODELS_ENDPOINT = `${COPILOT_API_BASE}/models`
 
-// Minimum Copilot CLI version required for SDK compatibility
-export const MIN_COPILOT_VERSION = '0.0.400'
-
-// Cache file path for storing copilot binary info
-const CACHE_FILE = path.join(os.homedir(), '.cache', 'geeto', 'copilot-bin.json')
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
-
-interface CopilotBinCache {
-  path: string
-  version: string
-  timestamp: number
-}
+// ── Token Management ────────────────────────────────────────────────────
+let cachedToken: string | null = null
 
 /**
- * Parse version string to numeric value for comparison.
+ * Get GitHub auth token for Copilot API access.
+ * Priority: 1) cached token, 2) GITHUB_TOKEN env, 3) `gh auth token`
  */
-export const parseParts = (v: string): number => {
-  const parts = v.split('.').map((n) => Number.parseInt(n, 10))
-  const [major = 0, minor = 0, patch = 0] = parts
-  return major * 1_000_000 + minor * 1_000 + patch
-}
+const getToken = (): string | null => {
+  if (cachedToken) return cachedToken
 
-/**
- * Read cached copilot binary info from file.
- */
-const readCache = (): CopilotBinCache | null => {
+  // Try env vars first (fast path)
+  const envToken = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? null
+  if (envToken) {
+    cachedToken = envToken
+    return envToken
+  }
+
+  // Fall back to gh CLI
   try {
-    if (!fs.existsSync(CACHE_FILE)) return null
-    const data = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')) as CopilotBinCache
-    // Check if cache is still valid (within TTL and binary still exists)
-    if (Date.now() - data.timestamp < CACHE_TTL_MS && fs.existsSync(data.path)) {
-      return data
+    const token = exec('gh auth token', true).trim()
+    if (token) {
+      cachedToken = token
+      return token
     }
   } catch {
-    // ignore
+    // gh CLI not available or not authenticated
   }
+
   return null
 }
 
-/**
- * Write copilot binary info to cache file.
- */
-const writeCache = (info: { path: string; version: string }): void => {
-  try {
-    const cacheDir = path.dirname(CACHE_FILE)
-    if (!fs.existsSync(cacheDir)) {
-      fs.mkdirSync(cacheDir, { recursive: true })
-    }
-    fs.writeFileSync(CACHE_FILE, JSON.stringify({ ...info, timestamp: Date.now() }))
-  } catch {
-    // ignore cache write failures
-  }
+// ── Chat Completions ────────────────────────────────────────────────────
+interface ChatMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
 }
 
-/**
- * Get version from a specific copilot binary path.
- */
-const getVersionFromPath = (binPath: string): string | null => {
+interface ChatResponse {
+  choices?: Array<{
+    message?: { content?: string; role?: string }
+    finish_reason?: string
+  }>
+  error?: { message?: string; code?: string }
+}
+
+const chatCompletion = async (messages: ChatMessage[], model?: string): Promise<string | null> => {
+  const token = getToken()
+  if (!token) {
+    log.warn('No GitHub token available. Run `gh auth login` to authenticate.')
+    return null
+  }
+
+  const body = {
+    model: model ?? 'gpt-5-mini',
+    messages,
+  }
+
   try {
-    const verOut = exec(`"${binPath}" --version`, true)
-    const m = verOut.match(/(\d+\.\d+\.\d+)/)
-    return m?.[1] ?? null
-  } catch {
+    const res = await fetch(CHAT_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(body),
+    })
+
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => '')
+      if (res.status === 401 || res.status === 403) {
+        // Token expired or invalid — clear cache for retry
+        cachedToken = null
+        log.warn('GitHub token expired or unauthorized. Run `gh auth login` to re-authenticate.')
+      } else {
+        log.warn(`Copilot API error (${res.status}): ${errorText.slice(0, 200)}`)
+      }
+      return null
+    }
+
+    const data = (await res.json()) as ChatResponse
+    const content = data.choices?.[0]?.message?.content
+    return content ?? null
+  } catch (error) {
+    log.error('Copilot API request failed: ' + String(error))
     return null
   }
 }
 
+// ── Public API (same exports as before) ─────────────────────────────────
+
 /**
- * Find the best (newest) copilot binary from known locations.
- * Uses file-based caching to avoid slow exec calls on every startup.
+ * Check if Copilot API is accessible (has valid token).
  */
-export const findBestCopilotBinary = (): { path: string; version: string } | null => {
-  const minNum = parseParts(MIN_COPILOT_VERSION)
-  const isWin = os.platform() === 'win32'
-  const copilotBin = isWin ? 'copilot.exe' : 'copilot'
+export const isAvailable = async (): Promise<boolean> => {
+  const token = getToken()
+  if (!token) return false
 
-  // Super fast path: check cache first
-  const cached = readCache()
-  if (cached && fs.existsSync(cached.path) && parseParts(cached.version) >= minNum) {
-    return { path: cached.path, version: cached.version }
-  }
-
-  // Check PATH first (most common case)
   try {
-    const whichCmd = isWin ? 'where copilot' : 'which copilot'
-    const pathBin = exec(whichCmd, true).trim().split('\n')[0]?.trim() // `where` may return multiple
-    if (pathBin && fs.existsSync(pathBin)) {
-      const ver = getVersionFromPath(pathBin)
-      if (ver) {
-        const num = parseParts(ver)
-        if (num >= minNum) {
-          const result = { path: pathBin, version: ver }
-          writeCache(result)
-          return result
-        }
-      }
-    }
+    const res = await fetch(MODELS_ENDPOINT, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return res.ok
   } catch {
-    // ignore, will check other locations
-  }
-
-  // PATH version is outdated or not found - scan known locations
-  const home = os.homedir()
-  const knownPaths: string[] = isWin
-    ? [
-        // Windows install locations (matches copilot-setup.ts)
-        path.join(process.env.LOCALAPPDATA ?? '', 'Programs', 'GitHub CLI', copilotBin),
-        'C:\\Program Files\\GitHub CLI\\' + copilotBin,
-        'C:\\Program Files (x86)\\GitHub CLI\\' + copilotBin,
-        path.join(home, 'AppData', 'Roaming', 'npm', copilotBin),
-        path.join(home, 'scoop', 'shims', copilotBin),
-        path.join(
-          home,
-          '.config',
-          'Code',
-          'User',
-          'globalStorage',
-          'github.copilot-chat',
-          'copilotCli',
-          copilotBin
-        ),
-      ]
-    : [
-        // macOS / Linux install locations (matches copilot-setup.ts)
-        '/opt/homebrew/bin/copilot',
-        '/usr/local/bin/copilot',
-        '/usr/bin/copilot',
-        path.join(home, '.config/Code/User/globalStorage/github.copilot-chat/copilotCli/copilot'),
-        path.join(home, '.npm-global/bin/copilot'),
-        path.join(home, '.local/bin/copilot'),
-      ]
-
-  for (const binPath of knownPaths) {
-    if (fs.existsSync(binPath)) {
-      const ver = getVersionFromPath(binPath)
-      if (ver) {
-        const num = parseParts(ver)
-        if (num >= minNum) {
-          const result = { path: binPath, version: ver }
-          writeCache(result)
-          return result
-        }
-      }
-    }
-  }
-
-  return null
-}
-
-/**
- * Check if Copilot CLI version is compatible with SDK.
- * The standalone CLI is used as fallback when the bundled CLI is unavailable
- * (e.g. in bun-compiled binaries). Also used for setup guidance.
- */
-export const checkCopilotCliVersion = (): boolean => {
-  const best = findBestCopilotBinary()
-  if (!best) {
     return false
   }
-  return parseParts(best.version) >= parseParts(MIN_COPILOT_VERSION)
 }
-
-let client: _CopilotClient | null = null
 
 /**
- * Lazily start the Copilot SDK client.
- *
- * Resolution order:
- * 1. Bundled CLI – SDK resolves @github/copilot from node_modules (npm/bun install).
- * 2. System CLI  – Standalone Copilot CLI binary found on PATH or known locations
- *                  (used when bundled CLI is unavailable, e.g. Bun-compiled binary).
+ * No-op for backwards compatibility. REST API is stateless.
  */
-const ensureClient = async (): Promise<boolean> => {
-  if (client) {
-    return true
-  }
-
-  // Suppress Node.js experimental warnings from copilot subprocess
-  process.env.NODE_NO_WARNINGS = '1'
-
-  // ── Attempt 1: bundled CLI (default SDK behaviour) ────────────────────
-  try {
-    client = new CopilotClient({ autoStart: true })
-    await client.start()
-    return true
-  } catch (bundledError: unknown) {
-    const bundledMsg = bundledError instanceof Error ? bundledError.message : String(bundledError)
-
-    // Only fall through to system CLI when the bundled CLI cannot be resolved
-    // (e.g. running inside a bun-compiled binary where node_modules don't exist).
-    const isMissingModule =
-      bundledMsg.includes('Cannot find module') ||
-      bundledMsg.includes('ResolveMessage') ||
-      bundledMsg.includes('ENOENT')
-
-    if (!isMissingModule) {
-      // Not a resolution error — report and bail out
-      log.clearLine()
-      log.gap()
-      if (bundledMsg.includes('headless') || bundledMsg.includes('Unknown flag')) {
-        log.info('Copilot SDK: bundled CLI does not support --headless (Bun compat issue).')
-        log.info('Upgrade SDK: bun add @github/copilot-sdk@latest')
-      } else {
-        log.info(`Copilot SDK unavailable: ${bundledMsg}`)
-      }
-      log.gap()
-      client = null
-      return false
-    }
-
-    // ── Attempt 2: system Copilot CLI (standalone native binary) ────────
-    const systemCli = findBestCopilotBinary()
-    if (!systemCli) {
-      log.clearLine()
-      log.gap()
-      log.info('Copilot SDK: bundled CLI not found and no system Copilot CLI available.')
-      log.info('Install Copilot CLI: brew install copilot-cli')
-      log.gap()
-      client = null
-      return false
-    }
-
-    try {
-      log.clearLine()
-      log.gap()
-      log.info(`Using system Copilot CLI (v${systemCli.version})`)
-      log.gap()
-      client = new CopilotClient({ cliPath: systemCli.path, autoStart: true })
-      await client.start()
-      return true
-    } catch (systemError: unknown) {
-      const sysMsg = systemError instanceof Error ? systemError.message : String(systemError)
-      log.clearLine()
-      log.gap()
-      log.info(`System Copilot CLI failed: ${sysMsg}`)
-      log.gap()
-      client = null
-      return false
-    }
-  }
-}
-
-const withSession = async (
-  model: string | undefined,
-  fn: (session: Session) => Promise<string | null>
-): Promise<string | null> => {
-  const ok = await ensureClient()
-  if (!ok || !client) {
-    return null
-  }
-  try {
-    const session = await client.createSession({ model })
-    try {
-      const res = await fn(session)
-
-      // best-effort destroy session workspace
-      try {
-        await session.destroy()
-      } catch {
-        // ignore
-      }
-      return res
-    } catch (error) {
-      try {
-        await session.destroy()
-      } catch {
-        // ignore
-      }
-      throw error
-    }
-  } catch (error) {
-    log.warn('Failed to create Copilot session: ' + String(error))
-    return null
-  }
-}
-
-export const isAvailable = async (): Promise<boolean> => {
-  return ensureClient()
-}
-
 export const stopClient = async (): Promise<void> => {
-  if (!client) {
-    return
-  }
-  try {
-    await client.stop()
-  } catch {
-    try {
-      // Some runtime implementations expose forceStop; call if present
-      await client.forceStop()
-    } catch {
-      /* ignore */
-    }
-  }
-  client = null
+  // REST API is stateless — nothing to stop
 }
 
 export const generateBranchName = async (
@@ -314,39 +148,24 @@ export const generateBranchName = async (
   correction?: string,
   model?: string
 ): Promise<string | null> => {
-  const promptBase = `Generate a git branch name suffix from this input. Output ONLY the kebab-case suffix (lowercase-with-hyphens), 3-50 chars, nothing else.`
-  const prompt = correction
-    ? `${promptBase}\n\nInput:\n${text}\n\nAdjustment: ${correction}`
-    : `${promptBase}\n\nInput:\n${text}`
+  const prompt = buildPromptWithCorrection('branch-name-prompt.md', text, 'Input', correction)
 
-  const result = await withSession(model, async (session) => {
-    // sendAndWait returns the assistant message event with data.content
-    try {
-      const response = await session.sendAndWait({ prompt })
-      const content = response?.data?.content ?? ''
-      const first =
-        String(content)
-          .trim()
-          .split('\n')
-          .find((l: string) => !!l) ?? ''
-      // sanitize to kebab-case
-      const cleaned = String(first)
-        .toLowerCase()
-        .replaceAll(/[^\d\sa-z-]/g, ' ')
+  try {
+    const content = await chatCompletion([{ role: 'user', content: prompt }], model)
+    if (!content) return null
+
+    const first =
+      content
         .trim()
-        .replaceAll(/\s+/g, '-')
-        .replaceAll(/-+/g, '-')
-        .replaceAll(/^-|-$/g, '')
-      return cleaned || null
-    } catch (error) {
-      log.clearLine()
-      log.gap()
-      log.error('Copilot Error: ' + String(error))
-      return null
-    }
-  })
-
-  return result
+        .split('\n')
+        .find((l: string) => !!l) ?? ''
+    return normalizeBranchName(first) || null
+  } catch (error) {
+    log.clearLine()
+    log.gap()
+    log.error('Copilot Error: ' + String(error))
+    return null
+  }
 }
 
 export const generateCommitMessage = async (
@@ -354,38 +173,22 @@ export const generateCommitMessage = async (
   correction?: string,
   model?: string
 ): Promise<string | null> => {
-  const promptBase = `Generate a conventional commit message from this git diff. Output ONLY the commit message in this format:\n\n<type>(<scope>): <short summary>\n\n<Detailed multi-line body explaining the change. Wrap lines at ~72 characters. LIMITS: subject max 100 chars; body max 360 chars. Include why the change was made and any important notes. Separate subject and body by a single blank line. Do not include any extraneous commentary or markers. Use imperative mood.
+  const prompt = buildPromptWithCorrection('commit-message-prompt.md', diff, 'Diff', correction)
 
-Example:
-refactor(ai): migrate providers to SDKs
+  try {
+    const content = await chatCompletion([{ role: 'user', content: prompt }], model)
+    if (!content) return null
 
-Replaces direct API/CLI calls for Copilot and Gemini with SDK integrations.
-This simplifies code, improves maintainability, and adds dynamic model
-fetching. Updates .gitignore for geeto binaries.`
-  const prompt = correction
-    ? `${promptBase}\n\nDiff:\n${diff}\n\nAdjustment: ${correction}`
-    : `${promptBase}\n\nDiff:\n${diff}`
-
-  const result = await withSession(model, async (session) => {
-    try {
-      const response = await session.sendAndWait({ prompt })
-      const content = response?.data?.content ?? ''
-      // Normalize full response: remove fenced blocks, trim surrounding quotes, collapse extra blank lines
-      const cleaned = String(content)
-        .replaceAll(/```[\S\s]*?```/g, '')
-        .replaceAll(/^"+|"+$/g, '')
-        .trim()
-      const normalized = cleaned.replaceAll(/\n\s*\n+/g, '\n\n').trim()
-      return normalized && normalized.length >= 8 ? normalized : null
-    } catch (error) {
-      log.clearLine()
-      log.gap()
-      log.error('Copilot Error: ' + String(error))
-      return null
-    }
-  })
-
-  return result
+    return cleanAIContent(content, {
+      normalizeBlankLines: true,
+      minLength: MIN_AI_RESPONSE_LENGTH,
+    })
+  } catch (error) {
+    log.clearLine()
+    log.gap()
+    log.error('Copilot Error: ' + String(error))
+    return null
+  }
 }
 
 /**
@@ -404,107 +207,58 @@ type ModelDetail = {
 }
 
 export const getAvailableModelsDetailed = async (): Promise<ModelDetail[] | null> => {
+  const token = getToken()
+  if (!token) return null
+
   try {
-    const runtime: any = client
-    let list: any = null
-    if (typeof runtime.listModels === 'function') {
-      list = await runtime.listModels()
-    } else if (typeof runtime.getModels === 'function') {
-      list = await runtime.getModels()
-    } else if (Array.isArray((runtime as any).models)) {
-      list = (runtime as any).models
-    }
+    const res = await fetch(MODELS_ENDPOINT, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
 
-    if (!list || !Array.isArray(list)) {
-      return null
-    }
+    if (!res.ok) return null
 
-    const mapped: Array<ModelDetail | null> = await Promise.all(
-      list.map(async (m: any) => {
-        if (!m) {
-          return null
-        }
+    const data = (await res.json()) as { data?: any[] }
+    const list = data.data
+    if (!Array.isArray(list)) return null
 
-        if (typeof m === 'string') {
-          return {
-            id: m,
-            name: m,
-            inputTokenLimit: null,
-            outputTokenLimit: null,
-            needsEnable: false,
-            isPremium: false,
-            multiplier: null,
-            label: m,
-            value: m,
-          }
-        }
+    const result: ModelDetail[] = []
+    for (const m of list) {
+      if (!m?.id) continue
 
-        const id = String(m.id ?? m.model ?? m.name ?? '')
-        const name = String(m.name ?? m.title ?? id)
-        const policyState = m.policy?.state ?? m.state ?? null
-        const billing = m.billing ?? m.pricing ?? null
-        const isPremium = Boolean(billing?.is_premium ?? billing?.premium ?? false)
-        const multiplierRaw = billing?.multiplier ?? billing?.cost_multiplier ?? null
-        const multiplier = typeof multiplierRaw === 'number' ? multiplierRaw : null
+      // Skip non-chat models (embeddings, etc.)
+      const type = m.capabilities?.type
+      if (type && type !== 'chat') continue
 
-        let needsEnable = Boolean(policyState && String(policyState).toLowerCase() !== 'enabled')
+      const id = String(m.id)
+      const name = String(m.name ?? id)
+      const limits = m.capabilities?.limits
+      const inputTokenLimit =
+        typeof limits?.max_prompt_tokens === 'number' ? limits.max_prompt_tokens : null
+      const outputTokenLimit =
+        typeof limits?.max_output_tokens === 'number' ? limits.max_output_tokens : null
 
-        // If the policy state is unknown, try to ping the model via adapter to check enablement
-        if (policyState === null) {
-          try {
-            const adapter = await import('./copilot-adapter.js')
-            if (adapter && typeof adapter.pingModel === 'function') {
-              try {
-                const pingOk = await adapter.pingModel(id || name)
-                needsEnable = !pingOk
-              } catch {
-                // If ping fails, leave needsEnable as false to avoid blocking users
-                needsEnable = false
-              }
-            }
-          } catch {
-            // adapter import failed; ignore and proceed
-          }
-        }
+      const policyState = m.policy?.state ?? null
+      const needsEnable = Boolean(policyState && String(policyState).toLowerCase() !== 'enabled')
 
-        // capabilities.limits may contain token limits for the runtime
-        let inputTokenLimit: number | null = null
-        let outputTokenLimit: number | null = null
-        try {
-          const limits = m.capabilities?.limits
-          if (limits) {
-            if (typeof limits.max_prompt_tokens === 'number') {
-              inputTokenLimit = limits.max_prompt_tokens
-            }
-            if (typeof limits.max_output_tokens === 'number') {
-              outputTokenLimit = limits.max_output_tokens
-            }
-          }
-        } catch {
-          // ignore parsing errors; leave as null
-        }
+      const billing = m.capabilities?.supports?.billing ?? null
+      const isPremium = Boolean(billing?.premium_billing)
+      const multiplierRaw = billing?.copilot_premium_request_multiplier ?? null
+      const multiplier = typeof multiplierRaw === 'number' ? multiplierRaw : null
 
-        const label = `${name}`
-        const value = id || label
-        return {
-          id,
-          name,
-          inputTokenLimit,
-          outputTokenLimit,
-          needsEnable,
-          isPremium,
-          multiplier,
-          label,
-          value,
-        }
+      result.push({
+        id,
+        name,
+        inputTokenLimit,
+        outputTokenLimit,
+        needsEnable,
+        isPremium,
+        multiplier,
+        label: name,
+        value: id,
       })
-    )
-
-    const out = mapped.filter(Boolean) as ModelDetail[]
-    if (out.length > 0) {
-      return out
     }
-    return null
+
+    return result.length > 0 ? result : null
   } catch {
     return null
   }
@@ -513,7 +267,6 @@ export const getAvailableModelsDetailed = async (): Promise<ModelDetail[] | null
 export const getAvailableModelChoices = async (defaultModelId?: string) => {
   const detailed = (await getAvailableModelsDetailed()) ?? []
 
-  // compute max lengths using simple loops (avoid reduce)
   let maxNameLen = 0
   let maxIoLen = 0
   let maxMultLen = 0
@@ -550,7 +303,6 @@ export const getAvailableModelChoices = async (defaultModelId?: string) => {
     const defaultMark = isDefault ? ' ✓' : ''
     const padCount = Math.max(0, maxNameLen - nameWithHint.length + 2)
     const paddedName = nameWithHint + ' '.repeat(padCount) + defaultMark
-
     const ioStr = `${d.inputTokenLimit ?? 'n/a'}/${d.outputTokenLimit ?? 'n/a'} tokens`
     const ioPadded = ioStr + ' '.repeat(Math.max(0, maxIoLen - ioStr.length + 2))
 
@@ -569,81 +321,29 @@ export const generateReleaseNotes = async (
   correction?: string,
   model?: string
 ): Promise<string | null> => {
-  const langLabel = language === 'id' ? 'Indonesian (Bahasa Indonesia)' : 'English'
-  const promptBase = `You are a release notes writer. Given a list of git commit messages, generate user-friendly release notes in ${langLabel}. Output ONLY the release notes content (no title/heading, no version number, no date — those are added separately).
+  const prompt = buildReleaseNotesPrompt(commits, language, correction)
 
-Rules:
-- Start with "### What's New?" as the top-level section
-- Group changes into subsections: "#### New Features", "#### Bug Fixes", "#### Other Improvements"
-- Only include subsections that have items (skip empty ones)
-- Use simple, non-technical language that end users can understand
-- Each item should be a bullet point starting with "-"
-- Strip conventional commit prefixes (feat:, fix:, chore:, etc.)
-- Keep it concise but informative
-- If there are breaking changes, add a "#### Breaking Changes" subsection at the top
-- Do NOT include commit hashes or author names
-
-Formatting (follow EXACTLY — this is markdownlint-compliant):
-- Always put ONE blank line after EVERY heading (### or ####) before the first bullet
-- Always put ONE blank line after the last bullet in a section before the next #### heading
-- Never have more than one consecutive blank line
-- Example output:
-
-### What's New?
-
-#### New Features
-
-- Feature description here
-- Another feature
-
-#### Bug Fixes
-
-- Fix description here
-
-#### Other Improvements
-
-- Improvement here`
-
-  const prompt = correction
-    ? `${promptBase}\n\nCommits:\n${commits}\n\nAdjustment: ${correction}`
-    : `${promptBase}\n\nCommits:\n${commits}`
-
-  const result = await withSession(model, async (session) => {
-    try {
-      const response = await session.sendAndWait({ prompt })
-      const content = response?.data?.content ?? ''
-      const cleaned = String(content)
-        .replaceAll(/```[\S\s]*?```/g, '')
-        .replaceAll(/^"+|"+$/g, '')
-        .trim()
-      return cleaned || null
-    } catch (error) {
-      log.clearLine()
-      log.gap()
-      log.error('Copilot Error: ' + String(error))
-      return null
-    }
-  })
-
-  return result
+  try {
+    const content = await chatCompletion([{ role: 'user', content: prompt }], model)
+    if (!content) return null
+    return cleanAIContent(content)
+  } catch (error) {
+    log.clearLine()
+    log.gap()
+    log.error('Copilot Error: ' + String(error))
+    return null
+  }
 }
 
 /** Send a raw prompt to Copilot and return the text response. */
 export const generateText = async (prompt: string, model?: string): Promise<string | null> => {
-  const result = await withSession(model, async (session) => {
-    try {
-      const response = await session.sendAndWait({ prompt })
-      const content = response?.data?.content ?? ''
-      const cleaned = String(content)
-        .replaceAll(/```[\S\s]*?```/g, '')
-        .replaceAll(/^"+|"+$/g, '')
-        .trim()
-      return cleaned || null
-    } catch {
-      return null
-    }
-  })
-  return result
+  try {
+    const content = await chatCompletion([{ role: 'user', content: prompt }], model)
+    if (!content) return null
+    return cleanAIContent(content)
+  } catch {
+    return null
+  }
 }
 
 export default {

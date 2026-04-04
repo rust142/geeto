@@ -1,5 +1,67 @@
 # Releases
 
+## v0.7.0-alpha.4 — April 4, 2026
+
+### What's New?
+
+#### New Features
+
+- Generate embedded prompts to improve suggestion accuracy
+
+- Improve Copilot SDK handling for more reliable operation
+
+#### Bug Fixes
+
+- Fix compatibility with Bun binaries by adding a static module map
+
+---
+
+## v0.7.0-alpha.3 — April 4, 2026
+
+### What's New?
+
+#### New Features
+
+- Save and manage AI models so they persist across sessions and are easier to use.
+- Add a doctor workflow with automatic task generation to help organize and track next steps.
+
+---
+
+## v0.7.0-alpha.2 — April 4, 2026
+
+### What's New?
+
+#### Breaking Changes
+
+- The built-in inline file editor has been removed; files now open in the Vim editor by default.
+
+#### Bug Fixes
+
+- Improved label alignment by increasing the padding so names line up correctly.
+
+---
+
+## v0.7.0-alpha.1 — April 3, 2026
+
+### What's New?
+
+#### New Features
+
+- Support for GitLab and a unified platform interface
+- More consistent AI suggestions and improved AI command workflows
+- Pick files grouped by folder with multi-select and simple staging
+
+#### Bug Fixes
+
+- Geeto now removes old installations before reinstalling to avoid conflicts
+
+#### Other Improvements
+
+- Confirmation prompts are now simpler and clearer
+- Progress display during scramble operations is simplified to a single-line spinner
+
+---
+
 ## v0.6.6 — February 26, 2026
 
 ### What's New?

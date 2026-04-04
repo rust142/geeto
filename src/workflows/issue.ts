@@ -1,5 +1,5 @@
 /**
- * Create GitHub Issue workflow
+ * Create Issue workflow — supports GitHub and GitLab
  * Interactive issue creation from CLI
  */
 
@@ -7,35 +7,17 @@ import type { CopilotModel } from '../api/copilot.js'
 import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 
-import { createIssue, listLabels, parseRepoFromUrl } from '../api/github.js'
+import { getPlatformAPI } from '../api/platform.js'
 import { askMultiline, askQuestion, confirm, editInline } from '../cli/input.js'
 import { multiSelect, select } from '../cli/menu.js'
-import { setupGithubConfigInteractive } from '../core/github-setup.js'
+import { getModelForProvider, showAIPreview, updateModelInState } from '../utils/ai-workflow.js'
 import { colors } from '../utils/colors.js'
-import { DEFAULT_GEMINI_MODEL, hasGithubConfig } from '../utils/config.js'
 import { isDryRun, logDryRun } from '../utils/dry-run.js'
-import { execSilent } from '../utils/exec.js'
 import { generateTextWithProvider, getAIProviderShortName } from '../utils/git-ai.js'
+import { getPlatformRepoFromRemote, validatePlatformConfig } from '../utils/github-helpers.js'
 import { log } from '../utils/logging.js'
-import { loadState, saveState } from '../utils/state.js'
-
-/**
- * Format a markdown line for terminal preview display
- */
-const formatMdLine = (line: string): string => {
-  const trimmed = line.trimStart()
-  if (trimmed.startsWith('### ')) {
-    return `  ${colors.bright}${trimmed.slice(4)}${colors.reset}`
-  }
-  if (trimmed.startsWith('## ')) {
-    return `  ${colors.cyan}${colors.bright}${trimmed.slice(3)}${colors.reset}`
-  }
-  if (trimmed.startsWith('- ')) {
-    return `    ${trimmed}`
-  }
-  if (!trimmed) return ''
-  return `  ${colors.gray}${trimmed}${colors.reset}`
-}
+import { loadPrompt } from '../utils/prompt-loader.js'
+import { loadState } from '../utils/state.js'
 
 /**
  * Call AI to generate an issue title and body from a brief description
@@ -46,25 +28,7 @@ const callAIForIssue = async (
   model: string | undefined,
   correction?: string
 ): Promise<{ title: string; body: string } | null> => {
-  const promptBase = [
-    'Generate a GitHub Issue title and body from this description.',
-    'IMPORTANT: Always write in English regardless of the input language.',
-    'Output ONLY in this exact format (no extra markers):',
-    '',
-    'TITLE: <concise issue title, max 72 chars>',
-    '',
-    'BODY:',
-    '## Description',
-    '<clear description of the issue>',
-    '',
-    '## Expected Behavior / Goal',
-    '<what should happen or what is the goal>',
-    '',
-    '## Additional Context',
-    '<any relevant details>',
-    '',
-    `User description:\n${description}`,
-  ].join('\n')
+  const promptBase = loadPrompt('issue-prompt.md') + `\n\nUser description:\n${description}`
 
   const prompt = correction ? `${promptBase}\n\nAdjustment: ${correction}` : promptBase
 
@@ -104,79 +68,22 @@ const callAIForIssue = async (
 }
 
 /**
- * Show AI issue preview in terminal
- */
-const showAIIssuePreview = (title: string, body: string): void => {
-  log.ai('Suggested Issue:\n')
-  console.log(`  ${colors.cyan}${colors.bright}${title}${colors.reset}\n`)
-  for (const line of body.split('\n')) {
-    console.log(formatMdLine(line))
-  }
-  console.log('')
-}
-
-/**
- * Get current model string for a given provider from state
- */
-const getModelForProvider = (
-  provider: 'copilot' | 'gemini' | 'openrouter',
-  state: ReturnType<typeof loadState>
-): string | undefined => {
-  if (provider === 'copilot') return state?.copilotModel
-  if (provider === 'openrouter') return state?.openrouterModel
-  return state?.geminiModel ?? DEFAULT_GEMINI_MODEL
-}
-
-/**
- * Update model in state and persist
- */
-const updateModelInState = (
-  state: ReturnType<typeof loadState>,
-  provider: 'copilot' | 'gemini' | 'openrouter',
-  model: string
-): void => {
-  if (!state) return
-  if (provider === 'copilot') state.copilotModel = model
-  else if (provider === 'openrouter') state.openrouterModel = model
-  else state.geminiModel = model
-  saveState(state)
-}
-
-/**
  * Interactive Create Issue workflow
  */
 export const handleCreateIssue = async (): Promise<void> => {
   log.banner()
-  log.step(`${colors.cyan}Create GitHub Issue${colors.reset}\n`)
+  // Detect platform and resolve repo info
+  const platformRepo = getPlatformRepoFromRemote()
+  if (!platformRepo) return
 
-  // Check GitHub config
-  if (!hasGithubConfig()) {
-    const ok = setupGithubConfigInteractive()
-    if (!ok) {
-      log.info('Setup cancelled. Run --setup-github later.')
-      return
-    }
-    console.log('')
-  }
+  const platformLabel = platformRepo.platform === 'github' ? 'GitHub' : 'GitLab'
+  log.step(`${colors.cyan}Create ${platformLabel} Issue${colors.reset}\n`)
 
-  // Resolve repo info from remote
-  let remoteUrl = ''
-  try {
-    remoteUrl = execSilent('git remote get-url origin').trim()
-  } catch {
-    log.error('No git remote "origin" found.')
-    log.info('Add a remote: git remote add origin <url>')
-    return
-  }
+  if (!validatePlatformConfig(platformRepo.platform)) return
 
-  const repoInfo = parseRepoFromUrl(remoteUrl)
-  if (!repoInfo) {
-    log.error('Could not parse GitHub owner/repo from remote URL.')
-    log.info(`Remote: ${remoteUrl}`)
-    return
-  }
+  const api = getPlatformAPI(platformRepo.platform)
 
-  log.info(`Repo: ${colors.cyan}${repoInfo.owner}/${repoInfo.repo}${colors.reset}`)
+  log.info(`Repo: ${colors.cyan}${platformRepo.owner}/${platformRepo.repo}${colors.reset}`)
 
   // Issue content generation
   let title = ''
@@ -225,7 +132,7 @@ export const handleCreateIssue = async (): Promise<void> => {
 
       title = aiResult.title
       body = aiResult.body
-      showAIIssuePreview(title, body)
+      showAIPreview('Issue', title, body)
 
       const action = await select('Accept this issue content?', [
         { label: 'Yes, use it', value: 'accept' },
@@ -360,7 +267,7 @@ export const handleCreateIssue = async (): Promise<void> => {
           `- OS: ${process.platform}`,
           `- Node: ${process.version}`,
         ].join('\n')
-        log.info('Bug report template applied. Edit in GitHub after creation.')
+        log.info(`Bug report template applied. Edit in ${platformLabel} after creation.`)
         break
       }
       case 'feature': {
@@ -379,7 +286,7 @@ export const handleCreateIssue = async (): Promise<void> => {
           '### Alternatives Considered',
           '',
         ].join('\n')
-        log.info('Feature request template applied. Edit in GitHub after creation.')
+        log.info(`Feature request template applied. Edit in ${platformLabel} after creation.`)
         break
       }
       default: {
@@ -393,7 +300,11 @@ export const handleCreateIssue = async (): Promise<void> => {
   console.log('')
   const spinner = log.spinner()
   spinner.start('Fetching labels...')
-  const labels = await listLabels(repoInfo.owner, repoInfo.repo)
+  const labels = await api.listLabels(
+    platformRepo.projectPath,
+    platformRepo.owner,
+    platformRepo.repo
+  )
   spinner.stop()
 
   let selectedLabels: string[] = []
@@ -418,14 +329,14 @@ export const handleCreateIssue = async (): Promise<void> => {
   let assignees: string[] = []
   switch (assignChoice) {
     case 'me': {
-      assignees = [repoInfo.owner]
+      assignees = [platformRepo.owner]
       break
     }
     case 'custom': {
       if (process.stdin.isTTY) {
         process.stdin.setRawMode(false)
       }
-      const username = askQuestion('GitHub username: ').trim()
+      const username = askQuestion(`${platformLabel} username: `).trim()
       if (username) assignees = [username]
       break
     }
@@ -467,7 +378,7 @@ export const handleCreateIssue = async (): Promise<void> => {
 
   // Create Issue
   if (isDryRun()) {
-    logDryRun(`GitHub API: Create issue "${title}"`)
+    logDryRun(`${platformLabel} API: Create issue "${title}"`)
     log.success('Issue would be created (dry-run)')
     return
   }
@@ -475,25 +386,26 @@ export const handleCreateIssue = async (): Promise<void> => {
   const issueSpinner = log.spinner()
   issueSpinner.start('Creating issue...')
 
-  const issue = await createIssue({
-    owner: repoInfo.owner,
-    repo: repoInfo.repo,
+  const issue = await api.createIssue({
+    projectPath: platformRepo.projectPath,
     title,
     body,
     labels: selectedLabels,
     assignees,
+    owner: platformRepo.owner,
+    repo: platformRepo.repo,
   })
 
   if (issue) {
     issueSpinner.succeed('Issue created!')
     console.log('')
     console.log(`  ${colors.green}#${issue.number}${colors.reset} ${issue.title}`)
-    console.log(`  ${colors.cyan}${issue.html_url}${colors.reset}`)
+    console.log(`  ${colors.cyan}${issue.url}${colors.reset}`)
 
     // OSC 8 clickable link
     console.log('')
     console.log(
-      `  \u001B]8;;${issue.html_url}\u0007` +
+      `  \u001B]8;;${issue.url}\u0007` +
         `${colors.cyan}Open in browser →${colors.reset}` +
         `\u001B]8;;\u0007`
     )

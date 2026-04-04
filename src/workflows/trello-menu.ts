@@ -8,54 +8,13 @@ import path from 'node:path'
 import { fetchTrelloCards, fetchTrelloLists } from '../api/trello.js'
 import { multiSelect, select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
-import { getTrelloConfig, hasTrelloConfig } from '../utils/config.js'
+import { hasTrelloConfig } from '../utils/config.js'
 import { commandExists, exec } from '../utils/exec.js'
 import { log } from '../utils/logging.js'
 
 /**
- * Display Trello lists with formatted output
- */
-export const handleGetTrelloLists = async (): Promise<void> => {
-  log.step('Fetching Trello Lists')
-
-  // Check if Trello is configured
-  if (!hasTrelloConfig()) {
-    log.error('Trello is not configured!')
-    log.info('Please run: geeto --setup-trello')
-    return
-  }
-
-  const config = getTrelloConfig()
-  log.info(`Board ID: ${colors.cyan}${config.boardId}${colors.reset}`)
-
-  console.log('')
-  const spinner = log.spinner()
-  spinner.start('Fetching lists...')
-
-  const lists = await fetchTrelloLists()
-
-  if (lists.length === 0) {
-    spinner.fail('No lists found or failed to fetch')
-    log.warn('Make sure your Trello credentials are valid and the board exists.')
-    return
-  }
-
-  spinner.succeed(`Found ${lists.length} lists`)
-
-  log.step(`${colors.cyan}Trello Lists${colors.reset}\n`)
-
-  for (const [index, list] of lists.entries()) {
-    const num = `${index + 1}`.padStart(2, ' ')
-    console.log(`  ${colors.gray}[${num}]${colors.reset} ${colors.cyan}${list.name}${colors.reset}`)
-    console.log(`       ${colors.gray}ID: ${list.id}${colors.reset}`)
-  }
-
-  console.log('')
-  log.success('Lists fetched successfully!')
-}
-
-/**
- * Generate tasks.instructions.md from selected Trello list
+ * Generate individual task files from selected Trello list cards
+ * Creates tasks/ directory with README.md (AI instructions) + card-{id}-{slug}.md per card
  */
 export const handleGenerateTaskInstructions = async (): Promise<void> => {
   log.step('Generate Task Instructions')
@@ -116,8 +75,15 @@ export const handleGenerateTaskInstructions = async (): Promise<void> => {
   spinner2.succeed(`Found ${allCards.length} cards`)
   console.log('')
 
+  const toSlug = (name: string): string =>
+    name
+      .toLowerCase()
+      .replaceAll(/[^a-z0-9]+/g, '-')
+      .replaceAll(/^-|-$/g, '')
+      .slice(0, 50)
+
   const cardChoices = allCards.map((card) => ({
-    label: `#${card.idShort} - ${card.name}`,
+    label: `${card.shortLink}-${toSlug(card.name)}`,
     value: card.id,
   }))
 
@@ -136,180 +102,9 @@ export const handleGenerateTaskInstructions = async (): Promise<void> => {
 
   log.success(`Selected ${colors.cyan}${cards.length}${colors.reset} of ${allCards.length} cards`)
 
-  // Generate markdown content
-  const now = new Date()
-  const dateStr = now.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
-
-  let markdown = `# Tasks from "${selectedList.name}"
-
-Generated from Trello board on ${dateStr}
-
----
-
-## ⚠️ IMPORTANT INSTRUCTIONS FOR AI AGENTS ⚠️
-
-**CRITICAL: You MUST follow these rules strictly:**
-
-1. **EXECUTE ONLY ONE TASK AT A TIME** - Never work on multiple tasks simultaneously
-2. **STOP after completing each task** - Do NOT automatically proceed to the next task
-3. **Wait for explicit user confirmation** before moving to the next task
-4. **Ask the user for validation** after implementation with clear options
-5. **Test & Verify** - Always provide testing steps and ask user to confirm
-
-**WORKFLOW:**
-\`\`\`
-Step 1: Read only the FIRST uncompleted task (with - [ ])
-Step 2: Execute ONLY that one task
-Step 3: Test the implementation (if applicable)
-Step 4: STOP and present completion summary with options
-Step 5: Ask user with clear choices:
-   [ ] Implementation looks good, proceed to next task
-   [ ] Has bugs/issues that need fixing
-   [ ] Needs more testing
-   [ ] Needs more detailed explanation
-Step 6: Wait for user response and act accordingly
-Step 7: If confirmed OK, mark done and proceed to Step 1
-\`\`\`
-
-**AFTER COMPLETING IMPLEMENTATION:**
-Always ask user with structured options using ask_questions tool:
-\`\`\`
-"Implementation completed! How does it look?"
-Options:
-- ✅ Looks good, no bugs found
-- 🐛 Has bugs, needs fixing
-- 🧪 Needs more testing
-- 📝 Needs more detailed explanation
-- ↩️  Needs rollback/revert changes
-\`\`\`
-
-**❌ DO NOT:**
-- Execute multiple tasks in one go
-- Continue to next task without confirmation
-- Assume implementation is perfect without user validation
-- Make assumptions about database schema, models, or queries without checking
-- Skip testing or verification steps
-
-**✅ DO:**
-- Work on exactly one task
-- Stop and wait after each task
-- Present clear summary of changes
-- Ask for permission to continue with structured options
-- Provide testing steps for user to verify
-- Check both new data and old data compatibility
-
-**📋 FOR FULLSTACK/BACKEND PROJECTS:**
-
-Before implementing any task involving database, API, or data logic:
-
-1. **Check migrations** - Look at recent migration files to understand schema changes
-2. **Review models** - Examine model definitions and relationships
-3. **Read existing queries** - Check similar queries or repository patterns in the codebase
-4. **Understand the data flow** - Trace how data moves through the application
-
-**When creating NEW ENDPOINTS/CONTROLLERS/SERVICES:**
-1. **Find the most similar existing endpoint** - Look for endpoints with similar functionality
-2. **Copy the exact structure** - Use the same file organization, naming, and patterns
-3. **Match the code patterns exactly** - Request validation, error handling, response format
-4. **Keep consistency** - Controller methods, service layer, repository patterns should be identical
-5. **Reuse existing utilities** - Auth middleware, validators, error handlers, etc
-
-Example: If creating a "Create User" endpoint, find "Create Product" or similar and replicate its exact structure.
-
-**Never assume:**
-- Table structures or column names
-- Model relationships or foreign keys
-- Query patterns or ORM usage
-- API endpoint structures
-- Request/response formats
-- Validation rules
-
-**Always verify** by reading the actual code first, then implement based on what exists **exactly**.
-
-**📋 FOR FRONTEND PROJECTS:**
-
-Before implementing any UI/frontend task:
-
-1. **Review existing components** - Check similar components for patterns and conventions
-2. **Check styling approach** - Identify CSS framework (Tailwind, CSS Modules, styled-components, etc)
-3. **Understand state management** - See how state is managed (Redux, Zustand, Context, props)
-4. **Review API integration** - Look at how data fetching and error handling is done
-5. **Check type definitions** - Read existing interfaces/types for props and data structures
-6. **Follow naming conventions** - Match existing component and file naming patterns
-
-**When creating NEW PAGES/ROUTES:**
-1. **Find the most similar existing page** - Look for pages with similar functionality
-2. **Copy the exact structure** - Use the same file organization, imports, and layout
-3. **Match the code patterns exactly** - Don't deviate from the established patterns
-4. **Keep consistency** - Naming, export style, component composition should be identical
-5. **Reuse existing components** - Don't create new ones if similar components exist
-
-Example: If creating a "User Settings" page, find "Account Settings" or similar page and replicate its structure exactly.
-
-**Never assume:**
-- Component structure or prop patterns
-- CSS class naming or styling approach
-- State management implementation
-- API client or fetch patterns
-- File/folder naming conventions
-- Page/route structure
-
-**Always match** the existing codebase style and patterns **exactly**.
-
----
-
-## Tasks
-
-**Total: ${cards.length} tasks**
-
-`
-
-  for (const [index, card] of cards.entries()) {
-    markdown += `### Task ${index + 1} of ${cards.length}\n\n`
-    markdown += `- **${card.name}** (#${card.idShort})\n`
-    markdown += `  - Trello URL: ${card.url}\n`
-    if (card.desc?.trim()) {
-      markdown += `\n**Description:**\n${card.desc}\n`
-    }
-
-    // Include Trello checklists (if any)
-    if (card.checklists && card.checklists.length > 0) {
-      for (const checklist of card.checklists) {
-        if (checklist.checkItems && checklist.checkItems.length > 0) {
-          markdown += `\n**${checklist.name}:**\n`
-          for (const item of checklist.checkItems) {
-            const checked = item.state === 'complete' ? 'x' : ' '
-            markdown += `- [${checked}] ${item.name}\n`
-          }
-        }
-      }
-    }
-
-    markdown += `\n---\n\n`
-  }
-
-  markdown += `
-## Instructions for Human Users
-
-This file contains tasks from your Trello board. To work through these:
-
-1. **Execute each task one by one** from top to bottom (or let your AI agent do it)
-2. **When a task is completed**, mark it done or delete it from this file
-3. **If using an AI agent**, confirm after each task before proceeding
-4. **Keep this file updated** as you progress
-
----
-
-*Generated by Geeto CLI - Trello Integration*
-`
-
   // Detect editor from terminal environment to determine output path
   let editorCommand: string | null = null
-  let outputPath: string
+  let tasksDir: string
 
   const termProgram = process.env.TERM_PROGRAM
   const vsCodeHandle = process.env.VSCODE_GIT_IPC_HANDLE
@@ -317,20 +112,20 @@ This file contains tasks from your Trello board. To work through these:
   const cursorExecutable = process.env.CURSOR_EXECUTABLE
 
   if (cursorExecutable || termProgram === 'cursor') {
-    // Running in Cursor terminal - save to .cursor/
-    outputPath = path.join(process.cwd(), '.cursor', 'tasks.instructions.md')
+    // Running in Cursor terminal - save to .cursor/tasks/
+    tasksDir = path.join(process.cwd(), '.cursor', 'tasks')
     if (commandExists('cursor')) {
       editorCommand = 'cursor'
     }
   } else if (vsCodeHandle || vsCodeInjection || termProgram === 'vscode') {
-    // Running in VSCode terminal - save to .github/instructions/
-    outputPath = path.join(process.cwd(), '.github', 'instructions', 'tasks.instructions.md')
+    // Running in VSCode terminal - save to .github/instructions/tasks/
+    tasksDir = path.join(process.cwd(), '.github', 'instructions', 'tasks')
     if (commandExists('code')) {
       editorCommand = 'code'
     }
   } else if (termProgram?.toLowerCase().includes('jetbrains')) {
-    // Running in JetBrains IDE terminal - save to .idea/
-    outputPath = path.join(process.cwd(), '.idea', 'tasks.instructions.md')
+    // Running in JetBrains IDE terminal - save to .idea/tasks/
+    tasksDir = path.join(process.cwd(), '.idea', 'tasks')
     const jetbrainsCommands = ['webstorm', 'idea', 'pycharm', 'phpstorm', 'rubymine', 'goland']
     for (const cmd of jetbrainsCommands) {
       if (commandExists(cmd)) {
@@ -339,28 +134,68 @@ This file contains tasks from your Trello board. To work through these:
       }
     }
   } else {
-    // Fallback - save to root
-    outputPath = path.join(process.cwd(), 'tasks.instructions.md')
+    // Fallback - save to .github/instructions/tasks/
+    tasksDir = path.join(process.cwd(), '.github', 'instructions', 'tasks')
   }
 
-  // Write to file
+  // Write task files
   try {
-    // Create directory if it doesn't exist
-    const outputDir = path.dirname(outputPath)
-    if (!fs.existsSync(outputDir)) {
-      fs.mkdirSync(outputDir, { recursive: true })
+    // Create tasks directory if it doesn't exist
+    if (!fs.existsSync(tasksDir)) {
+      fs.mkdirSync(tasksDir, { recursive: true })
     }
 
-    fs.writeFileSync(outputPath, markdown, 'utf8')
-    console.log('')
-    log.success(`Task instructions generated: ${colors.cyan}${outputPath}${colors.reset}`)
-    log.info(`Total tasks: ${colors.cyan}${cards.length}${colors.reset}`)
+    // Write individual card files in tasks/ folder
+    for (const card of cards) {
+      const slug = toSlug(card.name)
+      const fileName = `card-${card.idShort}-${slug}.md`
 
-    // Auto-open file in detected editor
+      let cardContent = `# Task: ${card.name} (#${card.idShort})
+
+- Trello URL: ${card.url}
+
+## Description
+
+${card.desc?.trim() ? card.desc : 'No description provided.'}
+
+## Checklists
+
+`
+
+      if (card.checklists && card.checklists.length > 0) {
+        let hasChecklistItems = false
+        for (const checklist of card.checklists) {
+          if (checklist.checkItems && checklist.checkItems.length > 0) {
+            hasChecklistItems = true
+            cardContent += `### ${checklist.name}\n\n`
+            for (const item of checklist.checkItems) {
+              const checked = item.state === 'complete' ? 'x' : ' '
+              cardContent += `- [${checked}] ${item.name}\n`
+            }
+            cardContent += '\n'
+          }
+        }
+        if (!hasChecklistItems) {
+          cardContent += 'No checklists.\n'
+        }
+      } else {
+        cardContent += 'No checklists.\n'
+      }
+
+      fs.writeFileSync(path.join(tasksDir, fileName), cardContent, 'utf8')
+      log.info(`Written: ${colors.cyan}${fileName}${colors.reset}`)
+    }
+
+    console.log('')
+    log.success(
+      `Generated ${colors.cyan}${cards.length}${colors.reset} task files in ${colors.cyan}${tasksDir}${colors.reset}`
+    )
+
+    // Auto-open tasks directory in detected editor
     if (editorCommand) {
       try {
-        exec(`${editorCommand} "${outputPath}"`, true)
-        log.info(`Opening file in ${editorCommand}...`)
+        exec(`${editorCommand} "${tasksDir}"`, true)
+        log.info(`Opening tasks directory in ${editorCommand}...`)
       } catch {
         // Ignore open errors (not critical)
       }
@@ -380,7 +215,7 @@ This file contains tasks from your Trello board. To work through these:
 
       if (!hasTrelloSection) {
         // Add complete Trello-generated tasks section to .gitignore
-        const trelloSection = `\n# Trello-generated tasks\n.github/instructions/tasks.instructions.md\n.cursor/tasks.instructions.md\n.idea/tasks.instructions.md\n`
+        const trelloSection = `\n# Trello-generated tasks\n**/tasks/card-*.md\n`
         const newContent = gitignoreContent.endsWith('\n')
           ? `${gitignoreContent}${trelloSection}`
           : `${gitignoreContent}${trelloSection}`
@@ -394,7 +229,7 @@ This file contains tasks from your Trello board. To work through these:
       )
     }
   } catch (error) {
-    log.error(`Failed to write file: ${error instanceof Error ? error.message : String(error)}`)
+    log.error(`Failed to write files: ${error instanceof Error ? error.message : String(error)}`)
   }
 }
 
@@ -424,16 +259,11 @@ export const showTrelloMenu = async (): Promise<void> => {
   }
 
   const choice = await select('What would you like to do?', [
-    { label: 'Get Trello lists', value: 'lists' },
-    { label: 'Generate tasks.instructions.md', value: 'generate' },
+    { label: 'Generate task files from cards', value: 'generate' },
     { label: 'Back to main menu', value: 'back' },
   ])
 
   switch (choice) {
-    case 'lists': {
-      await handleGetTrelloLists()
-      break
-    }
     case 'generate': {
       await handleGenerateTaskInstructions()
       break
