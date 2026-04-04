@@ -2,7 +2,9 @@
  * Copilot CLI setup helper (moved from `setup.ts`)
  */
 
+import fs from 'node:fs'
 import os from 'node:os'
+import path from 'node:path'
 
 import { findBestCopilotBinary, MIN_COPILOT_VERSION, parseParts } from '../api/copilot-sdk.js'
 import { confirm } from '../cli/input.js'
@@ -11,6 +13,28 @@ import { ensureGeetoIgnored } from '../utils/config.js'
 import { commandExists, exec, execAsync } from '../utils/exec.js'
 import { log } from '../utils/logging.js'
 import { getGhCliInstallCommand, getLinuxDistro } from '../utils/platform.js'
+
+/** Save recommended default Copilot models if no model file exists */
+const saveDefaultCopilotModels = (): void => {
+  try {
+    const outDir = path.join(process.cwd(), '.geeto')
+    const modelFile = path.join(outDir, 'copilot-model.json')
+    if (fs.existsSync(modelFile)) return // Already has saved models
+
+    const defaultModels = [
+      { label: 'Claude Sonnet 4', value: 'claude-sonnet-4' },
+      { label: 'Claude Haiku 4.5', value: 'claude-haiku-4.5' },
+      { label: 'GPT-4.1', value: 'gpt-4.1' },
+      { label: 'GPT-5 Mini', value: 'gpt-5-mini' },
+    ]
+
+    if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true })
+    fs.writeFileSync(modelFile, JSON.stringify(defaultModels, null, 2), 'utf8')
+    log.info('Saved recommended Copilot models to .geeto/copilot-model.json')
+  } catch {
+    /* ignore */
+  }
+}
 
 /**
  * Check Copilot CLI version and warn if outdated.
@@ -273,6 +297,7 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
     checkCopilotVersion()
 
     ensureGeetoIgnored()
+    saveDefaultCopilotModels()
     return true
   }
 
@@ -469,6 +494,7 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
     checkCopilotVersion()
 
     ensureGeetoIgnored()
+    saveDefaultCopilotModels()
 
     return true
   }
@@ -480,6 +506,7 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
 
     checkCopilotVersion()
     ensureGeetoIgnored()
+    saveDefaultCopilotModels()
     return true
   } catch {
     // CLI not working

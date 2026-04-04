@@ -2,6 +2,8 @@
  * Gemini integration for AI-powered branch naming and commit messages
  */
 
+import path from 'node:path'
+
 import {
   generateBranchName as sdkGenerateBranchName,
   generateCommitMessage as sdkGenerateCommitMessage,
@@ -17,11 +19,30 @@ import { log } from '../utils/logging.js'
 export type GeminiModel = string
 
 /**
- * Return Gemini model choices from the SDK in realtime.
- * This deliberately does NOT read or write `.geeto/gemini-model.json`.
+ * Return Gemini model choices.
+ * Checks `.geeto/gemini-model.json` (user favorites) first, then falls back to live SDK.
  */
 export const getGeminiModels = async (): Promise<Array<{ label: string; value: GeminiModel }>> => {
   try {
+    // Check persisted favorites first
+    const fs = await import('node:fs')
+    const cfgPath = path.join(process.cwd(), '.geeto', 'gemini-model.json')
+    if (fs.existsSync(cfgPath)) {
+      try {
+        const raw = fs.readFileSync(cfgPath, 'utf8')
+        const parsed = JSON.parse(raw) as Array<{ label?: string; value?: string }>
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((p) => ({
+            label: p.label ?? String(p.value),
+            value: String(p.value),
+          }))
+        }
+      } catch (error) {
+        log.warn(`Could not read .geeto/gemini-model.json: ${(error as Error).message}`)
+      }
+    }
+
+    // Fallback to live SDK
     const ok = sdkIsAvailable()
     if (!ok) {
       log.info('Gemini SDK not available; returning no Gemini models.')
@@ -34,7 +55,7 @@ export const getGeminiModels = async (): Promise<Array<{ label: string; value: G
     }
     return []
   } catch (error) {
-    log.warn(`Failed to fetch live Gemini models: ${String(error)}`)
+    log.warn(`Failed to fetch Gemini models: ${String(error)}`)
     return []
   }
 }

@@ -70,6 +70,19 @@ chmod +x geeto
 sudo mv geeto /usr/local/bin/
 ```
 
+#### Prerelease binary
+
+To install a specific prerelease version (alpha, beta, or rc):
+
+```bash
+# Replace TAG with the version, e.g. v0.7.0-beta.1
+curl -fsSL https://github.com/rust142/geeto/releases/download/TAG/geeto-linux -o geeto
+chmod +x geeto
+sudo mv geeto /usr/local/bin/
+```
+
+Browse all prereleases at [Releases](https://github.com/rust142/geeto/releases).
+
 ### From Source
 
 ```bash

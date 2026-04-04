@@ -93,20 +93,20 @@ export const setupGeminiConfigInteractive = (): boolean => {
     fs.writeFileSync(configPath, configContent, 'utf8')
     log.success(`Gemini config saved to: ${configPath}`)
 
-    // Write default gemini-model.json so users have model choices available
+    // Write default gemini-model.json with recommended models
     try {
       const modelFile = `${configDir}/gemini-model.json`
       const defaultModels = [
-        { label: 'Gemini 2.0 Flash', value: 'gemini-2.0-flash' },
-        { label: 'Gemini 2.5 Flash Lite', value: 'gemini-2.5-flash-lite' },
         { label: 'Gemini 2.5 Flash', value: 'gemini-2.5-flash' },
         { label: 'Gemini 2.5 Pro', value: 'gemini-2.5-pro' },
+        { label: 'Gemini 3 Flash Preview', value: 'gemini-3-flash-preview' },
+        { label: 'Gemini 3 Pro Preview', value: 'gemini-3-pro-preview' },
+        { label: 'Gemini Flash Latest', value: 'gemini-flash-latest' },
+        { label: 'Gemini Pro Latest', value: 'gemini-pro-latest' },
       ]
 
-      if (!fs.existsSync(modelFile)) {
-        fs.writeFileSync(modelFile, JSON.stringify(defaultModels, null, 2), 'utf8')
-        log.info(`Wrote default Gemini model list to: ${modelFile}`)
-      }
+      fs.writeFileSync(modelFile, JSON.stringify(defaultModels, null, 2), 'utf8')
+      log.info(`Saved recommended Gemini models to: ${modelFile}`)
     } catch {
       /* ignore model file write failures */
     }

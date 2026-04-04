@@ -20,6 +20,22 @@ export const select = async (question: string, options: SelectOption[]): Promise
     let searchQuery = ''
     let filteredOptions = options
 
+    /** Skip disabled items when navigating */
+    const skipDisabled = (dir: 1 | -1) => {
+      const len = filteredOptions.length
+      for (let i = 0; i < len; i++) {
+        selectedIndex += dir
+        if (selectedIndex < 0) selectedIndex = len - 1
+        if (selectedIndex >= len) selectedIndex = 0
+        if (!filteredOptions[selectedIndex]?.disabled) break
+      }
+    }
+
+    // Skip initial disabled items
+    if (filteredOptions[selectedIndex]?.disabled) {
+      skipDisabled(1)
+    }
+
     const filterOptions = (query: string) => {
       if (!query) {
         return options
@@ -47,6 +63,11 @@ export const select = async (question: string, options: SelectOption[]): Promise
       str.replaceAll(/\u001B\[\d*;?\d*m|\u001B\]8;;[^\u0007]*\u0007/g, '')
 
     const renderItem = (opt: SelectOption, idx: number) => {
+      // Disabled items render as section headers (non-selectable)
+      if (opt.disabled) {
+        return `  ${colors.bright}${opt.label}${colors.reset}`
+      }
+
       const prefix = idx === selectedIndex ? `${colors.cyan}❯${colors.reset}` : ' '
 
       // Truncate label to terminal width
@@ -266,18 +287,19 @@ export const select = async (question: string, options: SelectOption[]): Promise
         }
         case '\u001B[A':
         case 'k': {
-          selectedIndex = selectedIndex > 0 ? selectedIndex - 1 : filteredOptions.length - 1
+          skipDisabled(-1)
           renderMenu()
           break
         }
         case '\u001B[B':
         case 'j': {
-          selectedIndex = selectedIndex < filteredOptions.length - 1 ? selectedIndex + 1 : 0
+          skipDisabled(1)
           renderMenu()
           break
         }
         case '\r':
         case '\n': {
+          if (filteredOptions[selectedIndex]?.disabled) break
           cleanup()
           resolve(filteredOptions[selectedIndex]?.value ?? '')
           break
@@ -341,7 +363,11 @@ export const select = async (question: string, options: SelectOption[]): Promise
 /**
  * Interactive multi-select menu with checkboxes (Space to toggle, Enter to confirm)
  */
-export const multiSelect = async (question: string, options: SelectOption[]): Promise<string[]> => {
+export const multiSelect = async (
+  question: string,
+  options: SelectOption[],
+  preSelected?: string[]
+): Promise<string[]> => {
   return new Promise((resolve) => {
     let selectedIndex = 0
     // Skip initial disabled items (but allow group headers with children)
@@ -359,7 +385,9 @@ export const multiSelect = async (question: string, options: SelectOption[]): Pr
     let searchQuery = ''
     let rangeQuery = ''
     let filteredOptions = options
-    const checked = new Set<string>()
+    const checked = new Set<string>(
+      (preSelected ?? []).filter((v) => options.some((o) => o.value === v))
+    )
     const totalSelectable = options.filter((o) => !o.disabled && !o.children).length
     let lastRenderedLines = 0
 

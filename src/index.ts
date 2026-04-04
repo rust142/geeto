@@ -182,13 +182,6 @@ const COMMAND_REGISTRY: CommandEntry[] = [
     errorLabel: 'Trello menu',
   },
   {
-    flag: '--trello-list',
-    alias: '-tl',
-    module: './workflows/trello-menu.js',
-    handler: 'handleGetTrelloLists',
-    errorLabel: 'Trello list',
-  },
-  {
     flag: '--trello-generate',
     alias: '-tg',
     module: './workflows/trello-menu.js',
@@ -251,6 +244,21 @@ const COMMAND_REGISTRY: CommandEntry[] = [
     module: './core/gitlab-setup.js',
     handler: 'setupGitlabConfigInteractive',
     errorLabel: 'Settings',
+  },
+  // Doctor / Info
+  {
+    flag: '--uninstall',
+    alias: undefined,
+    module: './workflows/doctor.js',
+    handler: 'handleUninstall',
+    errorLabel: 'Uninstall',
+  },
+  {
+    flag: '--where',
+    alias: undefined,
+    module: './workflows/doctor.js',
+    handler: 'handleWhereInstalled',
+    errorLabel: 'Where',
   },
 ]
 
@@ -447,6 +455,11 @@ function showHelpMessage(): void {
   console.log(`    ${C}-dr, --dry-run${R}            Simulate commands without executing`)
   console.log(`    ${C}-v,  --version${R}            Show version`)
   console.log(`    ${C}-h,  --help${R}               Show this help message`)
+  console.log('')
+
+  console.log(`  ${B}INFO${R}`)
+  console.log(`    ${C}     --where${R}              Show installation path & method`)
+  console.log(`    ${C}     --uninstall${R}          Uninstall geeto CLI`)
   console.log('')
 }
 

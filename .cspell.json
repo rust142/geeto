@@ -121,7 +121,12 @@
     "Glab",
     "glab",
     "glpat",
-    "vpad"
+    "vpad",
+    "stabilityai",
+    "recraft",
+    "dall",
+    "sdxl",
+    "lyria"
   ],
   "ignorePaths": [
     "node_modules/**",
