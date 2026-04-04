@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.9.0](https://github.com/rust142/geeto/compare/v0.8.0...v0.9.0) (2026-04-04)
+
+### Features
+
+* feat(workflows): add merge releases workflow to consolidate release notes ([a3ecc63](https://github.com/rust142/geeto/commit/a3ecc63))
+
 ## [0.8.0](https://github.com/rust142/geeto/compare/v0.7.0-alpha.4...v0.8.0) (2026-04-04)
 
 ### Other Changes

@@ -1,5 +1,15 @@
 # Releases
 
+## v0.9.0 — April 4, 2026
+
+### What's New?
+
+#### New Features
+
+- Added an automated process that merges and consolidates release notes so release summaries are easier to find.
+
+---
+
 ## v0.8.0 — April 4, 2026
 
 ### What's New?
