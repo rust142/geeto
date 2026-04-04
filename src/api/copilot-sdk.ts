@@ -98,10 +98,11 @@ const chatCompletion = async (messages: ChatMessage[], model?: string): Promise<
     if (!res.ok) {
       const errorText = await res.text().catch(() => '')
       if (res.status === 401 || res.status === 403) {
-        // Token expired or invalid — clear cache for retry
         cachedToken = null
+        log.clearLine()
         log.warn('GitHub token expired or unauthorized. Run `gh auth login` to re-authenticate.')
       } else {
+        log.clearLine()
         log.warn(`Copilot API error (${res.status}): ${errorText.slice(0, 200)}`)
       }
       return null
@@ -111,6 +112,7 @@ const chatCompletion = async (messages: ChatMessage[], model?: string): Promise<
     const content = data.choices?.[0]?.message?.content
     return content ?? null
   } catch (error) {
+    log.clearLine()
     log.error('Copilot API request failed: ' + String(error))
     return null
   }

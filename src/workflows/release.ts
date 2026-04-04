@@ -9,6 +9,7 @@ import type { CopilotModel } from '../api/copilot.js'
 import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 
+import { handleMergeReleases } from './release-merge.js'
 import {
   generateChangelogEntry,
   generateReleaseMd,
@@ -58,12 +59,18 @@ export const handleRelease = async (): Promise<void> => {
   const mode = await select('What do you want to do?', [
     { label: 'Create a new release', value: 'create' },
     { label: `Sync ${platformName} Releases for existing tags`, value: 'sync' },
+    { label: 'Merge Releases (consolidate release notes)', value: 'merge' },
     { label: 'Recover missing tags from release commits', value: 'recover' },
     { label: `Delete ${platformName} Releases`, value: 'delete' },
   ])
 
   if (mode === 'sync') {
     await handleSyncReleases()
+    return
+  }
+
+  if (mode === 'merge') {
+    await handleMergeReleases()
     return
   }
 
