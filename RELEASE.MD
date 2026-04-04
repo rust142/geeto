@@ -1,5 +1,15 @@
 # Releases
 
+## v0.8.0 — April 4, 2026
+
+### What's New?
+
+#### Other Improvements
+
+- Updated the Copilot integration to use the Copilot REST API instead of the previous SDK command-line interface, improving reliability and making future updates easier.
+
+---
+
 ## v0.7.0-alpha.4 — April 4, 2026
 
 ### What's New?

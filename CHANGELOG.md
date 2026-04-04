@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.8.0](https://github.com/rust142/geeto/compare/v0.7.0-alpha.4...v0.8.0) (2026-04-04)
+
+### Other Changes
+
+* refactor(copilot): replace @github/copilot-sdk/CLI with Copilot REST API ([6055739](https://github.com/rust142/geeto/commit/6055739))
+
 ## [0.7.0-alpha.4](https://github.com/rust142/geeto/compare/v0.7.0-alpha.3...v0.7.0-alpha.4) (2026-04-04)
 
 ### Features
