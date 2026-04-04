@@ -283,7 +283,11 @@ const ensureClient = async (): Promise<boolean> => {
       if (!isMissingModule) {
         log.clearLine()
         log.gap()
-        if (bundledMsg.includes('headless') || bundledMsg.includes('Unknown flag')) {
+        if (bundledMsg.includes('protocol version mismatch')) {
+          log.info('SDK protocol mismatch with bundled Copilot CLI.')
+          log.info('  • Downgrade Copilot CLI to v1.0.16: copilot update --version 1.0.16')
+          log.info('  • Or wait for Geeto v0.8.0+ with updated SDK')
+        } else if (bundledMsg.includes('headless') || bundledMsg.includes('Unknown flag')) {
           log.info('Copilot SDK: bundled CLI does not support --headless (Bun compat issue).')
           log.info('Upgrade SDK: bun add @github/copilot-sdk@latest')
         } else {
@@ -310,7 +314,25 @@ const ensureClient = async (): Promise<boolean> => {
       const sysMsg = systemError instanceof Error ? systemError.message : String(systemError)
       log.clearLine()
       log.gap()
-      log.info(`System Copilot CLI failed: ${sysMsg}`)
+
+      // Detect SDK protocol version mismatch
+      const protoMatch = sysMsg.match(/SDK expects version (\d+).*server reports version (\d+)/)
+      if (protoMatch) {
+        const sdkProto = protoMatch[1]
+        const serverProto = protoMatch[2]
+        log.info(`Protocol mismatch: SDK expects v${sdkProto}, Copilot CLI reports v${serverProto}`)
+        if (Number(serverProto) > Number(sdkProto)) {
+          log.info('Your Copilot CLI is newer than this Geeto version supports.')
+          log.info('Options:')
+          log.info('  • Downgrade Copilot CLI to v1.0.16: copilot update --version 1.0.16')
+          log.info('  • Wait for Geeto v0.8.0+ which will support newer Copilot CLI')
+        } else {
+          log.info('Your Copilot CLI is too old for this SDK version.')
+          log.info('  • Update Copilot CLI: copilot update')
+        }
+      } else {
+        log.info(`System Copilot CLI failed: ${sysMsg}`)
+      }
       log.gap()
       client = null
     }
