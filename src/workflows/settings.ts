@@ -6,7 +6,7 @@ import { existsSync, unlinkSync } from 'node:fs'
 import path from 'node:path'
 
 import { askQuestion, confirm } from '../cli/input.js'
-import { select } from '../cli/menu.js'
+import { multiSelect, select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
 import {
   getBranchStrategyConfig,
@@ -16,6 +16,7 @@ import {
   saveBranchStrategyConfig,
 } from '../utils/config.js'
 import { log } from '../utils/logging.js'
+import { ScrambleProgress } from '../utils/scramble.js'
 
 const configDirPath = () => path.join(process.cwd(), '.geeto')
 
@@ -194,31 +195,91 @@ const syncOpenRouterModels = async (): Promise<void> => {
 
     if (sdk && typeof sdk.getAvailableModelChoices === 'function') {
       try {
+        const spinner = new ScrambleProgress()
+        spinner.start(['Fetching OpenRouter models...'])
         const detailed = (await sdk.getAvailableModelChoices()) as Array<
           Record<string, unknown>
         > | null
+        spinner.stop()
         if (Array.isArray(detailed) && detailed.length > 0) {
           // Persist detailed sync file
           const syncFile = path.join(outDir, 'openrouter-model-live-sample.json')
           await fs.promises.writeFile(syncFile, JSON.stringify(detailed, null, 2))
 
-          // Persist simplified file used by getOpenRouterModels
+          // Filter out image-generation-only models (geeto is for text/code tasks)
+          const imageOnlyPrefixes = [
+            'stabilityai/',
+            'black-forest-labs/',
+            'ideogram/',
+            'recraft/',
+            'aura-',
+          ]
+          const imageOnlyKeywords = [
+            'dall-e',
+            'flux',
+            'midjourney',
+            'imagen',
+            'sdxl',
+            'stable-diffusion',
+          ]
+
+          const textModels = detailed.filter((d) => {
+            const val = String((d as Record<string, unknown>).value).toLowerCase()
+            if (imageOnlyPrefixes.some((p) => val.includes(p))) return false
+            if (imageOnlyKeywords.some((k) => val.includes(k))) return false
+            return true
+          })
+
+          // Show multiselect for user to pick favorite models
+          const choices = textModels.map((d) => ({
+            label: String(
+              (d as Record<string, unknown>).label ??
+                (d as Record<string, unknown>).name ??
+                (d as Record<string, unknown>).value
+            ),
+            value: String((d as Record<string, unknown>).value),
+          }))
+
+          // Pre-select: use currently saved models if available, else recommended defaults
+          const savedModelFile = path.join(outDir, 'openrouter-model.json')
+          let defaults: string[] = []
+          try {
+            const saved = JSON.parse(await fs.promises.readFile(savedModelFile, 'utf8')) as Array<{
+              value?: string
+            }>
+            defaults = saved.map((m) => String(m.value ?? '')).filter(Boolean)
+          } catch {
+            // No saved models — use recommended defaults
+            const recommended = [
+              'anthropic/claude-sonnet-4',
+              'anthropic/claude-haiku-4.5',
+              'openai/gpt-4o',
+              'openai/gpt-4.1',
+              'openai/gpt-5-mini',
+              'google/gemini-2.5-flash',
+            ]
+            defaults = choices
+              .filter((c) => recommended.some((r) => c.value.includes(r)))
+              .map((c) => c.value)
+          }
+
+          const selected = await multiSelect(
+            'Pick your favorite OpenRouter models:',
+            choices,
+            defaults
+          )
+
+          if (!selected || selected.length === 0) {
+            log.info('No models selected. Sync cancelled.')
+            return
+          }
+
           type SimpleModel = { name?: string; label?: string; value?: string }
-          const filtered = detailed.filter(
-            (d) =>
-              (d.value as string) === 'microsoft/wizardlm-2-8x22b' ||
-              (d.value as string) === 'allenai/olmo-3-32b-think' ||
-              (d.value as string) === 'allenai/molmo-2-8b' ||
-              (d.value as string) === 'meta-llama/llama-3.2-3b-instruct' ||
-              (d.value as string) === 'anthropic/claude-sonnet-4.5' ||
-              (d.value as string) === 'anthropic/claude-sonnet-4' ||
-              (d.value as string) === 'anthropic/claude-haiku-4.5' ||
-              (d.value as string) === 'openai/gpt-5' ||
-              (d.value as string) === 'openai/gpt-5.2-codex'
+          const filtered = detailed.filter((d) =>
+            selected.includes(String((d as Record<string, unknown>).value))
           ) as SimpleModel[]
 
           // Renumber auto-numbered labels sequentially
-
           const hasAutoNumber = filtered.some((d: SimpleModel) =>
             /^\s*\d+\./.test(String(d.label ?? d.name ?? d.value))
           )
@@ -234,11 +295,11 @@ const syncOpenRouterModels = async (): Promise<void> => {
             }
           })
 
-          const modelFile = path.join(outDir, 'openrouter-model.json')
-          await fs.promises.writeFile(modelFile, JSON.stringify(simple, null, 2))
+          const outModelFile = path.join(outDir, 'openrouter-model.json')
+          await fs.promises.writeFile(outModelFile, JSON.stringify(simple, null, 2))
 
           log.info(
-            `Synced ${detailed.length} OpenRouter model(s) to .geeto/openrouter-model.json ` +
+            `Saved ${simple.length} OpenRouter model(s) to .geeto/openrouter-model.json ` +
               '(and _live-sample.json).'
           )
           return
@@ -279,9 +340,206 @@ const syncOpenRouterModels = async (): Promise<void> => {
   }
 }
 
+// Sync Gemini models (fetch from SDK & persist user favorites)
+const syncGeminiModels = async (): Promise<void> => {
+  try {
+    let sdkModule: unknown = null
+    try {
+      sdkModule = await import('../api/gemini-sdk.js')
+    } catch {
+      log.warn('Gemini SDK unavailable. Configure Gemini first with --setup-gemini.')
+      return
+    }
+
+    const sdk = sdkModule as { getAvailableModelChoices?: () => Promise<unknown> }
+
+    if (!sdk || typeof sdk.getAvailableModelChoices !== 'function') {
+      log.warn('Gemini SDK unavailable. Configure Gemini first with --setup-gemini.')
+      return
+    }
+
+    const spinner = new ScrambleProgress()
+    spinner.start(['Fetching Gemini models...'])
+    const detailed = (await sdk.getAvailableModelChoices()) as Array<Record<string, unknown>> | null
+    spinner.stop()
+
+    if (!Array.isArray(detailed) || detailed.length === 0) {
+      log.warn('No Gemini models found. Check your Gemini API key.')
+      return
+    }
+
+    // Filter out image-generation-only models
+    const imageKeywords = ['imagen', 'veo', 'lyria']
+    const textModels = detailed.filter((d) => {
+      const val = String(d.value ?? d.id).toLowerCase()
+      return !imageKeywords.some((k) => val.includes(k))
+    })
+
+    if (textModels.length === 0) {
+      log.warn('No text Gemini models found. Check your Gemini API key.')
+      return
+    }
+
+    const choices = textModels.map((d) => ({
+      label: String(d.label ?? d.name ?? d.value),
+      value: String(d.value ?? d.id),
+    }))
+
+    // Pre-select: use currently saved models if available, else recommended defaults
+    const fsModule = await import('node:fs')
+    const savedGeminiFile = path.join(process.cwd(), '.geeto', 'gemini-model.json')
+    let defaults: string[] = []
+    try {
+      const saved = JSON.parse(fsModule.readFileSync(savedGeminiFile, 'utf8')) as Array<{
+        value?: string
+      }>
+      defaults = saved.map((m) => String(m.value ?? '')).filter(Boolean)
+    } catch {
+      // No saved models — use recommended defaults
+      const recommended = new Set([
+        'gemini-2.5-flash',
+        'gemini-2.5-pro',
+        'gemini-3-flash-preview',
+        'gemini-3-pro-preview',
+        'gemini-flash-latest',
+        'gemini-pro-latest',
+      ])
+      defaults = choices
+        .filter((c) => {
+          const stripped = c.value.toLowerCase().replace('models/', '')
+          return recommended.has(stripped)
+        })
+        .map((c) => c.value)
+    }
+
+    const selected = await multiSelect('Pick your favorite Gemini models:', choices, defaults)
+
+    if (!selected || selected.length === 0) {
+      log.info('No models selected. Sync cancelled.')
+      return
+    }
+
+    // Build model list — keep full labels, just re-number
+    const simple = selected.map((val, idx) => {
+      const detail = detailed.find((d) => String(d.value ?? d.id) === val)
+      const rawLabel = String(detail?.label ?? detail?.name ?? val)
+      const label = rawLabel.replace(/^\s*\d+\.\s*/, `${idx + 1}. `)
+      return {
+        label,
+        value: val,
+      }
+    })
+
+    // Save to gemini-model.json
+    const outDir = path.join(process.cwd(), '.geeto')
+    await fsModule.promises.mkdir(outDir, { recursive: true })
+    const outGeminiFile = path.join(outDir, 'gemini-model.json')
+    await fsModule.promises.writeFile(outGeminiFile, JSON.stringify(simple, null, 2))
+
+    log.success(`Saved ${simple.length} Gemini model(s) to .geeto/gemini-model.json`)
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    log.warn(`Gemini model sync failed: ${msg}`)
+  }
+}
+
+// Sync Copilot models (fetch from SDK & persist user favorites)
+const syncCopilotModels = async (): Promise<void> => {
+  try {
+    let sdkModule: unknown = null
+    try {
+      sdkModule = await import('../api/copilot-sdk.js')
+    } catch {
+      log.warn('Copilot SDK unavailable. Configure Copilot first with --setup-copilot.')
+      return
+    }
+
+    const sdk = sdkModule as {
+      isAvailable?: () => Promise<boolean>
+      getAvailableModelChoices?: () => Promise<unknown>
+    }
+
+    if (!sdk || typeof sdk.getAvailableModelChoices !== 'function') {
+      log.warn('Copilot SDK unavailable. Configure Copilot first with --setup-copilot.')
+      return
+    }
+
+    if (typeof sdk.isAvailable === 'function') {
+      const ok = await sdk.isAvailable()
+      if (!ok) {
+        log.warn('Copilot is not available. Run --setup-copilot first.')
+        return
+      }
+    }
+
+    const spinner = new ScrambleProgress()
+    spinner.start(['Fetching Copilot models...'])
+    const detailed = (await sdk.getAvailableModelChoices()) as Array<Record<string, unknown>> | null
+    spinner.stop()
+
+    if (!Array.isArray(detailed) || detailed.length === 0) {
+      log.warn('No Copilot models found.')
+      return
+    }
+
+    const choices = detailed.map((d) => ({
+      label: String(d.label ?? d.name ?? d.value),
+      value: String(d.value ?? d.id),
+    }))
+
+    // Pre-select: use currently saved models if available, else recommended defaults
+    const fsModule = await import('node:fs')
+    const savedCopilotFile = path.join(process.cwd(), '.geeto', 'copilot-model.json')
+    let defaults: string[] = []
+    try {
+      const saved = JSON.parse(fsModule.readFileSync(savedCopilotFile, 'utf8')) as Array<{
+        value?: string
+      }>
+      defaults = saved.map((m) => String(m.value ?? '')).filter(Boolean)
+    } catch {
+      // No saved models — use recommended defaults
+      const recommended = ['claude-sonnet-4', 'claude-haiku-4.5', 'gpt-4.1', 'gpt-5-mini']
+      defaults = choices
+        .filter((c) => recommended.some((r) => c.value.toLowerCase().includes(r)))
+        .map((c) => c.value)
+    }
+
+    const selected = await multiSelect('Pick your favorite Copilot models:', choices, defaults)
+
+    if (!selected || selected.length === 0) {
+      log.info('No models selected. Sync cancelled.')
+      return
+    }
+
+    // Build model list — keep full SDK labels (with token info), just re-number
+    const simple = selected.map((val, idx) => {
+      const detail = detailed.find((d) => String(d.value ?? d.id) === val)
+      const rawLabel = String(detail?.label ?? detail?.name ?? val)
+      const label = rawLabel.replace(/^\s*\d+\.\s*/, `${idx + 1}. `)
+      return {
+        label,
+        value: val,
+      }
+    })
+
+    // Save to copilot-model.json
+    const outDir = path.join(process.cwd(), '.geeto')
+    await fsModule.promises.mkdir(outDir, { recursive: true })
+    const outCopilotFile = path.join(outDir, 'copilot-model.json')
+    await fsModule.promises.writeFile(outCopilotFile, JSON.stringify(simple, null, 2))
+
+    log.success(`Saved ${simple.length} Copilot model(s) to .geeto/copilot-model.json`)
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    log.warn(`Copilot model sync failed: ${msg}`)
+  }
+}
+
 const handleModelResetSetting = async (): Promise<boolean | void> => {
-  const resetChoice = await select('Sync model configurations (non-destructive):', [
-    { label: 'Sync only OpenRouter models', value: 'openrouter' },
+  const resetChoice = await select('Saved AI models — choose provider:', [
+    { label: 'Copilot', value: 'copilot' },
+    { label: 'Gemini', value: 'gemini' },
+    { label: 'OpenRouter', value: 'openrouter' },
     { label: 'Back to settings menu', value: 'back' },
   ])
 
@@ -291,8 +549,13 @@ const handleModelResetSetting = async (): Promise<boolean | void> => {
 
   try {
     if (resetChoice === 'openrouter') {
-      log.info('⏳ Syncing OpenRouter models...')
       await syncOpenRouterModels()
+    }
+    if (resetChoice === 'gemini') {
+      await syncGeminiModels()
+    }
+    if (resetChoice === 'copilot') {
+      await syncCopilotModels()
     }
 
     log.success('Model sync completed!')
@@ -538,14 +801,20 @@ export const showSettingsMenu = async () => {
     log.info('Settings Menu')
 
     const settingChoice = await select('Choose a setting to configure:', [
+      { label: '── Branch ──', value: '_branch', disabled: true },
       { label: 'Branch prefix format (dev#name / dev/name)', value: 'prefix' },
       { label: 'Branch separator (hyphen/underscore)', value: 'separator' },
       { label: 'Protected branches', value: 'protected' },
-      { label: 'Sync model configurations (fetch live sample models)', value: 'models' },
-      { label: 'Change AI provider / model', value: 'change-model' },
+      { label: '── AI Configuration ──', value: '_ai', disabled: true },
+      { label: 'Saved AI models (manage favorite models per provider)', value: 'models' },
+      { label: 'Active AI model (switch provider & model for generation)', value: 'change-model' },
+      { label: '── Integration Setup ──', value: '_setup', disabled: true },
       { label: 'Gemini AI setup', value: 'gemini' },
       { label: 'OpenRouter AI setup', value: 'openrouter' },
       { label: 'Trello integration setup', value: 'trello' },
+      { label: '── System ──', value: '_system', disabled: true },
+      { label: 'Installation info', value: 'where' },
+      { label: 'Uninstall geeto', value: 'uninstall' },
       { label: 'Back to main menu', value: 'back' },
     ])
 
@@ -601,6 +870,17 @@ export const showSettingsMenu = async () => {
       if (back) {
         continue
       }
+    }
+    if (settingChoice === 'where') {
+      const { handleWhereInstalled } = await import('./doctor.js')
+      await handleWhereInstalled()
+      askQuestion(`  ${colors.gray}Press Enter to go back${colors.reset}`)
+      continue
+    }
+    if (settingChoice === 'uninstall') {
+      const { handleUninstall } = await import('./doctor.js')
+      await handleUninstall()
+      break
     }
 
     console.log('')

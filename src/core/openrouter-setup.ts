@@ -96,6 +96,24 @@ openrouter_api_key = "${openrouterKey}"
     fs.writeFileSync(path, configContent, 'utf8')
     log.success(`OpenRouter config saved to: ${path}`)
 
+    // Write default openrouter-model.json with recommended text/code models
+    try {
+      const modelFile = `${configDir}/openrouter-model.json`
+      const defaultModels = [
+        { label: 'Claude Sonnet 4', value: 'anthropic/claude-sonnet-4' },
+        { label: 'Claude Haiku 4.5', value: 'anthropic/claude-haiku-4.5' },
+        { label: 'GPT-4o', value: 'openai/gpt-4o' },
+        { label: 'GPT-4.1', value: 'openai/gpt-4.1' },
+        { label: 'GPT-5 Mini', value: 'openai/gpt-5-mini' },
+        { label: 'Gemini 2.5 Flash', value: 'google/gemini-2.5-flash' },
+      ]
+
+      fs.writeFileSync(modelFile, JSON.stringify(defaultModels, null, 2), 'utf8')
+      log.info(`Saved recommended OpenRouter models to: ${modelFile}`)
+    } catch {
+      /* ignore model file write failures */
+    }
+
     return true
   } catch (error) {
     log.error(`Failed to save config: ${(error as Error).message}`)

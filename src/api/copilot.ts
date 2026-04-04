@@ -2,6 +2,8 @@
  * Copilot integration for AI-powered branch naming and commit messages
  */
 
+import path from 'node:path'
+
 import {
   generateBranchName as sdkGenerateBranchName,
   generateCommitMessage as sdkGenerateCommitMessage,
@@ -17,12 +19,29 @@ import { log } from '../utils/logging.js'
 export type CopilotModel = string
 
 /**
- * Return Copilot model choices from the SDK in realtime.
- * This deliberately does NOT read or write `.geeto/copilot-model.json`.
+ * Return Copilot model choices — persisted file first, fallback to live SDK.
  */
 export const getCopilotModels = async (): Promise<
   Array<{ label: string; value: CopilotModel }>
 > => {
+  // Check persisted file first
+  try {
+    const fs = await import('node:fs')
+    const modelFile = path.join(process.cwd(), '.geeto', 'copilot-model.json')
+    if (fs.existsSync(modelFile)) {
+      const data = JSON.parse(fs.readFileSync(modelFile, 'utf8')) as Array<{
+        label: string
+        value: string
+      }>
+      if (Array.isArray(data) && data.length > 0) {
+        return data
+      }
+    }
+  } catch {
+    // Fall through to live SDK
+  }
+
+  // Fallback to live SDK
   try {
     const ok = await sdkIsAvailable()
     if (!ok) {
