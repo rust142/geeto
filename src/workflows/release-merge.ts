@@ -16,11 +16,12 @@ import type { CopilotModel } from '../api/copilot.js'
 import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 
+import { getCurrentVersion, updatePackageVersion } from './release-utils.js'
 import { askQuestion, confirm, editInline } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
 import { BOX_W } from '../utils/display.js'
-import { execAsync } from '../utils/exec.js'
+import { exec, execAsync } from '../utils/exec.js'
 import {
   chooseModelForProvider,
   generateTextWithProvider,
@@ -668,6 +669,32 @@ export const handleMergeReleases = async (): Promise<void> => {
       mergeSpinner.succeed(
         `Merged into ${stableTag}, but ${allPrereleases.length - deleteCount}/${allPrereleases.length} deletions failed`
       )
+    }
+
+    // Step 3: bump package.json to stable version
+    const currentVer = getCurrentVersion()
+    if (currentVer !== baseVer && isPrerelease(`v${currentVer}`)) {
+      console.log('')
+      console.log(
+        `  ${colors.yellow}package.json${colors.reset} is still at ${colors.bright}v${currentVer}${colors.reset}`
+      )
+      const doBump = confirm(`Bump package.json to v${baseVer}?`)
+      if (doBump) {
+        try {
+          updatePackageVersion(baseVer)
+          log.success(`package.json → v${baseVer}`)
+
+          // Offer to commit the version bump
+          const doCommit = confirm('Commit version bump?')
+          if (doCommit) {
+            exec('git add package.json src/version.ts', true)
+            exec(`git commit --no-verify -m "chore(release): bump version to v${baseVer}"`, true)
+            log.success('Version bump committed')
+          }
+        } catch (error) {
+          log.error('Failed to update package.json: ' + String(error))
+        }
+      }
     }
   }
 }
