@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.1](https://github.com/rust142/geeto/compare/v0.9.0...v0.9.1) (2026-04-09)
+
+### Features
+
+* feat(release): add interactive package.json version bump and update to v0.9.0 ([6342fa4](https://github.com/rust142/geeto/commit/6342fa4))
+* feat(cli): add Copilot API headers & retries, force reauth, and improve ([6bfc2e7](https://github.com/rust142/geeto/commit/6bfc2e7))
+* feat(cli): add interactive submodule manager and local install ([9717ce4](https://github.com/rust142/geeto/commit/9717ce4))
+
 ## [0.7.0-alpha.4](https://github.com/rust142/geeto/compare/v0.7.0-alpha.3...v0.7.0-alpha.4) (2026-04-04)
 
 ### Features

@@ -1,5 +1,17 @@
 # Releases
 
+## v0.9.1 — April 9, 2026
+
+### What's New?
+
+#### New Features
+
+- Interactive tool to bump the package version in package.json, and the project is updated to v0.9.0.
+- Improved Copilot integration with required headers, automatic retries, and forced reauthentication when needed.
+- Added an interactive submodule manager and a simpler local install option.
+
+---
+
 ## v0.7.0-alpha.4 — April 4, 2026
 
 ### What's New?
