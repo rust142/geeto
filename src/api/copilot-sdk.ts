@@ -27,6 +27,15 @@ const COPILOT_API_BASE = 'https://api.individual.githubcopilot.com'
 const CHAT_ENDPOINT = `${COPILOT_API_BASE}/chat/completions`
 const MODELS_ENDPOINT = `${COPILOT_API_BASE}/models`
 
+// Required by the Copilot API — requests without these headers get 403
+const COPILOT_HEADERS = {
+  'Copilot-Integration-Id': 'vscode-chat',
+  'Editor-Version': 'vscode/1.96.0',
+  'Editor-Plugin-Version': 'copilot-chat/0.24.0',
+  'User-Agent': 'GitHubCopilotChat/0.24.0',
+  'Openai-Intent': 'conversation-panel',
+} as const
+
 // ── Token Management ────────────────────────────────────────────────────
 let cachedToken: string | null = null
 
@@ -84,38 +93,55 @@ const chatCompletion = async (messages: ChatMessage[], model?: string): Promise<
     messages,
   }
 
-  try {
-    const res = await fetch(CHAT_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify(body),
-    })
+  const maxRetries = 2
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(CHAT_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          ...COPILOT_HEADERS,
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(body),
+      })
 
-    if (!res.ok) {
-      const errorText = await res.text().catch(() => '')
-      if (res.status === 401 || res.status === 403) {
-        cachedToken = null
-        log.clearLine()
-        log.warn('GitHub token expired or unauthorized. Run `gh auth login` to re-authenticate.')
-      } else {
-        log.clearLine()
-        log.warn(`Copilot API error (${res.status}): ${errorText.slice(0, 200)}`)
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => '')
+
+        // Retry on 403 (Copilot intermittent rate-limit)
+        if (res.status === 403 && attempt < maxRetries) {
+          await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)))
+          continue
+        }
+
+        if (res.status === 401 || res.status === 403) {
+          cachedToken = null
+          log.clearLine()
+          log.warn('GitHub token expired or unauthorized. Run `gh auth login` to re-authenticate.')
+        } else {
+          log.clearLine()
+          log.warn(`Copilot API error (${res.status}): ${errorText.slice(0, 200)}`)
+        }
+        return null
       }
+
+      const data = (await res.json()) as ChatResponse
+      const content = data.choices?.[0]?.message?.content
+      return content ?? null
+    } catch (error) {
+      if (attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)))
+        continue
+      }
+      log.clearLine()
+      log.error('Copilot API request failed: ' + String(error))
       return null
     }
-
-    const data = (await res.json()) as ChatResponse
-    const content = data.choices?.[0]?.message?.content
-    return content ?? null
-  } catch (error) {
-    log.clearLine()
-    log.error('Copilot API request failed: ' + String(error))
-    return null
   }
+
+  return null
 }
 
 // ── Public API (same exports as before) ─────────────────────────────────
@@ -130,7 +156,7 @@ export const isAvailable = async (): Promise<boolean> => {
   try {
     const res = await fetch(MODELS_ENDPOINT, {
       method: 'GET',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { ...COPILOT_HEADERS, Authorization: `Bearer ${token}` },
     })
     return res.ok
   } catch {
@@ -214,7 +240,7 @@ export const getAvailableModelsDetailed = async (): Promise<ModelDetail[] | null
 
   try {
     const res = await fetch(MODELS_ENDPOINT, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { ...COPILOT_HEADERS, Authorization: `Bearer ${token}` },
     })
 
     if (!res.ok) return null
