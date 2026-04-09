@@ -10,7 +10,6 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { confirm } from '../cli/input.js'
-import { select } from '../cli/menu.js'
 import { ensureGeetoIgnored } from '../utils/config.js'
 import { commandExists, exec } from '../utils/exec.js'
 import { log } from '../utils/logging.js'
@@ -191,39 +190,29 @@ const getGitHubUsername = (): string | null => {
 }
 
 // Helper: Authenticate with GitHub CLI
-const authenticateGitHub = async (): Promise<boolean> => {
-  const authOptions = [
-    { label: 'Already authenticated with GitHub CLI (skip auth)', value: 'already' },
-    { label: 'Authenticate now (opens browser for GitHub OAuth)', value: 'auth' },
-    { label: 'Skip for now (authenticate later)', value: 'skip' },
-  ]
-
-  const authChoice = await select('Is GitHub CLI already authenticated?', authOptions)
-
-  if (authChoice === 'auth') {
-    log.info('Starting GitHub authentication...')
-    log.info('This will open your browser for GitHub OAuth.')
-    try {
-      exec('gh auth login')
-      log.success('Authentication process started!')
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-      if (isGitHubAuthenticated()) {
-        log.success('GitHub authenticated successfully')
-        return true
-      } else {
-        log.warn('Authentication may not have completed yet. Please finish in browser.')
-        return false
-      }
-    } catch (error) {
-      log.error(`Authentication failed: ${error}`)
+const authenticateGitHub = async (force = false): Promise<boolean> => {
+  if (!force) {
+    const proceed = confirm('Authenticate with GitHub now? (opens browser for OAuth)')
+    if (!proceed) {
+      log.info('Skipping authentication. Run `gh auth login` later.')
       return false
     }
-  } else if (authChoice === 'skip') {
-    log.info('Skipping authentication for now. You can run `gh auth login` later.')
+  }
+
+  log.info('Starting GitHub authentication...')
+  try {
+    exec('gh auth login')
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+    if (isGitHubAuthenticated()) {
+      log.success('GitHub authenticated successfully')
+      return true
+    }
+    log.warn('Authentication may not have completed yet. Finish in browser.')
+    return false
+  } catch (error) {
+    log.error(`Authentication failed: ${error}`)
     return false
   }
-  // If 'already', assume it's authenticated
-  return true
 }
 
 /**
@@ -244,7 +233,7 @@ const checkCopilotAPIAccess = async (): Promise<boolean> => {
  * Since v0.8.0, Geeto uses the Copilot REST API directly.
  * Setup only requires GitHub CLI authenticated — no Copilot CLI binary needed.
  */
-export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
+export const setupGitHubCopilotInteractive = async (forceReauth = false): Promise<boolean> => {
   // Ensure GitHub CLI is installed (install automatically if needed)
   const ghInstalled = setupGitHubCLI()
   if (!ghInstalled) {
@@ -252,8 +241,8 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
     return false
   }
 
-  // Check if already authenticated
-  if (isGitHubAuthenticated()) {
+  // Check if already authenticated (skip if force re-auth)
+  if (!forceReauth && isGitHubAuthenticated()) {
     const user = getGitHubUsername()
     if (user) {
       log.info(`GitHub authenticated as: ${user}`)
@@ -262,7 +251,7 @@ export const setupGitHubCopilotInteractive = async (): Promise<boolean> => {
     }
   } else {
     // Need to authenticate
-    const ghAuthenticated = await authenticateGitHub()
+    const ghAuthenticated = await authenticateGitHub(forceReauth)
     if (!ghAuthenticated) {
       return false
     }

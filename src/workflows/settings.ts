@@ -674,7 +674,7 @@ const handleCopilotSetting = async (): Promise<boolean | void> => {
   if (action === 'reconfigure') {
     log.info('Reconfiguring GitHub Copilot integration...')
     const { setupGitHubCopilotInteractive } = await import('../core/copilot-setup.js')
-    await setupGitHubCopilotInteractive()
+    await setupGitHubCopilotInteractive(true)
   }
   if (action === 'back') {
     return true
