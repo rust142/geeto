@@ -652,6 +652,37 @@ const handleChangeModelSetting = async (): Promise<boolean | void> => {
   // Done; do not go back to settings menu
   return false
 }
+const handleCopilotSetting = async (): Promise<boolean | void> => {
+  const { isAvailable } = await import('../api/copilot-sdk.js')
+  const hasConfig = await isAvailable()
+
+  if (!hasConfig) {
+    log.info('Setting up GitHub Copilot integration...')
+    const { setupGitHubCopilotInteractive } = await import('../core/copilot-setup.js')
+    await setupGitHubCopilotInteractive()
+    return false
+  }
+
+  const action = await select(
+    'GitHub Copilot integration is already configured. What would you like to do?',
+    [
+      { label: 'Reconfigure (re-authenticate)', value: 'reconfigure' },
+      { label: 'Back to settings menu', value: 'back' },
+    ]
+  )
+
+  if (action === 'reconfigure') {
+    log.info('Reconfiguring GitHub Copilot integration...')
+    const { setupGitHubCopilotInteractive } = await import('../core/copilot-setup.js')
+    await setupGitHubCopilotInteractive()
+  }
+  if (action === 'back') {
+    return true
+  }
+
+  return false
+}
+
 const handleGeminiSetting = async (): Promise<boolean | void> => {
   const hasConfig = hasGeminiConfig()
 
@@ -809,6 +840,7 @@ export const showSettingsMenu = async () => {
       { label: 'Saved AI models (manage favorite models per provider)', value: 'models' },
       { label: 'Active AI model (switch provider & model for generation)', value: 'change-model' },
       { label: '── Integration Setup ──', value: '_setup', disabled: true },
+      { label: 'GitHub Copilot setup', value: 'copilot' },
       { label: 'Gemini AI setup', value: 'gemini' },
       { label: 'OpenRouter AI setup', value: 'openrouter' },
       { label: 'Trello integration setup', value: 'trello' },
@@ -850,6 +882,12 @@ export const showSettingsMenu = async () => {
       const back = await handleChangeModelSetting()
       if (back) {
         // user chose to go back from within handler — return to settings menu
+        continue
+      }
+    }
+    if (settingChoice === 'copilot') {
+      const back = await handleCopilotSetting()
+      if (back) {
         continue
       }
     }
@@ -898,6 +936,7 @@ export {
   handleProtectedBranchesSetting,
   handleModelResetSetting,
   handleChangeModelSetting,
+  handleCopilotSetting,
   handleGeminiSetting,
   handleOpenRouterSetting,
   handleTrelloSetting,

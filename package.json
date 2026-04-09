@@ -59,6 +59,7 @@
     "postpublish": "pinst --enable",
     "lint-staged": "lint-staged",
     "tools:install": "sh tools/install.sh",
+    "install:local": "bash scripts/install-local.sh",
     "danger:ci": "danger ci",
     "danger:local": "danger pr",
     "copilot": "gh"
