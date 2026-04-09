@@ -13,7 +13,11 @@ export const exec = (command: string, silent = false): string => {
   }
 
   try {
-    const result = execSync(command, { encoding: 'utf8', stdio: silent ? 'pipe' : 'inherit' })
+    const result = execSync(command, {
+      encoding: 'utf8',
+      stdio: silent ? 'pipe' : 'inherit',
+      maxBuffer: 10 * 1024 * 1024,
+    })
     return result?.trimEnd() || ''
   } catch (error) {
     if (!silent) {
@@ -86,7 +90,11 @@ export const execGit = (command: string, silent = false): string => {
   }
 
   try {
-    const result = execSync(command, { encoding: 'utf8', stdio: silent ? 'pipe' : 'inherit' })
+    const result = execSync(command, {
+      encoding: 'utf8',
+      stdio: silent ? 'pipe' : 'inherit',
+      maxBuffer: 10 * 1024 * 1024,
+    })
     return result?.trim() || ''
   } catch (error) {
     // For git commands, exit code 1 is often not an error (e.g., git diff when there are changes)

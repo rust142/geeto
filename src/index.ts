@@ -175,6 +175,13 @@ const COMMAND_REGISTRY: CommandEntry[] = [
   },
   // Trello
   {
+    flag: '--submodules',
+    alias: '-sm',
+    module: './workflows/submodules.js',
+    handler: 'handleSubmodules',
+    errorLabel: 'Submodules',
+  },
+  {
     flag: '--trello',
     alias: '-tr',
     module: './workflows/trello-menu.js',
@@ -229,6 +236,13 @@ const COMMAND_REGISTRY: CommandEntry[] = [
     alias: undefined,
     module: './workflows/settings.js',
     handler: 'handleTrelloSetting',
+    errorLabel: 'Settings',
+  },
+  {
+    flag: '--setup-copilot',
+    alias: undefined,
+    module: './workflows/settings.js',
+    handler: 'handleCopilotSetting',
     errorLabel: 'Settings',
   },
   {
@@ -418,6 +432,7 @@ function showHelpMessage(): void {
   console.log(`    ${C}-al, --alias${R}              Install shell aliases for geeto`)
   console.log(`    ${C}-rw, --reword${R}             Edit past commit messages`)
   console.log(`    ${C}-sts, --stats${R}             Repository statistics dashboard`)
+  console.log(`    ${C}-sm, --submodules${R}         Manage git submodules`)
   console.log(`    ${C}     --abort${R}              Abort in-progress operation`)
   console.log(`    ${C}-pl, --pull${R}               Pull from remote interactively`)
   console.log(`    ${C}-ft, --fetch${R}              Fetch latest from remote`)
@@ -439,6 +454,7 @@ function showHelpMessage(): void {
   console.log('')
 
   console.log(`  ${B}SETTINGS${R}`)
+  console.log(`    ${C}     --setup-copilot${R}      Configure GitHub Copilot`)
   console.log(`    ${C}     --setup-gemini${R}       Configure Gemini AI`)
   console.log(`    ${C}     --setup-openrouter${R}   Configure OpenRouter AI`)
   console.log(`    ${C}     --setup-github${R}       Configure GitHub token`)
@@ -496,6 +512,7 @@ const MODULE_LOADERS: Record<
   './workflows/undo.js': () => import('./workflows/undo.js'),
   './workflows/release.js': () => import('./workflows/release.js'),
   './workflows/repo-settings.js': () => import('./workflows/repo-settings.js'),
+  './workflows/submodules.js': () => import('./workflows/submodules.js'),
   './workflows/trello-menu.js': () => import('./workflows/trello-menu.js'),
   './workflows/settings.js': () => import('./workflows/settings.js'),
   './core/github-setup.js': () => import('./core/github-setup.js'),

@@ -143,7 +143,10 @@
     "untuk",
     "pedoman",
     "kontribusi",
-    "githubcopilot"
+    "githubcopilot",
+    "codesign",
+    "uninit",
+    "deinit"
   ],
   "ignorePaths": [
     "node_modules/**",
