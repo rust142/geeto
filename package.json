@@ -107,7 +107,7 @@
     "markdownlint-cli": "^0.47.0",
     "pinst": "^3.0.0",
     "prettier": "^3.8.1",
-    "release-it": "^19.2.4",
+    "release-it": "^20.0.1",
     "typescript": "^5.9.3",
     "yaml-lint": "^1.7.0"
   },
