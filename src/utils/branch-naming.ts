@@ -17,10 +17,10 @@ export const handleBranchNaming = async (
   separator: '-' | '_',
   trelloCardId: string,
   currentBranch: string,
-  aiProvider: 'gemini' | 'copilot' | 'openrouter' = 'gemini',
+  aiProvider: 'gemini' | 'copilot' | 'openrouter' | 'groq' = 'gemini',
   model?: CopilotModel | OpenRouterModel | GeminiModel,
   updateModel?: (
-    provider: 'gemini' | 'copilot' | 'openrouter',
+    provider: 'gemini' | 'copilot' | 'openrouter' | 'groq',
     model?: CopilotModel | OpenRouterModel | GeminiModel
   ) => void
 ): Promise<BranchNamingResult> => {
@@ -140,7 +140,11 @@ export const handleBranchNaming = async (
             const { generateBranchName } = await import('../api/openrouter.js')
             const word = diff
             aiSuffix = await generateBranchName(word, correction, model as OpenRouterModel)
-
+            break
+          }
+          case 'groq': {
+            const { generateBranchName } = await import('../api/groq.js')
+            aiSuffix = await generateBranchName(diff, correction, model as string)
             break
           }
         }
@@ -152,7 +156,10 @@ export const handleBranchNaming = async (
     }
 
     if (!aiSuffix || isTransientAIFailure(aiSuffix) || isContextLimitFailure(aiSuffix)) {
-      const safeUpdate = (provider: 'gemini' | 'copilot' | 'openrouter', modelStr?: string) => {
+      const safeUpdate = (
+        provider: 'gemini' | 'copilot' | 'openrouter' | 'groq',
+        modelStr?: string
+      ) => {
         if (updateModel) {
           // forward to provided updater (cast since caller may use narrower model types)
           updateModel(provider, modelStr as unknown as CopilotModel | OpenRouterModel | GeminiModel)
@@ -250,7 +257,12 @@ export const handleBranchNaming = async (
         }
         case 'change-model': {
           // change only the current provider's model — use centralized helper
-          const provKey = (aiProvider ?? 'gemini') as 'gemini' | 'copilot' | 'openrouter' | string
+          const provKey = (aiProvider ?? 'gemini') as
+            | 'gemini'
+            | 'copilot'
+            | 'openrouter'
+            | 'groq'
+            | string
           const provider = (provKey === 'manual' ? 'gemini' : provKey) as
             | 'gemini'
             | 'copilot'
@@ -278,6 +290,7 @@ export const handleBranchNaming = async (
             { label: 'Gemini', value: 'gemini' },
             { label: 'Copilot (Recommended)', value: 'copilot' },
             { label: 'OpenRouter', value: 'openrouter' },
+            { label: 'Groq', value: 'groq' },
             { label: 'Back to suggested branch selection', value: 'cancel-prov' },
           ])
           if (prov === 'cancel-prov') {
@@ -287,7 +300,7 @@ export const handleBranchNaming = async (
           }
           // Centralized provider/model selection helper
           const chosen = await chooseModelForProvider(
-            prov as 'gemini' | 'copilot' | 'openrouter',
+            prov as 'gemini' | 'copilot' | 'openrouter' | 'groq',
             'Choose model:',
             'Back to suggested branch selection'
           )
@@ -402,6 +415,7 @@ export const handleBranchNaming = async (
             { label: 'Gemini', value: 'gemini' },
             { label: 'Copilot (Recommended)', value: 'copilot' },
             { label: 'OpenRouter', value: 'openrouter' },
+            { label: 'Groq', value: 'groq' },
             { label: 'Back to suggested branch selection', value: 'cancel-prov' },
           ])
           if (prov === 'cancel-prov') {
@@ -412,7 +426,7 @@ export const handleBranchNaming = async (
 
           // Centralized provider/model selection helper
           const chosen = await chooseModelForProvider(
-            prov as 'gemini' | 'copilot' | 'openrouter',
+            prov as 'gemini' | 'copilot' | 'openrouter' | 'groq',
             'Choose model:',
             'Back to suggested branch selection'
           )

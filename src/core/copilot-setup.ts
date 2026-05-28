@@ -228,6 +228,20 @@ const checkCopilotAPIAccess = async (): Promise<boolean> => {
 }
 
 /**
+ * Silent check — true if already authenticated and API accessible.
+ * Use this instead of setupGitHubCopilotInteractive for repeat calls.
+ */
+export const isCopilotReady = async (): Promise<boolean> => {
+  if (!isGitHubAuthenticated()) return false
+  const ready = await checkCopilotAPIAccess()
+  if (ready) {
+    const user = getGitHubUsername()
+    if (user) log.info(`GitHub authenticated as: ${user}`)
+  }
+  return ready
+}
+
+/**
  * Interactive setup for Copilot AI provider.
  *
  * Since v0.8.0, Geeto uses the Copilot REST API directly.

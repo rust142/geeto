@@ -65,7 +65,7 @@ export const getCopilotModels = async (): Promise<
 export const generateBranchName = async (
   text: string,
   correction?: string,
-  model: CopilotModel = 'gpt-5-mini'
+  model: CopilotModel = 'GPT-4.1'
 ): Promise<string | null> => {
   try {
     const ok = await sdkIsAvailable()
@@ -97,7 +97,7 @@ export const generateBranchName = async (
 export const generateCommitMessage = async (
   diff: string,
   correction?: string,
-  model: CopilotModel = 'gpt-5-mini'
+  model: CopilotModel = 'GPT-4.1'
 ): Promise<string | null> => {
   try {
     const ok = await sdkIsAvailable()
@@ -119,7 +119,7 @@ export const generateReleaseNotes = async (
   commits: string,
   language: 'en' | 'id',
   correction?: string,
-  model: CopilotModel = 'gpt-5-mini'
+  model: CopilotModel = 'GPT-4.1'
 ): Promise<string | null> => {
   try {
     const ok = await sdkIsAvailable()
@@ -138,7 +138,7 @@ export const generateReleaseNotes = async (
 
 export const generateText = async (
   prompt: string,
-  model: CopilotModel = 'gpt-5-mini'
+  model: CopilotModel = 'GPT-4.1'
 ): Promise<string | null> => {
   try {
     const ok = await sdkIsAvailable()

@@ -3,14 +3,12 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 
 /**
- * Copilot AI provider — direct REST API client.
- *
- * Uses GitHub Copilot Chat Completions API (api.individual.githubcopilot.com)
- * instead of the @github/copilot-sdk. This removes the dependency on the
- * Copilot CLI binary and avoids protocol version mismatch issues.
+ * Copilot AI provider — uses openai package with GitHub Copilot REST API.
  *
  * Auth: uses `gh auth token` (GitHub CLI) or GITHUB_TOKEN env var.
  */
+
+import OpenAI from 'openai'
 
 import {
   buildPromptWithCorrection,
@@ -24,7 +22,6 @@ import { log } from '../utils/logging.js'
 
 // ── API Configuration ───────────────────────────────────────────────────
 const COPILOT_API_BASE = 'https://api.individual.githubcopilot.com'
-const CHAT_ENDPOINT = `${COPILOT_API_BASE}/chat/completions`
 const MODELS_ENDPOINT = `${COPILOT_API_BASE}/models`
 
 // Required by the Copilot API — requests without these headers get 403
@@ -73,68 +70,37 @@ interface ChatMessage {
   content: string
 }
 
-interface ChatResponse {
-  choices?: Array<{
-    message?: { content?: string; role?: string }
-    finish_reason?: string
-  }>
-  error?: { message?: string; code?: string }
+const getClient = (): OpenAI | null => {
+  const token = getToken()
+  if (!token) return null
+  return new OpenAI({
+    baseURL: COPILOT_API_BASE,
+    apiKey: token,
+    defaultHeaders: COPILOT_HEADERS,
+    maxRetries: 2,
+  })
 }
 
 const chatCompletion = async (messages: ChatMessage[], model?: string): Promise<string | null> => {
-  const token = getToken()
-  if (!token) {
+  const client = getClient()
+  if (!client) {
     log.warn('No GitHub token available. Run `gh auth login` to authenticate.')
     return null
   }
 
-  const body = {
-    model: model ?? 'gpt-5-mini',
-    messages,
-  }
-
-  const maxRetries = 2
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const res = await fetch(CHAT_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          ...COPILOT_HEADERS,
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(body),
-      })
-
-      if (!res.ok) {
-        const errorText = await res.text().catch(() => '')
-
-        // Retry on 403 (Copilot intermittent rate-limit)
-        if (res.status === 403 && attempt < maxRetries) {
-          await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)))
-          continue
-        }
-
-        if (res.status === 401 || res.status === 403) {
-          cachedToken = null
-          log.clearLine()
-          log.warn('GitHub token expired or unauthorized. Run `gh auth login` to re-authenticate.')
-        } else {
-          log.clearLine()
-          log.warn(`Copilot API error (${res.status}): ${errorText.slice(0, 200)}`)
-        }
-        return null
-      }
-
-      const data = (await res.json()) as ChatResponse
-      const content = data.choices?.[0]?.message?.content
-      return content ?? null
-    } catch (error) {
-      if (attempt < maxRetries) {
-        await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)))
-        continue
-      }
+  try {
+    const res = await client.chat.completions.create({
+      model: model ?? 'GPT-4.1',
+      messages,
+    })
+    return res.choices[0]?.message?.content ?? null
+  } catch (error: unknown) {
+    const status = (error as any)?.status
+    if (status === 401 || status === 403) {
+      cachedToken = null
+      log.clearLine()
+      log.warn('GitHub token expired or unauthorized. Run `gh auth login` to re-authenticate.')
+    } else {
       log.clearLine()
       log.error('Copilot API request failed: ' + String(error))
       return null

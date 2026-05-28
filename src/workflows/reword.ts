@@ -318,8 +318,8 @@ interface RewordContext {
 /** Resolve current AI provider and model from persisted state. */
 const resolveAIProvider = (
   state: GeetoState
-): { provider: 'gemini' | 'copilot' | 'openrouter'; model: string | undefined } => {
-  const provider: 'gemini' | 'copilot' | 'openrouter' =
+): { provider: 'gemini' | 'copilot' | 'openrouter' | 'groq'; model: string | undefined } => {
+  const provider: 'gemini' | 'copilot' | 'openrouter' | 'groq' =
     (state.aiProvider === 'manual' ? undefined : state.aiProvider) ?? 'gemini'
 
   if (provider === 'copilot') return { provider, model: state.copilotModel as unknown as string }
@@ -715,7 +715,7 @@ const generateNewMessages = async (
           diff,
           correction,
           branch,
-          (provider: 'gemini' | 'copilot' | 'openrouter', model?: string) => {
+          (provider: 'gemini' | 'copilot' | 'openrouter' | 'groq', model?: string) => {
             state.aiProvider = provider
             switch (provider) {
               case 'copilot': {
@@ -819,6 +819,7 @@ const generateNewMessages = async (
               value: 'copilot',
             },
             { label: 'OpenRouter', value: 'openrouter' },
+            { label: 'Groq', value: 'groq' },
             { label: 'Back', value: 'back' },
           ])
 
@@ -828,7 +829,7 @@ const generateNewMessages = async (
           }
 
           const chosenModel = await chooseModelForProvider(
-            prov as 'gemini' | 'copilot' | 'openrouter',
+            prov as 'gemini' | 'copilot' | 'openrouter' | 'groq',
             'Choose model:',
             'Back'
           )
@@ -838,8 +839,8 @@ const generateNewMessages = async (
             continue
           }
 
-          state.aiProvider = prov as 'gemini' | 'copilot' | 'openrouter'
-          currentProvider = prov as 'gemini' | 'copilot' | 'openrouter'
+          state.aiProvider = prov as 'gemini' | 'copilot' | 'openrouter' | 'groq'
+          currentProvider = prov as 'gemini' | 'copilot' | 'openrouter' | 'groq'
           switch (prov) {
             case 'copilot': {
               state.copilotModel = chosenModel as unknown as CopilotModel
@@ -876,7 +877,7 @@ const generateNewMessages = async (
             currentProvider === 'openrouter'
               ? currentProvider
               : 'gemini'
-          ) as 'gemini' | 'copilot' | 'openrouter'
+          ) as 'gemini' | 'copilot' | 'openrouter' | 'groq'
 
           const chosen = await chooseModelForProvider(provKey, 'Choose model:', 'Back')
 

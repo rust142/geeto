@@ -293,7 +293,7 @@ const aiRewriteMergedNotes = async (
   language: 'en' | 'id'
 ): Promise<string | null> => {
   const savedState = loadState()
-  let aiProvider: 'gemini' | 'copilot' | 'openrouter' = 'copilot'
+  let aiProvider: 'gemini' | 'copilot' | 'openrouter' | 'groq' = 'copilot'
   let copilotModel: CopilotModel | undefined
   let openrouterModel: OpenRouterModel | undefined
   let geminiModel: GeminiModel | undefined
@@ -304,7 +304,7 @@ const aiRewriteMergedNotes = async (
     savedState.aiProvider !== 'manual' &&
     (savedState.copilotModel || savedState.openrouterModel || savedState.geminiModel)
   ) {
-    aiProvider = savedState.aiProvider as 'gemini' | 'copilot' | 'openrouter'
+    aiProvider = savedState.aiProvider as 'gemini' | 'copilot' | 'openrouter' | 'groq'
     copilotModel = savedState.copilotModel
     openrouterModel = savedState.openrouterModel
     geminiModel = savedState.geminiModel
@@ -315,7 +315,8 @@ const aiRewriteMergedNotes = async (
         { label: 'GitHub Copilot', value: 'copilot' },
         { label: 'Gemini', value: 'gemini' },
         { label: 'OpenRouter', value: 'openrouter' },
-      ])) as 'gemini' | 'copilot' | 'openrouter'
+        { label: 'Groq', value: 'groq' },
+      ])) as 'gemini' | 'copilot' | 'openrouter' | 'groq'
 
       const chosen = await chooseModelForProvider(aiProvider, undefined, 'Back to AI provider menu')
       if (!chosen || chosen === 'back') continue
@@ -426,7 +427,8 @@ const aiRewriteMergedNotes = async (
           { label: 'GitHub Copilot', value: 'copilot' },
           { label: 'Gemini', value: 'gemini' },
           { label: 'OpenRouter', value: 'openrouter' },
-        ])) as 'gemini' | 'copilot' | 'openrouter'
+          { label: 'Groq', value: 'groq' },
+        ])) as 'gemini' | 'copilot' | 'openrouter' | 'groq'
         aiProvider = prov
         copilotModel = undefined
         openrouterModel = undefined

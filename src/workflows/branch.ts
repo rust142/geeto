@@ -252,13 +252,14 @@ export const handleBranchCreationWorkflow = async (
             case 'ai': {
               // Use AI branch naming
               let selectedModel: CopilotModel | OpenRouterModel | GeminiModel | undefined
-              let providerToUse: 'gemini' | 'copilot' | 'openrouter'
+              let providerToUse: 'gemini' | 'copilot' | 'openrouter' | 'groq'
               // If user previously chose manual, ask which AI provider to use now
               if (!state.aiProvider || state.aiProvider === 'manual') {
                 const prov = await select('Choose AI provider for branch generation:', [
                   { label: 'Gemini', value: 'gemini' },
                   { label: 'GitHub Copilot', value: 'copilot' },
                   { label: 'OpenRouter', value: 'openrouter' },
+                  { label: 'Groq', value: 'groq' },
                   { label: 'Back to suggested branch selection', value: 'cancel-prov' },
                 ])
 
@@ -267,7 +268,7 @@ export const handleBranchCreationWorkflow = async (
                   continue
                 }
 
-                providerToUse = prov as 'gemini' | 'copilot' | 'openrouter'
+                providerToUse = prov as 'gemini' | 'copilot' | 'openrouter' | 'groq'
 
                 // Ensure provider is ready (skip check for manual since user chose an AI provider)
                 const { ensureAIProvider } = await import('../core/setup.js')
@@ -280,7 +281,7 @@ export const handleBranchCreationWorkflow = async (
                 state.aiProvider = providerToUse
                 saveState(state)
               } else {
-                providerToUse = state.aiProvider as 'gemini' | 'copilot' | 'openrouter'
+                providerToUse = state.aiProvider as 'gemini' | 'copilot' | 'openrouter' | 'groq'
               }
               // Ensure state reflects the provider we'll use for generation
               state.aiProvider = providerToUse
@@ -310,7 +311,7 @@ export const handleBranchCreationWorkflow = async (
                 state.currentBranch,
                 providerToUse,
                 selectedModel,
-                (provider: 'gemini' | 'copilot' | 'openrouter', model?: string) => {
+                (provider: 'gemini' | 'copilot' | 'openrouter' | 'groq', model?: string) => {
                   state.aiProvider = provider
                   switch (provider) {
                     case 'copilot': {
@@ -403,7 +404,7 @@ export const handleBranchCreationWorkflow = async (
                   diff,
                   correction,
                   state.currentBranch,
-                  (provider: 'gemini' | 'copilot' | 'openrouter', model?: string) => {
+                  (provider: 'gemini' | 'copilot' | 'openrouter' | 'groq', model?: string) => {
                     state.aiProvider = provider
                     switch (provider) {
                       case 'copilot': {
@@ -532,6 +533,7 @@ export const handleBranchCreationWorkflow = async (
                           { label: 'Gemini', value: 'gemini' },
                           { label: 'GitHub Copilot', value: 'copilot' },
                           { label: 'OpenRouter', value: 'openrouter' },
+                          { label: 'Groq', value: 'groq' },
                           { label: 'Back to suggested branch selection', value: 'cancel-prov' },
                         ])
                         if (prov === 'cancel-prov') {
@@ -543,7 +545,7 @@ export const handleBranchCreationWorkflow = async (
                         // Use centralized helper to choose model for the provider
                         const { chooseModelForProvider } = await import('../utils/git-ai.js')
                         const chosen = await chooseModelForProvider(
-                          prov as 'gemini' | 'copilot' | 'openrouter',
+                          prov as 'gemini' | 'copilot' | 'openrouter' | 'groq',
                           'Choose model:',
                           'Back to suggested branch selection'
                         )
@@ -556,7 +558,7 @@ export const handleBranchCreationWorkflow = async (
                           continue
                         }
 
-                        state.aiProvider = prov as 'gemini' | 'copilot' | 'openrouter'
+                        state.aiProvider = prov as 'gemini' | 'copilot' | 'openrouter' | 'groq'
                         switch (prov) {
                           case 'copilot': {
                             state.copilotModel = chosen as unknown as CopilotModel

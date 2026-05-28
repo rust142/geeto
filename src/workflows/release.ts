@@ -290,7 +290,7 @@ export const handleRelease = async (): Promise<void> => {
 
     // Read saved AI config from state
     const savedState = loadState()
-    let aiProvider: 'gemini' | 'copilot' | 'openrouter' = 'copilot'
+    let aiProvider: 'gemini' | 'copilot' | 'openrouter' | 'groq' = 'copilot'
     let copilotModel: CopilotModel | undefined
     let openrouterModel: OpenRouterModel | undefined
     let geminiModel: GeminiModel | undefined
@@ -301,7 +301,7 @@ export const handleRelease = async (): Promise<void> => {
       savedState.aiProvider !== 'manual' &&
       (savedState.copilotModel || savedState.openrouterModel || savedState.geminiModel)
     ) {
-      aiProvider = savedState.aiProvider as 'gemini' | 'copilot' | 'openrouter'
+      aiProvider = savedState.aiProvider as 'gemini' | 'copilot' | 'openrouter' | 'groq'
       copilotModel = savedState.copilotModel
       openrouterModel = savedState.openrouterModel
       geminiModel = savedState.geminiModel
@@ -313,7 +313,8 @@ export const handleRelease = async (): Promise<void> => {
           { label: 'GitHub Copilot', value: 'copilot' },
           { label: 'Gemini', value: 'gemini' },
           { label: 'OpenRouter', value: 'openrouter' },
-        ])) as 'gemini' | 'copilot' | 'openrouter'
+          { label: 'Groq', value: 'groq' },
+        ])) as 'gemini' | 'copilot' | 'openrouter' | 'groq'
 
         const chosen = await chooseModelForProvider(
           aiProvider,
@@ -440,7 +441,8 @@ export const handleRelease = async (): Promise<void> => {
             { label: 'GitHub Copilot', value: 'copilot' },
             { label: 'Gemini', value: 'gemini' },
             { label: 'OpenRouter', value: 'openrouter' },
-          ])) as 'gemini' | 'copilot' | 'openrouter'
+            { label: 'Groq', value: 'groq' },
+          ])) as 'gemini' | 'copilot' | 'openrouter' | 'groq'
           aiProvider = prov
           copilotModel = undefined
           openrouterModel = undefined

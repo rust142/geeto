@@ -147,7 +147,14 @@
     "codesign",
     "uninit",
     "deinit",
-    "reauthentication"
+    "reauthentication",
+    "Groq",
+    "groq",
+    "Mixtral",
+    "GROQ",
+    "mixtral",
+    "qwen",
+    "deepseek"
   ],
   "ignorePaths": [
     "node_modules/**",
