@@ -815,7 +815,7 @@ const generateNewMessages = async (
           const prov = await select('Choose AI provider:', [
             { label: 'Gemini', value: 'gemini' },
             {
-              label: 'GitHub (Recommended)',
+              label: 'GitHub Copilot',
               value: 'copilot',
             },
             { label: 'OpenRouter', value: 'openrouter' },

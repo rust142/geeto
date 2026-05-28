@@ -146,7 +146,8 @@
     "githubcopilot",
     "codesign",
     "uninit",
-    "deinit"
+    "deinit",
+    "reauthentication"
   ],
   "ignorePaths": [
     "node_modules/**",

@@ -340,7 +340,7 @@ export const handleCommitWorkflow = async (
 
   const aiTools = [
     { label: 'Gemini', value: 'gemini' },
-    { label: 'GitHub (Recommended)', value: 'copilot' },
+    { label: 'GitHub Copilot', value: 'copilot' },
     { label: 'OpenRouter', value: 'openrouter' },
     { label: 'Manual commit', value: 'manual' },
   ]
@@ -803,7 +803,7 @@ export const handleCommitWorkflow = async (
         case 'change-provider': {
           const prov = await select('Choose AI provider:', [
             { label: 'Gemini', value: 'gemini' },
-            { label: 'GitHub (Recommended)', value: 'copilot' },
+            { label: 'GitHub Copilot', value: 'copilot' },
             { label: 'OpenRouter', value: 'openrouter' },
             { label: 'Back to suggested commit selection', value: 'back' },
           ])

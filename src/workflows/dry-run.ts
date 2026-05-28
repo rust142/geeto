@@ -24,6 +24,7 @@ const DRY_RUN_COMMANDS = [
   { label: 'Prune stale branches', value: 'prune' },
   { label: 'Manage shell aliases', value: 'alias' },
   { label: 'Edit commit messages', value: 'reword' },
+  { label: 'Revert last commit', value: 'revert' },
 ]
 
 export const handleDryRunMenu = async (): Promise<void> => {
@@ -121,6 +122,11 @@ export const handleDryRunMenu = async (): Promise<void> => {
       case 'reword': {
         const m = await import('./reword.js')
         await m.handleReword()
+        break
+      }
+      case 'revert': {
+        const m = await import('./revert.js')
+        await m.handleRevert()
         break
       }
     }
