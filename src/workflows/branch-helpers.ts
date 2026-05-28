@@ -46,6 +46,10 @@ export async function handleTrelloCase(
 ): Promise<TrelloCaseResult> {
   // Returns result explaining what to do next for the branch workflow
   if (!hasTrelloConfig()) {
+    const { hasSkippedTrelloPrompt } = await import('../utils/config.js')
+    if (hasSkippedTrelloPrompt()) {
+      return { branchFlowComplete: false, branchMenuShown: false }
+    }
     const spinner = log.spinner()
     spinner.start('Setting up Trello integration...')
     const { setupTrelloConfigInteractive } = await import('../core/trello-setup.js')
@@ -164,7 +168,7 @@ export async function handleTrelloCase(
     log.warn('No AI provider configured yet.')
     const providerChoice = await select('Choose AI provider:', [
       { label: 'Gemini', value: 'gemini' },
-      { label: 'GitHub (Recommended)', value: 'copilot' },
+      { label: 'GitHub Copilot', value: 'copilot' },
       { label: 'OpenRouter', value: 'openrouter' },
       { label: 'Back to naming strategy', value: 'back' },
     ])
@@ -389,7 +393,7 @@ export async function handleTrelloCase(
         // let user pick another provider and optionally pick a model
         const prov = await select('Choose AI provider:', [
           { label: 'Gemini', value: 'gemini' },
-          { label: 'GitHub (Recommended)', value: 'copilot' },
+          { label: 'GitHub Copilot', value: 'copilot' },
           { label: 'OpenRouter', value: 'openrouter' },
           { label: 'Back to suggested branch selection', value: 'cancel-prov' },
         ])
@@ -444,7 +448,7 @@ export async function handleTrelloCase(
           const copOptions = models.some((m) => m.value === 'back')
             ? models
             : [...models, { label: 'Back to suggested branch selection', value: 'back' }]
-          const chosen = await select('Choose Copilot model:', copOptions)
+          const chosen = await select('Choose GitHub Copilot model:', copOptions)
           if (chosen === 'back') {
             skipRegenerate = true
             continue

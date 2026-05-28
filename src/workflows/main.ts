@@ -54,7 +54,6 @@ export const main = async (opts?: MainOpts): Promise<void> => {
         initialChoice = await select('Welcome to Geeto! What would you like to do?', [
           { label: 'Start new workflow', value: 'start' },
           { label: 'Trello tasks', value: 'trello' },
-          { label: 'Security & Quality Gate', value: 'security' },
           { label: 'Settings', value: 'settings' },
           { label: 'Exit', value: 'exit' },
         ])
@@ -62,12 +61,6 @@ export const main = async (opts?: MainOpts): Promise<void> => {
         if (initialChoice === 'exit' || initialChoice === 'back') {
           log.info('Goodbye!')
           return
-        }
-
-        if (initialChoice === 'security') {
-          const { showSecurityGateMenu } = await import('./security-gate.js')
-          await showSecurityGateMenu()
-          continue
         }
 
         if (initialChoice === 'settings') {

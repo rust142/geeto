@@ -17,7 +17,6 @@ export const setupOpenRouterConfigInteractive = (): boolean => {
   // If config already exists, nothing to do
   try {
     if (fs.existsSync(configPath)) {
-      log.success('OpenRouter API configuration is ready!')
       return true
     }
   } catch {

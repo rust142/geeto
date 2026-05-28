@@ -312,7 +312,7 @@ const aiRewriteMergedNotes = async (
     let providerChosen = false
     while (!providerChosen) {
       aiProvider = (await select('Choose AI Provider:', [
-        { label: 'GitHub (Recommended)', value: 'copilot' },
+        { label: 'GitHub Copilot', value: 'copilot' },
         { label: 'Gemini', value: 'gemini' },
         { label: 'OpenRouter', value: 'openrouter' },
       ])) as 'gemini' | 'copilot' | 'openrouter'
@@ -423,7 +423,7 @@ const aiRewriteMergedNotes = async (
       }
       case 'change-provider': {
         const prov = (await select('Choose AI provider:', [
-          { label: 'Copilot', value: 'copilot' },
+          { label: 'GitHub Copilot', value: 'copilot' },
           { label: 'Gemini', value: 'gemini' },
           { label: 'OpenRouter', value: 'openrouter' },
         ])) as 'gemini' | 'copilot' | 'openrouter'

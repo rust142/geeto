@@ -17,7 +17,6 @@ export const setupGeminiConfigInteractive = (): boolean => {
   // If config already exists, nothing to do
   try {
     if (fs.existsSync(configPath)) {
-      log.success('Gemini API configuration is ready!')
       return true
     }
   } catch {

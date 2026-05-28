@@ -537,7 +537,7 @@ const syncCopilotModels = async (): Promise<void> => {
 
 const handleModelResetSetting = async (): Promise<boolean | void> => {
   const resetChoice = await select('Saved AI models — choose provider:', [
-    { label: 'Copilot', value: 'copilot' },
+    { label: 'GitHub Copilot', value: 'copilot' },
     { label: 'Gemini', value: 'gemini' },
     { label: 'OpenRouter', value: 'openrouter' },
     { label: 'Back to settings menu', value: 'back' },
@@ -574,7 +574,7 @@ const handleChangeModelSetting = async (): Promise<boolean | void> => {
   const { chooseModelForProvider } = await import('../utils/git-ai.js')
   const provOptions = [
     { label: 'Gemini', value: 'gemini' },
-    { label: 'Copilot', value: 'copilot' },
+    { label: 'GitHub Copilot', value: 'copilot' },
     { label: 'OpenRouter', value: 'openrouter' },
     { label: 'Back to settings menu', value: 'back' },
   ]
@@ -831,23 +831,23 @@ export const showSettingsMenu = async () => {
   while (true) {
     log.info('Settings Menu')
 
-    const settingChoice = await select('Choose a setting to configure:', [
-      { label: '── Branch ──', value: '_branch', disabled: true },
-      { label: 'Branch prefix format (dev#name / dev/name)', value: 'prefix' },
-      { label: 'Branch separator (hyphen/underscore)', value: 'separator' },
-      { label: 'Protected branches', value: 'protected' },
-      { label: '── AI Configuration ──', value: '_ai', disabled: true },
-      { label: 'Saved AI models (manage favorite models per provider)', value: 'models' },
-      { label: 'Active AI model (switch provider & model for generation)', value: 'change-model' },
-      { label: '── Integration Setup ──', value: '_setup', disabled: true },
-      { label: 'GitHub Copilot setup', value: 'copilot' },
-      { label: 'Gemini AI setup', value: 'gemini' },
-      { label: 'OpenRouter AI setup', value: 'openrouter' },
-      { label: 'Trello integration setup', value: 'trello' },
-      { label: '── System ──', value: '_system', disabled: true },
-      { label: 'Installation info', value: 'where' },
-      { label: 'Uninstall geeto', value: 'uninstall' },
-      { label: 'Back to main menu', value: 'back' },
+    const settingChoice = await select('Settings:', [
+      { label: 'Branch', value: '_branch', disabled: true },
+      { label: '  Branch prefix  (dev#name / dev/name)', value: 'prefix' },
+      { label: '  Branch separator  (hyphen / underscore)', value: 'separator' },
+      { label: '  Protected branches', value: 'protected' },
+      { label: 'AI', value: '_ai', disabled: true },
+      { label: '  Active model  (switch provider & model)', value: 'change-model' },
+      { label: '  Saved models  (manage favorites per provider)', value: 'models' },
+      { label: 'Setup', value: '_setup', disabled: true },
+      { label: '  GitHub Copilot', value: 'copilot' },
+      { label: '  Gemini', value: 'gemini' },
+      { label: '  OpenRouter', value: 'openrouter' },
+      { label: '  Trello', value: 'trello' },
+      { label: 'System', value: '_system', disabled: true },
+      { label: '  Installation info', value: 'where' },
+      { label: '  Uninstall geeto', value: 'uninstall' },
+      { label: 'Back', value: 'back' },
     ])
 
     if (settingChoice === 'back') {

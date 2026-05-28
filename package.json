@@ -122,5 +122,15 @@
   "dependencies": {
     "@google/genai": "^1.42.0",
     "@openrouter/sdk": "^0.5.1"
+  },
+  "commitlint": {
+    "extends": [
+      "@commitlint/config-conventional"
+    ],
+    "rules": {
+      "body-max-line-length": [
+        0
+      ]
+    }
   }
 }

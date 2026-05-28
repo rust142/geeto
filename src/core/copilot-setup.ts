@@ -234,6 +234,10 @@ const checkCopilotAPIAccess = async (): Promise<boolean> => {
  * Setup only requires GitHub CLI authenticated — no Copilot CLI binary needed.
  */
 export const setupGitHubCopilotInteractive = async (forceReauth = false): Promise<boolean> => {
+  log.info('GitHub Copilot setup — uses the Copilot REST API via your GitHub account token.')
+  log.info('Note: requires Copilot access on your GitHub account (free tier or paid subscription).')
+  console.log('')
+
   // Ensure GitHub CLI is installed (install automatically if needed)
   const ghInstalled = setupGitHubCLI()
   if (!ghInstalled) {

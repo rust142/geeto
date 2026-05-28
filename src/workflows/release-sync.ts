@@ -154,7 +154,7 @@ export const handleSyncReleases = async (): Promise<void> => {
       let providerChosen = false
       while (!providerChosen) {
         aiProvider = (await select('Choose AI Provider:', [
-          { label: 'GitHub (Recommended)', value: 'copilot' },
+          { label: 'GitHub Copilot', value: 'copilot' },
           { label: 'Gemini', value: 'gemini' },
           { label: 'OpenRouter', value: 'openrouter' },
         ])) as 'gemini' | 'copilot' | 'openrouter'

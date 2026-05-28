@@ -352,7 +352,7 @@ export const handleCreatePR = async (): Promise<void> => {
         case 'change-provider': {
           const prov = await select('Choose AI provider:', [
             { label: 'Gemini', value: 'gemini' },
-            { label: 'Copilot', value: 'copilot' },
+            { label: 'GitHub Copilot', value: 'copilot' },
             { label: 'OpenRouter', value: 'openrouter' },
             { label: 'Back', value: 'back' },
           ])

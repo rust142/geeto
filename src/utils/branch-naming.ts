@@ -54,9 +54,8 @@ export const handleBranchNaming = async (
     const stageChoice = (await select('What to stage?', [
       { label: 'Stage all changes', value: 'all' },
       { label: 'Already staged', value: 'skip' },
-      { label: 'Continue without staging', value: 'without' },
       { label: 'Cancel', value: 'cancel' },
-    ])) as 'all' | 'skip' | 'without' | 'cancel'
+    ])) as 'all' | 'skip' | 'cancel'
 
     switch (stageChoice) {
       case 'all': {
@@ -72,7 +71,6 @@ export const handleBranchNaming = async (
         }
         break
       }
-      case 'without':
       case 'cancel': {
         log.warn('Cancelled.')
         result.cancelled = true
@@ -362,7 +360,7 @@ export const handleBranchNaming = async (
             const copOptions = models.some((m) => m.value === 'back')
               ? models
               : [...models, { label: 'Back to suggested branch selection', value: 'back' }]
-            const chosen = await select('Choose Copilot model:', copOptions)
+            const chosen = await select('Choose GitHub Copilot model:', copOptions)
             if (chosen === 'back') {
               skipRegenerate = true
               continue

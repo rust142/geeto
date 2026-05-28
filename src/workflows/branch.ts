@@ -257,7 +257,7 @@ export const handleBranchCreationWorkflow = async (
               if (!state.aiProvider || state.aiProvider === 'manual') {
                 const prov = await select('Choose AI provider for branch generation:', [
                   { label: 'Gemini', value: 'gemini' },
-                  { label: 'GitHub (Recommended)', value: 'copilot' },
+                  { label: 'GitHub Copilot', value: 'copilot' },
                   { label: 'OpenRouter', value: 'openrouter' },
                   { label: 'Back to suggested branch selection', value: 'cancel-prov' },
                 ])
@@ -367,9 +367,8 @@ export const handleBranchCreationWorkflow = async (
                   const stageChoice = (await select('What to stage?', [
                     { label: 'Stage all changes', value: 'all' },
                     { label: 'Already staged', value: 'skip' },
-                    { label: 'Continue without staging', value: 'without' },
                     { label: 'Cancel', value: 'cancel' },
-                  ])) as 'all' | 'skip' | 'without' | 'cancel'
+                  ])) as 'all' | 'skip' | 'cancel'
 
                   switch (stageChoice) {
                     case 'all': {
@@ -382,7 +381,6 @@ export const handleBranchCreationWorkflow = async (
                       }
                       break
                     }
-                    case 'without':
                     case 'cancel': {
                       log.warn('Cancelled.')
                       process.exit(0)
@@ -491,7 +489,7 @@ export const handleBranchCreationWorkflow = async (
                                 ...models,
                                 { label: 'Back to suggested branch selection', value: 'back' },
                               ]
-                          const chosen = await select('Choose Copilot model:', copOptions)
+                          const chosen = await select('Choose GitHub Copilot model:', copOptions)
                           if (chosen === 'back') {
                             continue
                           }
@@ -532,7 +530,7 @@ export const handleBranchCreationWorkflow = async (
                       case 'change-provider': {
                         const prov = await select('Choose AI provider:', [
                           { label: 'Gemini', value: 'gemini' },
-                          { label: 'GitHub (Recommended)', value: 'copilot' },
+                          { label: 'GitHub Copilot', value: 'copilot' },
                           { label: 'OpenRouter', value: 'openrouter' },
                           { label: 'Back to suggested branch selection', value: 'cancel-prov' },
                         ])

@@ -33,7 +33,7 @@ export function getAIProviderDisplayName(aiProvider: string): string {
       return 'Gemini'
     }
     case 'copilot': {
-      return 'GitHub (Recommended)'
+      return 'GitHub Copilot'
     }
     case 'openrouter': {
       return 'OpenRouter'
@@ -51,7 +51,7 @@ export function getAIProviderShortName(aiProvider: string): string {
       return 'Gemini'
     }
     case 'copilot': {
-      return 'Copilot'
+      return 'GitHub Copilot'
     }
     case 'openrouter': {
       return 'OpenRouter'
@@ -486,7 +486,7 @@ export async function interactiveAIFallback(
         const copOptions = models.some((m) => m.value === 'back')
           ? models
           : [...models, { label: 'Back to try again model selection', value: 'back' }]
-        const chosen = await select('Choose a different Copilot model:', copOptions)
+        const chosen = await select('Choose a different GitHub Copilot model:', copOptions)
         if (chosen === 'back') {
           continue // Go back to try again model selection
         }
@@ -495,7 +495,7 @@ export async function interactiveAIFallback(
         updateModel?.('copilot', chosen as CopilotModel)
         const spinner = new ScrambleProgress()
         spinner.start([
-          `${isCommit ? 'Generating commit message' : 'Generating branch name'} with GitHub (${chosen})`,
+          `${isCommit ? 'Generating commit message' : 'Generating branch name'} with GitHub Copilot (${chosen})`,
         ])
 
         if (isCommit) {
@@ -600,7 +600,7 @@ export async function interactiveAIFallback(
         }
         spinner.stop()
       } else if (pickProv === 'copilot') {
-        log.info(`Selected AI Provider: Copilot`)
+        log.info(`Selected AI Provider: GitHub Copilot`)
         const { ensureAIProvider } = await import('../core/setup.js')
         const copilotReady = await ensureAIProvider('copilot')
         if (!copilotReady) {
@@ -612,7 +612,7 @@ export async function interactiveAIFallback(
         const copOptions = models.some((m) => m.value === 'back')
           ? models
           : [...models, { label: 'Back to try again model selection', value: 'back' }]
-        const chosen = await select('Choose Copilot model:', copOptions)
+        const chosen = await select('Choose GitHub Copilot model:', copOptions)
         if (chosen === 'back') {
           continue // Go back to try again model selection
         }
@@ -623,7 +623,7 @@ export async function interactiveAIFallback(
         updateModel?.('copilot', chosen as CopilotModel)
         const spinner = new ScrambleProgress()
         spinner.start([
-          `${isCommit ? 'Generating commit message' : 'Generating branch name'} with GitHub (${chosen})`,
+          `${isCommit ? 'Generating commit message' : 'Generating branch name'} with GitHub Copilot (${chosen})`,
         ])
 
         if (isCommit) {
@@ -695,7 +695,7 @@ export async function chooseModelForProvider(
   backLabel?: string
 ): Promise<string | 'back' | undefined> {
   if (provider === 'copilot') {
-    log.info(`Selected AI Provider: Copilot`)
+    log.info(`Selected AI Provider: GitHub Copilot`)
 
     const { ensureAIProvider } = await import('../core/setup.js')
     const ready = await ensureAIProvider(provider)
@@ -708,13 +708,13 @@ export async function chooseModelForProvider(
 
     // Check if no models are available (SDK not installed or not functioning)
     if (models.length === 0) {
-      log.warn('Copilot SDK not available.')
+      log.warn('GitHub Copilot API not accessible.')
       console.log('')
-      log.info('The Copilot CLI is required to use Copilot models.')
+      log.info('A GitHub account with Copilot access (free tier or subscription) is required.')
       console.log('')
 
       const { confirm } = await import('../cli/input.js')
-      const shouldInstall = confirm('Setup Copilot CLI now?')
+      const shouldInstall = confirm('Setup GitHub Copilot now?')
 
       if (shouldInstall) {
         console.log('')
@@ -735,7 +735,7 @@ export async function chooseModelForProvider(
               ? modelsAfterInstall
               : [...modelsAfterInstall, { label: backLabel ?? 'Back', value: 'back' }]
             const { select } = await import('../cli/menu.js')
-            const chosen = await select(prompt ?? 'Choose Copilot model:', options)
+            const chosen = await select(prompt ?? 'Choose GitHub Copilot model:', options)
             return chosen as string | 'back'
           } else {
             log.warn('Installation completed but models still not available.')
@@ -756,7 +756,7 @@ export async function chooseModelForProvider(
       ? models
       : [...models, { label: backLabel ?? 'Back', value: 'back' }]
     const { select } = await import('../cli/menu.js')
-    const chosen = await select(prompt ?? 'Choose Copilot model:', options)
+    const chosen = await select(prompt ?? 'Choose GitHub Copilot model:', options)
     return chosen as string | 'back'
   }
 
