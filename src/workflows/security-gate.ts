@@ -281,7 +281,7 @@ function parseSecurityResponse(response: string): SecurityScanResult {
  */
 async function runSecurityScan(
   data: { diff: string; files: string[]; hasDependencies: boolean },
-  aiProvider: 'gemini' | 'copilot' | 'openrouter',
+  aiProvider: 'gemini' | 'copilot' | 'openrouter' | 'groq',
   model?: string
 ): Promise<string | null> {
   const prompt = buildSecurityPrompt(data)
@@ -534,7 +534,7 @@ export async function showSecurityGateMenu(): Promise<void> {
   // Run security scan
   const aiResponse = await runSecurityScan(
     scanData,
-    currentState.aiProvider as 'gemini' | 'copilot' | 'openrouter',
+    currentState.aiProvider as 'gemini' | 'copilot' | 'openrouter' | 'groq',
     currentState.copilotModel ?? currentState.openrouterModel ?? currentState.geminiModel
   )
 

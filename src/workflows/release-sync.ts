@@ -128,10 +128,11 @@ export const handleSyncReleases = async (): Promise<void> => {
   // AI setup if needed
   let useAI = notesMode === 'ai'
   let language: 'en' | 'id' = 'en'
-  let aiProvider: 'gemini' | 'copilot' | 'openrouter' = 'copilot'
+  let aiProvider: 'gemini' | 'copilot' | 'openrouter' | 'groq' = 'copilot'
   let copilotModel: CopilotModel | undefined
   let openrouterModel: OpenRouterModel | undefined
   let geminiModel: GeminiModel | undefined
+  let groqModel: string | undefined
 
   if (useAI) {
     language = (await select('Release notes language:', [
@@ -144,12 +145,16 @@ export const handleSyncReleases = async (): Promise<void> => {
     if (
       savedState?.aiProvider &&
       savedState.aiProvider !== 'manual' &&
-      (savedState.copilotModel || savedState.openrouterModel || savedState.geminiModel)
+      (savedState.copilotModel ||
+        savedState.openrouterModel ||
+        savedState.geminiModel ||
+        savedState.groqModel)
     ) {
-      aiProvider = savedState.aiProvider as 'gemini' | 'copilot' | 'openrouter'
+      aiProvider = savedState.aiProvider as 'gemini' | 'copilot' | 'openrouter' | 'groq'
       copilotModel = savedState.copilotModel
       openrouterModel = savedState.openrouterModel
       geminiModel = savedState.geminiModel
+      groqModel = savedState.groqModel
     } else {
       let providerChosen = false
       while (!providerChosen) {
@@ -157,7 +162,8 @@ export const handleSyncReleases = async (): Promise<void> => {
           { label: 'GitHub Copilot', value: 'copilot' },
           { label: 'Gemini', value: 'gemini' },
           { label: 'OpenRouter', value: 'openrouter' },
-        ])) as 'gemini' | 'copilot' | 'openrouter'
+          { label: 'Groq', value: 'groq' },
+        ])) as 'gemini' | 'copilot' | 'openrouter' | 'groq'
 
         const chosen = await chooseModelForProvider(
           aiProvider,
@@ -221,7 +227,9 @@ export const handleSyncReleases = async (): Promise<void> => {
     if (useAI && commits.length > 0) {
       console.log('')
       const aiSpinner = new ScrambleProgress()
-      const modelDisplay = getModelValue(copilotModel ?? openrouterModel ?? geminiModel ?? '')
+      const modelDisplay = getModelValue(
+        copilotModel ?? openrouterModel ?? groqModel ?? geminiModel ?? ''
+      )
       aiSpinner.start([
         `Generating release notes with ${getAIProviderShortName(aiProvider)}${modelDisplay ? ` (${modelDisplay})` : ''}`,
       ])

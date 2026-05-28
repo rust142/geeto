@@ -246,6 +246,13 @@ const COMMAND_REGISTRY: CommandEntry[] = [
     errorLabel: 'Settings',
   },
   {
+    flag: '--setup-groq',
+    alias: undefined,
+    module: './workflows/settings.js',
+    handler: 'handleGroqSetting',
+    errorLabel: 'Settings',
+  },
+  {
     flag: '--setup-github',
     alias: undefined,
     module: './core/github-setup.js',
@@ -457,6 +464,7 @@ function showHelpMessage(): void {
   console.log(`    ${C}     --setup-copilot${R}      Configure GitHub Copilot`)
   console.log(`    ${C}     --setup-gemini${R}       Configure Gemini AI`)
   console.log(`    ${C}     --setup-openrouter${R}   Configure OpenRouter AI`)
+  console.log(`    ${C}     --setup-groq${R}          Configure Groq AI (free)`)
   console.log(`    ${C}     --setup-github${R}       Configure GitHub token`)
   console.log(`    ${C}     --setup-gitlab${R}       Configure GitLab token`)
   console.log(`    ${C}     --setup-trello${R}       Configure Trello integration`)

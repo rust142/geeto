@@ -45,7 +45,7 @@ export type MainOpts = {
 }
 
 export interface CheckpointResult {
-  aiProvider: 'gemini' | 'copilot' | 'openrouter' | 'manual'
+  aiProvider: 'gemini' | 'copilot' | 'openrouter' | 'groq' | 'manual'
   copilotModel?: CopilotModel
   openrouterModel?: OpenRouterModel
   geminiModel?: GeminiModel

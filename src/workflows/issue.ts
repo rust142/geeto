@@ -24,7 +24,7 @@ import { loadState } from '../utils/state.js'
  */
 const callAIForIssue = async (
   description: string,
-  provider: 'copilot' | 'gemini' | 'openrouter',
+  provider: 'copilot' | 'gemini' | 'openrouter' | 'groq',
   model: string | undefined,
   correction?: string
 ): Promise<{ title: string; body: string } | null> => {
@@ -182,12 +182,13 @@ export const handleCreateIssue = async (): Promise<void> => {
             { label: 'Gemini', value: 'gemini' },
             { label: 'GitHub Copilot', value: 'copilot' },
             { label: 'OpenRouter', value: 'openrouter' },
+            { label: 'Groq', value: 'groq' },
             { label: 'Back', value: 'back' },
           ])
           if (prov !== 'back') {
             const { chooseModelForProvider } = await import('../utils/git-ai.js')
             const chosen = await chooseModelForProvider(
-              prov as 'gemini' | 'copilot' | 'openrouter',
+              prov as 'gemini' | 'copilot' | 'openrouter' | 'groq',
               'Choose model:',
               'Back'
             )

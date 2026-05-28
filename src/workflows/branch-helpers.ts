@@ -170,6 +170,7 @@ export async function handleTrelloCase(
       { label: 'Gemini', value: 'gemini' },
       { label: 'GitHub Copilot', value: 'copilot' },
       { label: 'OpenRouter', value: 'openrouter' },
+      { label: 'Groq', value: 'groq' },
       { label: 'Back to naming strategy', value: 'back' },
     ])
 
@@ -177,7 +178,7 @@ export async function handleTrelloCase(
       return { branchFlowComplete: false, branchMenuShown: false }
     }
 
-    const chosenProvider = providerChoice as 'gemini' | 'copilot' | 'openrouter'
+    const chosenProvider = providerChoice as 'gemini' | 'copilot' | 'openrouter' | 'groq'
 
     // Let user choose model for the selected provider
     const chosenModel = await chooseModelForProvider(
@@ -208,7 +209,7 @@ export async function handleTrelloCase(
   let skipRegenerate = false
 
   while (true) {
-    const aiProvider = state.aiProvider as 'gemini' | 'copilot' | 'openrouter'
+    const aiProvider = state.aiProvider as 'gemini' | 'copilot' | 'openrouter' | 'groq'
     let modelParam: CopilotModel | OpenRouterModel | GeminiModel
     if (aiProvider === 'copilot') {
       modelParam = state.copilotModel as CopilotModel
@@ -298,7 +299,7 @@ export async function handleTrelloCase(
         cardData.title,
         correction,
         state.currentBranch,
-        (provider: 'gemini' | 'copilot' | 'openrouter', selectedModel?: string) => {
+        (provider: 'gemini' | 'copilot' | 'openrouter' | 'groq', selectedModel?: string) => {
           state.aiProvider = provider
           if (provider === 'copilot') {
             state.copilotModel = selectedModel as CopilotModel
@@ -395,6 +396,7 @@ export async function handleTrelloCase(
           { label: 'Gemini', value: 'gemini' },
           { label: 'GitHub Copilot', value: 'copilot' },
           { label: 'OpenRouter', value: 'openrouter' },
+          { label: 'Groq', value: 'groq' },
           { label: 'Back to suggested branch selection', value: 'cancel-prov' },
         ])
         if (prov === 'cancel-prov') {
@@ -402,10 +404,10 @@ export async function handleTrelloCase(
           skipRegenerate = true
           continue
         }
-        state.aiProvider = prov as 'gemini' | 'copilot' | 'openrouter'
+        state.aiProvider = prov as 'gemini' | 'copilot' | 'openrouter' | 'groq'
 
         const chosen = await chooseModelForProvider(
-          state.aiProvider as 'gemini' | 'copilot' | 'openrouter',
+          state.aiProvider as 'gemini' | 'copilot' | 'openrouter' | 'groq',
           'Choose model:',
           'Back to suggested branch selection'
         )

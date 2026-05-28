@@ -11,11 +11,12 @@ import { loadState, saveState } from './state.js'
  * Get the persisted model name for the given AI provider.
  */
 export const getModelForProvider = (
-  provider: 'copilot' | 'gemini' | 'openrouter',
+  provider: 'copilot' | 'gemini' | 'openrouter' | 'groq',
   state: ReturnType<typeof loadState>
 ): string | undefined => {
   if (provider === 'copilot') return state?.copilotModel
   if (provider === 'openrouter') return state?.openrouterModel
+  if (provider === 'groq') return state?.groqModel
   return state?.geminiModel ?? DEFAULT_GEMINI_MODEL
 }
 
@@ -24,7 +25,7 @@ export const getModelForProvider = (
  */
 export const updateModelInState = (
   state: ReturnType<typeof loadState>,
-  provider: 'copilot' | 'gemini' | 'openrouter',
+  provider: 'copilot' | 'gemini' | 'openrouter' | 'groq',
   model: string
 ): void => {
   if (!state) return
@@ -35,6 +36,10 @@ export const updateModelInState = (
     }
     case 'openrouter': {
       state.openrouterModel = model as OpenRouterModel
+      break
+    }
+    case 'groq': {
+      state.groqModel = model
       break
     }
     default: {

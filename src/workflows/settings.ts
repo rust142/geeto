@@ -31,7 +31,7 @@ const removeConfigFile = (name: string): boolean => {
   return false
 }
 
-const runInteractiveSetup = async (name: 'trello' | 'openrouter' | 'gemini') => {
+const runInteractiveSetup = async (name: 'trello' | 'openrouter' | 'gemini' | 'groq') => {
   if (name === 'trello') {
     const { setupTrelloConfigInteractive } = await import('../core/trello-setup.js')
     const trelloSetupSuccess = setupTrelloConfigInteractive()
@@ -50,6 +50,17 @@ const runInteractiveSetup = async (name: 'trello' | 'openrouter' | 'gemini') => 
       log.success('Gemini AI integration configured!')
     } else {
       log.warn('Gemini setup failed or cancelled.')
+    }
+    return
+  }
+
+  if (name === 'groq') {
+    const { setupGroqConfigInteractive } = await import('../core/groq-setup.js')
+    const groqSetupSuccess = setupGroqConfigInteractive()
+    if (groqSetupSuccess) {
+      log.success('Groq integration configured!')
+    } else {
+      log.warn('Groq setup failed or cancelled.')
     }
     return
   }
@@ -443,6 +454,74 @@ const syncGeminiModels = async (): Promise<void> => {
   }
 }
 
+// Sync Groq models (fetch live, pre-select free ones as defaults)
+const syncGroqModels = async (): Promise<void> => {
+  try {
+    let sdkModule: unknown = null
+    try {
+      sdkModule = await import('../api/groq-sdk.js')
+    } catch {
+      log.warn('Groq SDK unavailable. Configure Groq first with --setup-groq.')
+      return
+    }
+
+    const sdk = sdkModule as { getGroqModels?: () => Promise<unknown>; isAvailable?: () => boolean }
+
+    if (!sdk || typeof sdk.getGroqModels !== 'function') {
+      log.warn('Groq SDK unavailable. Configure Groq first with --setup-groq.')
+      return
+    }
+
+    if (typeof sdk.isAvailable === 'function' && !sdk.isAvailable()) {
+      const { setupGroqConfigInteractive } = await import('../core/groq-setup.js')
+      const setupOk = setupGroqConfigInteractive()
+      if (!setupOk) return
+    }
+
+    const spinner = new ScrambleProgress()
+    spinner.start(['Fetching Groq models...'])
+    const models = (await sdk.getGroqModels()) as Array<{ label: string; value: string }> | null
+    spinner.stop()
+
+    if (!Array.isArray(models) || models.length === 0) {
+      log.warn('No Groq models found.')
+      return
+    }
+
+    // Pre-select all free models as defaults
+    const freeModels = new Set([
+      'llama-3.3-70b-versatile',
+      'llama-3.1-8b-instant',
+      'gemma2-9b-it',
+      'mixtral-8x7b-32768',
+    ])
+    const defaults = models.filter((m) => freeModels.has(m.value)).map((m) => m.value)
+
+    const selected = await multiSelect('Pick your favorite Groq models:', models, defaults)
+
+    if (!selected || selected.length === 0) {
+      log.info('No models selected. Sync cancelled.')
+      return
+    }
+
+    const simple = selected.map((val, idx) => {
+      const detail = models.find((m) => m.value === val)
+      return { label: `${idx + 1}. ${detail?.label ?? val}`, value: val }
+    })
+
+    const fsModule = await import('node:fs')
+    const outDir = path.join(process.cwd(), '.geeto')
+    await fsModule.promises.mkdir(outDir, { recursive: true })
+    const outFile = path.join(outDir, 'groq-model.json')
+    await fsModule.promises.writeFile(outFile, JSON.stringify(simple, null, 2))
+
+    log.success(`Saved ${simple.length} Groq model(s) to .geeto/groq-model.json`)
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    log.warn(`Groq model sync failed: ${msg}`)
+  }
+}
+
 // Sync Copilot models (fetch from SDK & persist user favorites)
 const syncCopilotModels = async (): Promise<void> => {
   try {
@@ -540,6 +619,7 @@ const handleModelResetSetting = async (): Promise<boolean | void> => {
     { label: 'GitHub Copilot', value: 'copilot' },
     { label: 'Gemini', value: 'gemini' },
     { label: 'OpenRouter', value: 'openrouter' },
+    { label: 'Groq', value: 'groq' },
     { label: 'Back to settings menu', value: 'back' },
   ])
 
@@ -556,6 +636,9 @@ const handleModelResetSetting = async (): Promise<boolean | void> => {
     }
     if (resetChoice === 'copilot') {
       await syncCopilotModels()
+    }
+    if (resetChoice === 'groq') {
+      await syncGroqModels()
     }
 
     log.success('Model sync completed!')
@@ -576,6 +659,7 @@ const handleChangeModelSetting = async (): Promise<boolean | void> => {
     { label: 'Gemini', value: 'gemini' },
     { label: 'GitHub Copilot', value: 'copilot' },
     { label: 'OpenRouter', value: 'openrouter' },
+    { label: 'Groq', value: 'groq' },
     { label: 'Back to settings menu', value: 'back' },
   ]
 
@@ -586,7 +670,7 @@ const handleChangeModelSetting = async (): Promise<boolean | void> => {
   }
 
   const picked = await chooseModelForProvider(
-    chosenProv as 'gemini' | 'copilot' | 'openrouter',
+    chosenProv as 'gemini' | 'copilot' | 'openrouter' | 'groq',
     undefined,
     'Back to settings menu'
   )
@@ -611,13 +695,13 @@ const handleChangeModelSetting = async (): Promise<boolean | void> => {
     targetBranch: '',
     currentBranch: '',
     timestamp: now,
-    aiProvider: chosenProv as 'gemini' | 'copilot' | 'openrouter' | 'manual',
+    aiProvider: chosenProv as 'gemini' | 'copilot' | 'openrouter' | 'groq' | 'manual',
     copilotModel: undefined,
     openrouterModel: undefined,
     geminiModel: undefined,
   }
 
-  base.aiProvider = chosenProv as 'gemini' | 'copilot' | 'openrouter' | 'manual'
+  base.aiProvider = chosenProv as 'gemini' | 'copilot' | 'openrouter' | 'groq' | 'manual'
 
   switch (chosenProv) {
     case 'copilot': {
@@ -638,6 +722,13 @@ const handleChangeModelSetting = async (): Promise<boolean | void> => {
       base.openrouterModel = undefined
       break
     }
+    case 'groq': {
+      base.groqModel = picked as string
+      base.copilotModel = undefined
+      base.openrouterModel = undefined
+      base.geminiModel = undefined
+      break
+    }
     default: {
       break
     }
@@ -647,7 +738,8 @@ const handleChangeModelSetting = async (): Promise<boolean | void> => {
 
   saveState(base)
   const providerLabel =
-    chosenProv === 'copilot' ? 'Copilot' : chosenProv === 'gemini' ? 'Gemini' : 'OpenRouter'
+    { gemini: 'Gemini', copilot: 'Copilot', openrouter: 'OpenRouter', groq: 'Groq' }[chosenProv] ??
+    chosenProv
   log.success(`Set ${providerLabel} model to: ${picked}`)
   // Done; do not go back to settings menu
   return false
@@ -827,6 +919,44 @@ const handleOpenRouterSetting = async (): Promise<boolean | void> => {
   return false
 }
 
+const handleGroqSetting = async (): Promise<boolean | void> => {
+  const { hasGroqConfig } = await import('../utils/config.js')
+  const hasConfig = hasGroqConfig()
+
+  if (!hasConfig) {
+    await runInteractiveSetup('groq')
+    return false
+  }
+
+  const action = await select(
+    'Groq integration is already configured. What would you like to do?',
+    [
+      { label: 'Reconfigure (replace existing config)', value: 'reconfigure' },
+      { label: 'Remove configuration', value: 'remove' },
+      { label: 'Back to settings menu', value: 'back' },
+    ]
+  )
+
+  if (action === 'reconfigure') {
+    log.info('Reconfiguring Groq integration...')
+    if (removeConfigFile('groq')) {
+      log.info('Cleared existing Groq configuration')
+    }
+    await runInteractiveSetup('groq')
+    log.success('Groq integration reconfigured!')
+  } else if (action === 'remove') {
+    const confirmRemove = confirm('Are you sure you want to remove Groq configuration?')
+    if (!confirmRemove) return false
+    if (removeConfigFile('groq')) {
+      log.success('Groq configuration removed!')
+    } else {
+      log.info('No Groq configuration found to remove')
+    }
+  }
+  if (action === 'back') return true
+  return false
+}
+
 export const showSettingsMenu = async () => {
   while (true) {
     log.info('Settings Menu')
@@ -843,6 +973,7 @@ export const showSettingsMenu = async () => {
       { label: '  GitHub Copilot', value: 'copilot' },
       { label: '  Gemini', value: 'gemini' },
       { label: '  OpenRouter', value: 'openrouter' },
+      { label: '  Groq', value: 'groq' },
       { label: '  Trello', value: 'trello' },
       { label: 'System', value: '_system', disabled: true },
       { label: '  Installation info', value: 'where' },
@@ -909,6 +1040,12 @@ export const showSettingsMenu = async () => {
         continue
       }
     }
+    if (settingChoice === 'groq') {
+      const back = await handleGroqSetting()
+      if (back) {
+        continue
+      }
+    }
     if (settingChoice === 'where') {
       const { handleWhereInstalled } = await import('./doctor.js')
       await handleWhereInstalled()
@@ -939,5 +1076,6 @@ export {
   handleCopilotSetting,
   handleGeminiSetting,
   handleOpenRouterSetting,
+  handleGroqSetting,
   handleTrelloSetting,
 }

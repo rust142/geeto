@@ -241,6 +241,24 @@ export const hasOpenRouterConfig = (): boolean => {
   return !!config.apiKey
 }
 
+export const getGroqConfigPath = (): string => '.geeto/groq.toml'
+
+export const getGroqConfig = (): { apiKey: string } => {
+  try {
+    const path = getGroqConfigPath()
+    if (fs.existsSync(path)) {
+      const content = fs.readFileSync(path, 'utf8')
+      const m = content.match(/api_key\s*=\s*["']([^"']+)["']/)
+      return { apiKey: m?.[1] ?? '' }
+    }
+  } catch {
+    /* ignore */
+  }
+  return { apiKey: '' }
+}
+
+export const hasGroqConfig = (): boolean => !!getGroqConfig().apiKey
+
 /**
  * Read branch strategy config
  */

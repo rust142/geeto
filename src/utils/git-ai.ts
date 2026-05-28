@@ -38,6 +38,9 @@ export function getAIProviderDisplayName(aiProvider: string): string {
     case 'openrouter': {
       return 'OpenRouter'
     }
+    case 'groq': {
+      return 'Groq'
+    }
     default: {
       return 'Manual'
     }
@@ -55,6 +58,9 @@ export function getAIProviderShortName(aiProvider: string): string {
     }
     case 'openrouter': {
       return 'OpenRouter'
+    }
+    case 'groq': {
+      return 'Groq'
     }
     default: {
       return 'Manual'
@@ -94,6 +100,10 @@ export async function generateBranchNameWithProvider(
       const { generateBranchName } = await import('../api/copilot.js')
       return generateBranchName(title, correction, copilotModel)
     }
+    case 'groq': {
+      const { generateBranchName } = await import('../api/groq.js')
+      return generateBranchName(title, correction)
+    }
     default: {
       const { generateBranchName } = await import('../api/openrouter.js')
       return generateBranchName(title, correction, openrouterModel)
@@ -119,6 +129,10 @@ export async function generateReleaseNotesWithProvider(
       const { generateReleaseNotes } = await import('../api/copilot.js')
       return generateReleaseNotes(commits, language, correction, copilotModel)
     }
+    case 'groq': {
+      const { generateReleaseNotes } = await import('../api/groq.js')
+      return generateReleaseNotes(commits, language, correction)
+    }
     default: {
       const { generateReleaseNotes } = await import('../api/openrouter.js')
       return generateReleaseNotes(commits, language, correction, openrouterModel)
@@ -142,6 +156,10 @@ export async function generateTextWithProvider(
     case 'copilot': {
       const { generateText } = await import('../api/copilot.js')
       return generateText(prompt, copilotModel)
+    }
+    case 'groq': {
+      const { generateText } = await import('../api/groq.js')
+      return generateText(prompt)
     }
     default: {
       const { generateText } = await import('../api/openrouter.js')
@@ -168,6 +186,10 @@ export async function generateCommitMessageWithProvider(
       const { generateCommitMessage } = await import('../api/copilot.js')
       return generateCommitMessage(diff, correction, copilotModel)
     }
+    case 'groq': {
+      const { generateCommitMessage } = await import('../api/groq.js')
+      return generateCommitMessage(diff, correction)
+    }
     default: {
       const { generateCommitMessage } = await import('../api/openrouter.js')
       return generateCommitMessage(diff, correction, openrouterModel)
@@ -180,13 +202,13 @@ export async function generateCommitMessageWithProvider(
  */
 export async function interactiveAIFallback(
   currentSuffix: string | null,
-  aiProvider: 'gemini' | 'copilot' | 'openrouter',
+  aiProvider: 'gemini' | 'copilot' | 'openrouter' | 'groq',
   model: CopilotModel | OpenRouterModel | GeminiModel | string,
   diff: string,
   correction: string,
   _currentBranch: string,
   updateModel: (
-    provider: 'gemini' | 'copilot' | 'openrouter',
+    provider: 'gemini' | 'copilot' | 'openrouter' | 'groq',
     model?: CopilotModel | OpenRouterModel | GeminiModel | string
   ) => void,
   isCommit: boolean = false
@@ -428,6 +450,29 @@ export async function interactiveAIFallback(
           spinner.stop()
           break
         }
+        case 'groq': {
+          const groqApi = await import('../api/groq.js')
+          const { generateBranchName, generateCommitMessage } = groqApi
+          const spinner = new ScrambleProgress()
+          spinner.start([
+            `Retrying with Groq${getModelValue(currentModel) ? ` (${getModelValue(currentModel)})` : ''}`,
+          ])
+          if (isCommit) {
+            aiSuffix = await generateCommitMessage(
+              diff || 'Code changes',
+              correction,
+              currentModel as string
+            )
+          } else {
+            aiSuffix = await generateBranchName(
+              diff || 'Code changes',
+              correction,
+              currentModel as string
+            )
+          }
+          spinner.stop()
+          break
+        }
         default: {
           break
         }
@@ -548,10 +593,39 @@ export async function interactiveAIFallback(
         }
         continue
       }
+
+      if (aiProvider === 'groq') {
+        const groqApi = await import('../api/groq.js')
+        const { generateBranchName, generateCommitMessage, getGroqModels } = groqApi
+        const models = await getGroqModels()
+        const groqOptions = models.some((m) => m.value === 'back')
+          ? models
+          : [...models, { label: 'Back to try again model selection', value: 'back' }]
+        const chosen = await select('Choose a different Groq model:', groqOptions)
+        if (chosen === 'back') {
+          continue
+        }
+        currentModel = chosen
+        updateModel?.('groq', chosen)
+        const spinner = new ScrambleProgress()
+        spinner.start([
+          `${isCommit ? 'Generating commit message' : 'Generating branch name'} with Groq (${chosen})`,
+        ])
+        if (isCommit) {
+          aiSuffix = await generateCommitMessage(diff, correction, chosen)
+        } else {
+          aiSuffix = await generateBranchName(diff || 'Code changes', correction, chosen)
+        }
+        spinner.stop()
+        if (isTransientFailure(aiSuffix)) {
+          failedModels.add(chosen)
+        }
+        continue
+      }
     }
 
     if (pick === 'different-provider') {
-      const providers = ['gemini', 'copilot', 'openrouter'].filter((p) => p !== aiProvider)
+      const providers = ['gemini', 'copilot', 'openrouter', 'groq'].filter((p) => p !== aiProvider)
       const providerOptions = providers.map((p) => ({
         label: getAIProviderDisplayName(p),
         value: p,
@@ -564,110 +638,154 @@ export async function interactiveAIFallback(
         continue // return to try-again model selection
       }
 
-      if (pickProv === 'gemini') {
-        // user selected Gemini provider — allow model choice and apply immediately
-        log.info(`Selected AI Provider: Gemini`)
-        const { ensureAIProvider } = await import('../core/setup.js')
-        const geminiReady = await ensureAIProvider('gemini')
-        if (!geminiReady) {
-          continue
-        }
-        const gem = await import('../api/gemini.js')
-        const models = await gem.getGeminiModels()
-        const gemOptions = models.some((m) => m.value === 'back')
-          ? models
-          : [...models, { label: 'Back to try again model selection', value: 'back' }]
-        const chosenModel = await select('Choose Gemini model:', gemOptions)
-        if (chosenModel === 'back') {
-          continue // Go back to try again model selection
-        }
-        // set active provider + model for subsequent retries
-        aiProvider = 'gemini'
-        currentModel = chosenModel as GeminiModel
-        updateModel?.('gemini', chosenModel as GeminiModel)
-        const spinner = new ScrambleProgress()
-        spinner.start([
-          `${isCommit ? 'Generating commit message' : 'Generating branch name'} with Gemini (${chosenModel})`,
-        ])
+      switch (pickProv) {
+        case 'gemini': {
+          // user selected Gemini provider — allow model choice and apply immediately
+          log.info(`Selected AI Provider: Gemini`)
+          const { ensureAIProvider } = await import('../core/setup.js')
+          const geminiReady = await ensureAIProvider('gemini')
+          if (!geminiReady) {
+            continue
+          }
+          const gem = await import('../api/gemini.js')
+          const models = await gem.getGeminiModels()
+          const gemOptions = models.some((m) => m.value === 'back')
+            ? models
+            : [...models, { label: 'Back to try again model selection', value: 'back' }]
+          const chosenModel = await select('Choose Gemini model:', gemOptions)
+          if (chosenModel === 'back') {
+            continue // Go back to try again model selection
+          }
+          // set active provider + model for subsequent retries
+          aiProvider = 'gemini'
+          currentModel = chosenModel as GeminiModel
+          updateModel?.('gemini', chosenModel as GeminiModel)
+          const spinner = new ScrambleProgress()
+          spinner.start([
+            `${isCommit ? 'Generating commit message' : 'Generating branch name'} with Gemini (${chosenModel})`,
+          ])
 
-        if (isCommit) {
-          // Use built-in Gemini API for commit generation
-          const res = await gem.generateCommitMessage(diff, correction, chosenModel as GeminiModel)
-          aiSuffix = res
-        } else {
-          const res = await gem.generateBranchName(diff, correction, chosenModel as GeminiModel)
-          aiSuffix = res
-        }
-        spinner.stop()
-      } else if (pickProv === 'copilot') {
-        log.info(`Selected AI Provider: GitHub Copilot`)
-        const { ensureAIProvider } = await import('../core/setup.js')
-        const copilotReady = await ensureAIProvider('copilot')
-        if (!copilotReady) {
-          continue
-        }
-        const cop = await import('../api/copilot.js')
-        const { getCopilotModels, generateBranchName, generateCommitMessage } = cop
-        const models = await getCopilotModels()
-        const copOptions = models.some((m) => m.value === 'back')
-          ? models
-          : [...models, { label: 'Back to try again model selection', value: 'back' }]
-        const chosen = await select('Choose GitHub Copilot model:', copOptions)
-        if (chosen === 'back') {
-          continue // Go back to try again model selection
-        }
+          if (isCommit) {
+            // Use built-in Gemini API for commit generation
+            const res = await gem.generateCommitMessage(
+              diff,
+              correction,
+              chosenModel as GeminiModel
+            )
+            aiSuffix = res
+          } else {
+            const res = await gem.generateBranchName(diff, correction, chosenModel as GeminiModel)
+            aiSuffix = res
+          }
+          spinner.stop()
 
-        // user already selected a model from the menu — apply it immediately
-        aiProvider = 'copilot'
-        currentModel = chosen as CopilotModel
-        updateModel?.('copilot', chosen as CopilotModel)
-        const spinner = new ScrambleProgress()
-        spinner.start([
-          `${isCommit ? 'Generating commit message' : 'Generating branch name'} with GitHub Copilot (${chosen})`,
-        ])
+          break
+        }
+        case 'copilot': {
+          log.info(`Selected AI Provider: GitHub Copilot`)
+          const { ensureAIProvider } = await import('../core/setup.js')
+          const copilotReady = await ensureAIProvider('copilot')
+          if (!copilotReady) {
+            continue
+          }
+          const cop = await import('../api/copilot.js')
+          const { getCopilotModels, generateBranchName, generateCommitMessage } = cop
+          const models = await getCopilotModels()
+          const copOptions = models.some((m) => m.value === 'back')
+            ? models
+            : [...models, { label: 'Back to try again model selection', value: 'back' }]
+          const chosen = await select('Choose GitHub Copilot model:', copOptions)
+          if (chosen === 'back') {
+            continue // Go back to try again model selection
+          }
 
-        if (isCommit) {
-          const res = await generateCommitMessage(diff, correction, chosen as CopilotModel)
-          aiSuffix = res
-        } else {
-          const res = await generateBranchName(diff, correction, chosen as CopilotModel)
-          aiSuffix = res
-        }
-        spinner.stop()
-      } else {
-        log.info(`Selected AI Provider: OpenRouter`)
-        const { ensureAIProvider } = await import('../core/setup.js')
-        const openrouterReady = await ensureAIProvider('openrouter')
-        if (!openrouterReady) {
-          continue
-        }
-        const or = await import('../api/openrouter.js')
-        const { generateBranchName, generateCommitMessage, getOpenRouterModels } = or
-        const models = await getOpenRouterModels()
-        const orOptions = models.some((m) => m.value === 'back')
-          ? models
-          : [...models, { label: 'Back to try again model selection', value: 'back' }]
-        const chosen = await select('Choose OpenRouter Model:', orOptions)
-        if (chosen === 'back') {
-          continue // Go back to try again model selection
-        }
-        // user already selected a model from the menu — apply it immediately
-        aiProvider = 'openrouter'
-        currentModel = chosen as OpenRouterModel
-        updateModel?.('openrouter', chosen as OpenRouterModel)
-        const spinner = new ScrambleProgress()
-        spinner.start([
-          `${isCommit ? 'Generating commit message' : 'Generating branch name'} with OpenRouter (${chosen})`,
-        ])
+          // user already selected a model from the menu — apply it immediately
+          aiProvider = 'copilot'
+          currentModel = chosen as CopilotModel
+          updateModel?.('copilot', chosen as CopilotModel)
+          const spinner = new ScrambleProgress()
+          spinner.start([
+            `${isCommit ? 'Generating commit message' : 'Generating branch name'} with GitHub Copilot (${chosen})`,
+          ])
 
-        if (isCommit) {
-          const res = await generateCommitMessage(diff, correction, chosen as OpenRouterModel)
-          aiSuffix = res
-        } else {
-          const res = await generateBranchName(diff, correction, chosen as OpenRouterModel)
-          aiSuffix = res
+          if (isCommit) {
+            const res = await generateCommitMessage(diff, correction, chosen as CopilotModel)
+            aiSuffix = res
+          } else {
+            const res = await generateBranchName(diff, correction, chosen as CopilotModel)
+            aiSuffix = res
+          }
+          spinner.stop()
+
+          break
         }
-        spinner.stop()
+        case 'openrouter': {
+          log.info(`Selected AI Provider: OpenRouter`)
+          const { ensureAIProvider } = await import('../core/setup.js')
+          const openrouterReady = await ensureAIProvider('openrouter')
+          if (!openrouterReady) {
+            continue
+          }
+          const or = await import('../api/openrouter.js')
+          const { generateBranchName, generateCommitMessage, getOpenRouterModels } = or
+          const models = await getOpenRouterModels()
+          const orOptions = models.some((m) => m.value === 'back')
+            ? models
+            : [...models, { label: 'Back to try again model selection', value: 'back' }]
+          const chosen = await select('Choose OpenRouter Model:', orOptions)
+          if (chosen === 'back') {
+            continue
+          }
+          aiProvider = 'openrouter'
+          currentModel = chosen as OpenRouterModel
+          updateModel?.('openrouter', chosen as OpenRouterModel)
+          const spinner = new ScrambleProgress()
+          spinner.start([
+            `${isCommit ? 'Generating commit message' : 'Generating branch name'} with OpenRouter (${chosen})`,
+          ])
+          if (isCommit) {
+            aiSuffix = await generateCommitMessage(diff, correction, chosen as OpenRouterModel)
+          } else {
+            aiSuffix = await generateBranchName(diff, correction, chosen as OpenRouterModel)
+          }
+          spinner.stop()
+
+          break
+        }
+        case 'groq': {
+          log.info(`Selected AI Provider: Groq`)
+          const { ensureAIProvider } = await import('../core/setup.js')
+          const groqReady = await ensureAIProvider('groq')
+          if (!groqReady) {
+            continue
+          }
+          const groqApi = await import('../api/groq.js')
+          const { generateBranchName, generateCommitMessage, getGroqModels } = groqApi
+          const models = await getGroqModels()
+          const groqOptions = models.some((m) => m.value === 'back')
+            ? models
+            : [...models, { label: 'Back to try again model selection', value: 'back' }]
+          const chosen = await select('Choose Groq model:', groqOptions)
+          if (chosen === 'back') {
+            continue
+          }
+          aiProvider = 'groq'
+          currentModel = chosen
+          updateModel?.('groq', chosen)
+          const spinner = new ScrambleProgress()
+          spinner.start([
+            `${isCommit ? 'Generating commit message' : 'Generating branch name'} with Groq (${chosen})`,
+          ])
+          if (isCommit) {
+            aiSuffix = await generateCommitMessage(diff, correction, chosen)
+          } else {
+            aiSuffix = await generateBranchName(diff, correction, chosen)
+          }
+          spinner.stop()
+
+          break
+        }
+        // No default
       }
 
       continue
@@ -676,7 +794,7 @@ export async function interactiveAIFallback(
 }
 
 export async function getBranchNameFromDiffUsingProvider(
-  provider: 'gemini' | 'copilot' | 'openrouter',
+  provider: 'gemini' | 'copilot' | 'openrouter' | 'groq',
   diff: string,
   correction?: string,
   copilotModel?: CopilotModel,
@@ -690,7 +808,7 @@ export async function getBranchNameFromDiffUsingProvider(
  * Returns the chosen model value string or 'back' if the user went back, or undefined if setup failed.
  */
 export async function chooseModelForProvider(
-  provider: 'gemini' | 'copilot' | 'openrouter',
+  provider: 'gemini' | 'copilot' | 'openrouter' | 'groq',
   prompt?: string,
   backLabel?: string
 ): Promise<string | 'back' | undefined> {
@@ -783,6 +901,29 @@ export async function chooseModelForProvider(
       : [...models, { label: backLabel ?? 'Back', value: 'back' }]
     const { select } = await import('../cli/menu.js')
     const chosen = await select(prompt ?? 'Choose OpenRouter model:', options)
+    return chosen as string | 'back'
+  }
+
+  if (provider === 'groq') {
+    log.info(`Selected AI Provider: Groq`)
+
+    const { ensureAIProvider } = await import('../core/setup.js')
+    const ready = await ensureAIProvider('groq')
+    if (!ready) return undefined
+
+    const groqApi = await import('../api/groq.js')
+    const models = await groqApi.getGroqModels()
+
+    if (models.length === 0) {
+      log.warn('No Groq models available.')
+      return undefined
+    }
+
+    const options = models.some((m) => m.value === 'back')
+      ? models
+      : [...models, { label: backLabel ?? 'Back', value: 'back' }]
+    const { select } = await import('../cli/menu.js')
+    const chosen = await select(prompt ?? 'Choose Groq model:', options)
     return chosen as string | 'back'
   }
 
