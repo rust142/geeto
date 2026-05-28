@@ -8,8 +8,6 @@
  * Auth: uses `gh auth token` (GitHub CLI) or GITHUB_TOKEN env var.
  */
 
-import OpenAI from 'openai'
-
 import {
   buildPromptWithCorrection,
   buildReleaseNotesPrompt,
@@ -22,6 +20,7 @@ import { log } from '../utils/logging.js'
 
 // ── API Configuration ───────────────────────────────────────────────────
 const COPILOT_API_BASE = 'https://api.individual.githubcopilot.com'
+const CHAT_ENDPOINT = `${COPILOT_API_BASE}/chat/completions`
 const MODELS_ENDPOINT = `${COPILOT_API_BASE}/models`
 
 // Required by the Copilot API — requests without these headers get 403
@@ -70,43 +69,79 @@ interface ChatMessage {
   content: string
 }
 
-const getClient = (): OpenAI | null => {
-  const token = getToken()
-  if (!token) return null
-  return new OpenAI({
-    baseURL: COPILOT_API_BASE,
-    apiKey: token,
-    defaultHeaders: COPILOT_HEADERS,
-    maxRetries: 2,
-  })
+interface ChatResponse {
+  choices?: Array<{ message?: { content?: string } }>
+  error?: { message?: string; code?: string }
 }
 
 const chatCompletion = async (messages: ChatMessage[], model?: string): Promise<string | null> => {
-  const client = getClient()
-  if (!client) {
+  const token = getToken()
+  if (!token) {
     log.warn('No GitHub token available. Run `gh auth login` to authenticate.')
     return null
   }
 
-  try {
-    const res = await client.chat.completions.create({
-      model: model ?? 'GPT-4.1',
-      messages,
-    })
-    return res.choices[0]?.message?.content ?? null
-  } catch (error: unknown) {
-    const status = (error as any)?.status
-    if (status === 401 || status === 403) {
-      cachedToken = null
+  const maxRetries = 1
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => {
+        controller.abort()
+      }, 30_000)
+
+      const res = await fetch(CHAT_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          ...COPILOT_HEADERS,
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({ model: model ?? 'gpt-5-mini', messages }),
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId)
+
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => '')
+        if (res.status === 429 && attempt < maxRetries) {
+          await new Promise((resolve) => setTimeout(resolve, 1000))
+          continue
+        }
+        if (res.status === 429) {
+          log.clearLine()
+          log.warn('GitHub Copilot quota exceeded or rate limited. Switch model or try later.')
+          return null
+        }
+        if (res.status === 401 || res.status === 403) {
+          cachedToken = null
+          log.clearLine()
+          log.warn('GitHub token expired or unauthorized. Run `gh auth login`.')
+          return null
+        }
+        log.clearLine()
+        log.warn(`Copilot API error (${res.status}): ${errorText.slice(0, 200)}`)
+        return null
+      }
+
+      const data = (await res.json()) as ChatResponse
+      return data.choices?.[0]?.message?.content ?? null
+    } catch (error) {
+      if (attempt < maxRetries && !(error instanceof DOMException)) {
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+        continue
+      }
+      if (error instanceof DOMException) {
+        log.clearLine()
+        log.warn('Copilot request timed out (30s). Try again or switch to a faster model.')
+        return null
+      }
       log.clearLine()
-      log.warn('GitHub token expired or unauthorized. Run `gh auth login` to re-authenticate.')
-    } else {
-      log.clearLine()
-      log.error('Copilot API request failed: ' + String(error))
+      log.error('Copilot request failed: ' + String(error))
       return null
     }
   }
-
   return null
 }
 

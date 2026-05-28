@@ -722,6 +722,13 @@ const handleChangeModelSetting = async (): Promise<boolean | void> => {
       base.openrouterModel = undefined
       break
     }
+    case 'groq': {
+      base.groqModel = picked as string
+      base.copilotModel = undefined
+      base.openrouterModel = undefined
+      base.geminiModel = undefined
+      break
+    }
     default: {
       break
     }
@@ -731,7 +738,8 @@ const handleChangeModelSetting = async (): Promise<boolean | void> => {
 
   saveState(base)
   const providerLabel =
-    chosenProv === 'copilot' ? 'Copilot' : chosenProv === 'gemini' ? 'Gemini' : 'OpenRouter'
+    { gemini: 'Gemini', copilot: 'Copilot', openrouter: 'OpenRouter', groq: 'Groq' }[chosenProv] ??
+    chosenProv
   log.success(`Set ${providerLabel} model to: ${picked}`)
   // Done; do not go back to settings menu
   return false

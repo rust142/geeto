@@ -43,6 +43,9 @@ export const getDefaultCommitTool = (
     case 'openrouter': {
       return 'openrouter'
     }
+    case 'groq': {
+      return 'groq'
+    }
     default: {
       return 'manual'
     }
@@ -335,6 +338,7 @@ export const handleCommitWorkflow = async (
     | 'gemini'
     | 'copilot'
     | 'openrouter'
+    | 'groq'
     | 'manual'
   let selectedTool = getDefaultCommitTool(aiProvider)
 
@@ -356,6 +360,8 @@ export const handleCommitWorkflow = async (
     modelName = state.copilotModel
   } else if (aiProvider === 'openrouter' && state.openrouterModel) {
     modelName = state.openrouterModel
+  } else if (aiProvider === 'groq') {
+    modelName = state.groqModel ?? ''
   } else if (aiProvider === 'gemini') {
     // prefer persisted state selection, otherwise fall back to default
     modelName = state.geminiModel ?? DEFAULT_GEMINI_MODEL
@@ -409,6 +415,9 @@ export const handleCommitWorkflow = async (
         case 'gemini': {
           return !!state.geminiModel
         }
+        case 'groq': {
+          return !!state.groqModel
+        }
         default: {
           return false
         }
@@ -459,6 +468,10 @@ export const handleCommitWorkflow = async (
             state.geminiModel = chosenModel as unknown as GeminiModel
             break
           }
+          case 'groq': {
+            state.groqModel = chosenModel
+            break
+          }
           default: {
             break
           }
@@ -490,12 +503,25 @@ export const handleCommitWorkflow = async (
         currentProvider = aiProvider as 'gemini' | 'copilot' | 'openrouter' | 'groq'
       }
 
-      if (currentProvider === 'copilot') {
-        currentModel = state.copilotModel
-      } else if (currentProvider === 'openrouter') {
-        currentModel = state.openrouterModel
-      } else {
-        currentModel = state.geminiModel ?? DEFAULT_GEMINI_MODEL
+      switch (currentProvider) {
+        case 'copilot': {
+          currentModel = state.copilotModel
+
+          break
+        }
+        case 'openrouter': {
+          currentModel = state.openrouterModel
+
+          break
+        }
+        case 'groq': {
+          currentModel = state.groqModel ?? ''
+
+          break
+        }
+        default: {
+          currentModel = state.geminiModel ?? DEFAULT_GEMINI_MODEL
+        }
       }
 
       spinner.start([

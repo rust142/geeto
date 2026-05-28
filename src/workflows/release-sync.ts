@@ -132,6 +132,7 @@ export const handleSyncReleases = async (): Promise<void> => {
   let copilotModel: CopilotModel | undefined
   let openrouterModel: OpenRouterModel | undefined
   let geminiModel: GeminiModel | undefined
+  let groqModel: string | undefined
 
   if (useAI) {
     language = (await select('Release notes language:', [
@@ -144,12 +145,16 @@ export const handleSyncReleases = async (): Promise<void> => {
     if (
       savedState?.aiProvider &&
       savedState.aiProvider !== 'manual' &&
-      (savedState.copilotModel || savedState.openrouterModel || savedState.geminiModel)
+      (savedState.copilotModel ||
+        savedState.openrouterModel ||
+        savedState.geminiModel ||
+        savedState.groqModel)
     ) {
       aiProvider = savedState.aiProvider as 'gemini' | 'copilot' | 'openrouter' | 'groq'
       copilotModel = savedState.copilotModel
       openrouterModel = savedState.openrouterModel
       geminiModel = savedState.geminiModel
+      groqModel = savedState.groqModel
     } else {
       let providerChosen = false
       while (!providerChosen) {
@@ -222,7 +227,9 @@ export const handleSyncReleases = async (): Promise<void> => {
     if (useAI && commits.length > 0) {
       console.log('')
       const aiSpinner = new ScrambleProgress()
-      const modelDisplay = getModelValue(copilotModel ?? openrouterModel ?? geminiModel ?? '')
+      const modelDisplay = getModelValue(
+        copilotModel ?? openrouterModel ?? groqModel ?? geminiModel ?? ''
+      )
       aiSpinner.start([
         `Generating release notes with ${getAIProviderShortName(aiProvider)}${modelDisplay ? ` (${modelDisplay})` : ''}`,
       ])

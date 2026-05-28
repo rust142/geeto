@@ -294,17 +294,22 @@ export const handleRelease = async (): Promise<void> => {
     let copilotModel: CopilotModel | undefined
     let openrouterModel: OpenRouterModel | undefined
     let geminiModel: GeminiModel | undefined
+    let groqModel: string | undefined
 
     // Use saved provider/model if available, otherwise ask user
     if (
       savedState?.aiProvider &&
       savedState.aiProvider !== 'manual' &&
-      (savedState.copilotModel || savedState.openrouterModel || savedState.geminiModel)
+      (savedState.copilotModel ||
+        savedState.openrouterModel ||
+        savedState.geminiModel ||
+        savedState.groqModel)
     ) {
       aiProvider = savedState.aiProvider as 'gemini' | 'copilot' | 'openrouter' | 'groq'
       copilotModel = savedState.copilotModel
       openrouterModel = savedState.openrouterModel
       geminiModel = savedState.geminiModel
+      groqModel = savedState.groqModel
     } else {
       // No saved config — ask user to pick provider + model
       let providerChosen = false
@@ -347,7 +352,9 @@ export const handleRelease = async (): Promise<void> => {
 
     while (!accepted) {
       const spinner = new ScrambleProgress()
-      const modelDisplay = getModelValue(copilotModel ?? openrouterModel ?? geminiModel ?? '')
+      const modelDisplay = getModelValue(
+        copilotModel ?? openrouterModel ?? groqModel ?? geminiModel ?? ''
+      )
       spinner.start([
         `Generating release notes with ${getAIProviderShortName(aiProvider)}${modelDisplay ? ` (${modelDisplay})` : ''}`,
       ])

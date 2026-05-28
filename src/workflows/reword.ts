@@ -323,6 +323,7 @@ const resolveAIProvider = (
     (state.aiProvider === 'manual' ? undefined : state.aiProvider) ?? 'gemini'
 
   if (provider === 'copilot') return { provider, model: state.copilotModel as unknown as string }
+  if (provider === 'groq') return { provider, model: state.groqModel ?? undefined }
   if (provider === 'openrouter')
     return { provider, model: state.openrouterModel as unknown as string }
   return { provider, model: (state.geminiModel as unknown as string) ?? DEFAULT_GEMINI_MODEL }
@@ -363,6 +364,8 @@ const regenerateDirect = async (
       modelName = state.copilotModel as string
     } else if (state.aiProvider === 'openrouter' && state.openrouterModel) {
       modelName = state.openrouterModel as string
+    } else if (state.aiProvider === 'groq') {
+      modelName = state.groqModel ?? ''
     } else if (state.aiProvider === 'gemini') {
       modelName = (state.geminiModel as string) ?? DEFAULT_GEMINI_MODEL
     }
@@ -396,6 +399,11 @@ const regenerateDirect = async (
         case 'gemini': {
           const { generateCommitMessage } = await import('../api/gemini.js')
           aiResult = await generateCommitMessage(diff, correction, state.geminiModel as GeminiModel)
+          break
+        }
+        case 'groq': {
+          const { generateCommitMessage } = await import('../api/groq.js')
+          aiResult = await generateCommitMessage(diff, correction, state.groqModel)
           break
         }
         default: {
@@ -699,13 +707,27 @@ const generateNewMessages = async (
           | 'gemini'
           | 'copilot'
           | 'openrouter'
+          | 'groq'
         let modelChoice: CopilotModel | OpenRouterModel | GeminiModel | string
-        if (provForFallback === 'copilot') {
-          modelChoice = state.copilotModel as CopilotModel
-        } else if (provForFallback === 'openrouter') {
-          modelChoice = state.openrouterModel as OpenRouterModel
-        } else {
-          modelChoice = (state.geminiModel as GeminiModel) ?? DEFAULT_GEMINI_MODEL
+        switch (provForFallback) {
+          case 'copilot': {
+            modelChoice = state.copilotModel as CopilotModel
+
+            break
+          }
+          case 'openrouter': {
+            modelChoice = state.openrouterModel as OpenRouterModel
+
+            break
+          }
+          case 'groq': {
+            modelChoice = state.groqModel ?? ''
+
+            break
+          }
+          default: {
+            modelChoice = (state.geminiModel as GeminiModel) ?? DEFAULT_GEMINI_MODEL
+          }
         }
 
         aiResult = await interactiveAIFallback(
