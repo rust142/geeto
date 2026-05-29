@@ -12,6 +12,7 @@ import {
 import { askQuestion } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { STEP } from '../core/constants.js'
+import { getConfiguredAIProvider } from '../utils/ai-workflow.js'
 import { colors } from '../utils/colors.js'
 import {
   DEFAULT_GEMINI_MODEL,
@@ -164,7 +165,7 @@ export async function handleTrelloCase(
   const shouldTranslateToEnglish = namingChoice === 'title-ai-en'
 
   // First, ensure AI provider is configured
-  if (!state.aiProvider) {
+  if (!getConfiguredAIProvider(state)) {
     log.warn('No AI provider configured yet.')
     const providerChoice = await select('Choose AI provider:', [
       { label: 'Gemini', value: 'gemini' },
@@ -193,12 +194,23 @@ export async function handleTrelloCase(
 
     // Save selected provider and model to state
     state.aiProvider = chosenProvider
-    if (chosenProvider === 'copilot') {
-      state.copilotModel = chosenModel as CopilotModel
-    } else if (chosenProvider === 'openrouter') {
-      state.openrouterModel = chosenModel as OpenRouterModel
-    } else {
-      state.geminiModel = chosenModel as GeminiModel
+    switch (chosenProvider) {
+      case 'copilot': {
+        state.copilotModel = chosenModel as CopilotModel
+        break
+      }
+      case 'openrouter': {
+        state.openrouterModel = chosenModel as OpenRouterModel
+        break
+      }
+      case 'groq': {
+        state.groqModel = chosenModel
+        break
+      }
+      default: {
+        state.geminiModel = chosenModel as GeminiModel
+        break
+      }
     }
     saveState(state)
     log.success(`AI provider set to ${getAIProviderShortName(chosenProvider)}`)
@@ -209,23 +221,49 @@ export async function handleTrelloCase(
   let skipRegenerate = false
 
   while (true) {
-    const aiProvider = state.aiProvider as 'gemini' | 'copilot' | 'openrouter' | 'groq'
-    let modelParam: CopilotModel | OpenRouterModel | GeminiModel
-    if (aiProvider === 'copilot') {
-      modelParam = state.copilotModel as CopilotModel
-    } else if (aiProvider === 'openrouter') {
-      modelParam = state.openrouterModel as OpenRouterModel
-    } else {
-      modelParam = (state.geminiModel ?? DEFAULT_GEMINI_MODEL) as GeminiModel
+    const aiProvider = getConfiguredAIProvider(state)
+    if (!aiProvider) {
+      log.warn('No AI provider configured. Please choose a provider first.')
+      return { branchFlowComplete: false, branchMenuShown: false }
+    }
+    let modelParam: CopilotModel | OpenRouterModel | GeminiModel | string
+    switch (aiProvider) {
+      case 'copilot': {
+        modelParam = state.copilotModel as CopilotModel
+        break
+      }
+      case 'openrouter': {
+        modelParam = state.openrouterModel as OpenRouterModel
+        break
+      }
+      case 'groq': {
+        modelParam = state.groqModel ?? ''
+        break
+      }
+      default: {
+        modelParam = (state.geminiModel ?? DEFAULT_GEMINI_MODEL) as GeminiModel
+        break
+      }
     }
 
     let model: string | undefined
-    if (aiProvider === 'copilot') {
-      model = state.copilotModel as unknown as string
-    } else if (aiProvider === 'openrouter') {
-      model = state.openrouterModel as unknown as string
-    } else {
-      model = (state.geminiModel as unknown as string) ?? DEFAULT_GEMINI_MODEL
+    switch (aiProvider) {
+      case 'copilot': {
+        model = state.copilotModel as unknown as string
+        break
+      }
+      case 'openrouter': {
+        model = state.openrouterModel as unknown as string
+        break
+      }
+      case 'groq': {
+        model = state.groqModel ?? undefined
+        break
+      }
+      default: {
+        model = (state.geminiModel as unknown as string) ?? DEFAULT_GEMINI_MODEL
+        break
+      }
     }
     const modelDisplay = getModelDisplayName(aiProvider, model)
     const spinner = log.spinner()
@@ -246,7 +284,8 @@ export async function handleTrelloCase(
         '',
         state.copilotModel,
         state.openrouterModel,
-        state.geminiModel
+        state.geminiModel,
+        state.groqModel
       )
 
       // Stop spinner first to ensure error messages appear on new line
@@ -286,7 +325,8 @@ export async function handleTrelloCase(
         correction,
         state.copilotModel,
         state.openrouterModel,
-        state.geminiModel
+        state.geminiModel,
+        state.groqModel
       )
       spinner.stop()
     }
@@ -301,10 +341,25 @@ export async function handleTrelloCase(
         state.currentBranch,
         (provider: 'gemini' | 'copilot' | 'openrouter' | 'groq', selectedModel?: string) => {
           state.aiProvider = provider
-          if (provider === 'copilot') {
-            state.copilotModel = selectedModel as CopilotModel
-          } else if (provider === 'openrouter') {
-            state.openrouterModel = selectedModel as OpenRouterModel
+          switch (provider) {
+            case 'copilot': {
+              state.copilotModel = selectedModel as CopilotModel
+
+              break
+            }
+            case 'openrouter': {
+              state.openrouterModel = selectedModel as OpenRouterModel
+
+              break
+            }
+            case 'groq': {
+              state.groqModel = selectedModel
+
+              break
+            }
+            default: {
+              state.geminiModel = selectedModel as GeminiModel
+            }
           }
           saveState(state)
         }
@@ -433,6 +488,10 @@ export async function handleTrelloCase(
             state.geminiModel = chosen as unknown as GeminiModel
             break
           }
+          case 'groq': {
+            state.groqModel = chosen
+            break
+          }
           default: {
             break
           }
@@ -443,43 +502,66 @@ export async function handleTrelloCase(
       }
       case 'change-model': {
         // change only the current provider's model
-        const currentProv = state.aiProvider ?? 'gemini'
-        if (currentProv === 'copilot') {
-          const cop = await import('../api/copilot.js')
-          const models = await cop.getCopilotModels()
-          const copOptions = models.some((m) => m.value === 'back')
-            ? models
-            : [...models, { label: 'Back to suggested branch selection', value: 'back' }]
-          const chosen = await select('Choose GitHub Copilot model:', copOptions)
-          if (chosen === 'back') {
-            skipRegenerate = true
-            continue
+        const currentProv = getConfiguredAIProvider(state) ?? 'gemini'
+        switch (currentProv) {
+          case 'copilot': {
+            const cop = await import('../api/copilot.js')
+            const models = await cop.getCopilotModels()
+            const copOptions = models.some((m) => m.value === 'back')
+              ? models
+              : [...models, { label: 'Back to suggested branch selection', value: 'back' }]
+            const chosen = await select('Choose GitHub Copilot model:', copOptions)
+            if (chosen === 'back') {
+              skipRegenerate = true
+              continue
+            }
+            state.copilotModel = chosen as unknown as CopilotModel
+
+            break
           }
-          state.copilotModel = chosen as unknown as CopilotModel
-        } else if (currentProv === 'openrouter') {
-          const or = await import('../api/openrouter.js')
-          const models = await or.getOpenRouterModels()
-          const orOptions = models.some((m) => m.value === 'back')
-            ? models
-            : [...models, { label: 'Back to suggested branch selection', value: 'back' }]
-          const chosen = await select('Choose OpenRouter model:', orOptions)
-          if (chosen === 'back') {
-            skipRegenerate = true
-            continue
+          case 'openrouter': {
+            const or = await import('../api/openrouter.js')
+            const models = await or.getOpenRouterModels()
+            const orOptions = models.some((m) => m.value === 'back')
+              ? models
+              : [...models, { label: 'Back to suggested branch selection', value: 'back' }]
+            const chosen = await select('Choose OpenRouter model:', orOptions)
+            if (chosen === 'back') {
+              skipRegenerate = true
+              continue
+            }
+            state.openrouterModel = chosen as unknown as OpenRouterModel
+
+            break
           }
-          state.openrouterModel = chosen as unknown as OpenRouterModel
-        } else {
-          const gm = await import('../api/gemini.js')
-          const models = await gm.getGeminiModels()
-          const gmOptions = models.some((m) => m.value === 'back')
-            ? models
-            : [...models, { label: 'Back to suggested branch selection', value: 'back' }]
-          const chosen = await select('Choose Gemini model:', gmOptions)
-          if (chosen === 'back') {
-            skipRegenerate = true
-            continue
+          case 'groq': {
+            const groq = await import('../api/groq.js')
+            const models = await groq.getGroqModels()
+            const groqOptions = models.some((m) => m.value === 'back')
+              ? models
+              : [...models, { label: 'Back to suggested branch selection', value: 'back' }]
+            const chosen = await select('Choose Groq model:', groqOptions)
+            if (chosen === 'back') {
+              skipRegenerate = true
+              continue
+            }
+            state.groqModel = chosen
+
+            break
           }
-          state.geminiModel = chosen as unknown as GeminiModel
+          default: {
+            const gm = await import('../api/gemini.js')
+            const models = await gm.getGeminiModels()
+            const gmOptions = models.some((m) => m.value === 'back')
+              ? models
+              : [...models, { label: 'Back to suggested branch selection', value: 'back' }]
+            const chosen = await select('Choose Gemini model:', gmOptions)
+            if (chosen === 'back') {
+              skipRegenerate = true
+              continue
+            }
+            state.geminiModel = chosen as unknown as GeminiModel
+          }
         }
         saveState(state)
         correction = ''

@@ -10,6 +10,7 @@ import type { OpenRouterModel } from '../api/openrouter.js'
 
 import { confirm } from '../cli/input.js'
 import { multiSelect, select } from '../cli/menu.js'
+import { getConfiguredAIProvider } from '../utils/ai-workflow.js'
 import { colors } from '../utils/colors.js'
 import { exec } from '../utils/exec.js'
 import { generateCommitMessageWithProvider } from '../utils/git-ai.js'
@@ -301,7 +302,8 @@ async function runSecurityScan(
       undefined,
       model as CopilotModel,
       model as OpenRouterModel,
-      model as GeminiModel
+      model as GeminiModel,
+      model
     )
 
     spinner.stop()
@@ -444,8 +446,9 @@ export async function showSecurityGateMenu(): Promise<void> {
 
   // Get current state to check AI provider
   const state = loadState()
+  let configuredProvider = getConfiguredAIProvider(state)
 
-  if (!state?.aiProvider || state.aiProvider === 'manual') {
+  if (!configuredProvider) {
     log.warn('No AI provider configured. Please run main workflow first to set up AI provider.')
     const setupNow = confirm('Set up AI provider now?')
 
@@ -453,7 +456,7 @@ export async function showSecurityGateMenu(): Promise<void> {
       const { handleAIProviderSelection } = await import('./ai-provider.js')
       const selection = await handleAIProviderSelection()
 
-      if (!selection.aiProvider || selection.aiProvider === 'manual') {
+      if (!getConfiguredAIProvider(selection)) {
         log.error('AI provider required for security analysis. Exiting.')
         return
       }
@@ -464,7 +467,8 @@ export async function showSecurityGateMenu(): Promise<void> {
 
   // Reload state after potential AI provider setup
   const currentState = loadState()
-  if (!currentState?.aiProvider) {
+  configuredProvider = getConfiguredAIProvider(currentState)
+  if (!currentState || !configuredProvider) {
     log.error('AI provider not configured.')
     return
   }
@@ -534,8 +538,11 @@ export async function showSecurityGateMenu(): Promise<void> {
   // Run security scan
   const aiResponse = await runSecurityScan(
     scanData,
-    currentState.aiProvider as 'gemini' | 'copilot' | 'openrouter' | 'groq',
-    currentState.copilotModel ?? currentState.openrouterModel ?? currentState.geminiModel
+    configuredProvider,
+    currentState.copilotModel ??
+      currentState.openrouterModel ??
+      currentState.groqModel ??
+      currentState.geminiModel
   )
 
   if (!aiResponse) {

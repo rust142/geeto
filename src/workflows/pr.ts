@@ -10,7 +10,12 @@ import type { OpenRouterModel } from '../api/openrouter.js'
 import { getPlatformAPI } from '../api/platform.js'
 import { askQuestion, confirm, editMultiline } from '../cli/input.js'
 import { select } from '../cli/menu.js'
-import { getModelForProvider, showAIPreview, updateModelInState } from '../utils/ai-workflow.js'
+import {
+  getConfiguredAIProvider,
+  getModelForProvider,
+  showAIPreview,
+  updateModelInState,
+} from '../utils/ai-workflow.js'
 import { colors } from '../utils/colors.js'
 import { isDryRun, logDryRun } from '../utils/dry-run.js'
 import { execAsync, execSilent } from '../utils/exec.js'
@@ -142,7 +147,8 @@ const callAIForPR = async (
       prompt,
       model as CopilotModel,
       model as OpenRouterModel,
-      (model as GeminiModel) ?? 'gemini-2.5-flash'
+      (model as GeminiModel) ?? 'gemini-2.5-flash',
+      model
     )
     spinner.stop()
   } catch {
@@ -263,10 +269,7 @@ export const handleCreatePR = async (): Promise<void> => {
     if (!diff) break aiBlock
 
     const state = loadState()
-    let aiProvider =
-      state?.aiProvider && state.aiProvider !== 'manual'
-        ? state.aiProvider
-        : (null as 'copilot' | 'gemini' | 'openrouter' | null)
+    let aiProvider = getConfiguredAIProvider(state)
 
     if (!aiProvider) break aiBlock
 
@@ -332,7 +335,8 @@ export const handleCreatePR = async (): Promise<void> => {
         }
         case 'edit': {
           const editedBody = await editMultiline(`Edit ${prLabel} Body`, prBody)
-          if (editedBody !== null) prBody = editedBody
+          if (editedBody === null) continue
+          prBody = editedBody
           if (process.stdin.isTTY) process.stdin.setRawMode(false)
           const editedTitle = askQuestion('Edit title (Enter to keep): ').trim()
           if (editedTitle) prTitle = editedTitle
@@ -365,7 +369,7 @@ export const handleCreatePR = async (): Promise<void> => {
               'Back'
             )
             if (chosen && chosen !== 'back') {
-              aiProvider = prov as 'copilot' | 'gemini' | 'openrouter'
+              aiProvider = prov as 'copilot' | 'gemini' | 'openrouter' | 'groq'
               currentModel = chosen
               if (state) {
                 state.aiProvider = aiProvider

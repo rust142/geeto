@@ -10,6 +10,7 @@ import type { OpenRouterModel } from '../api/openrouter.js'
 
 import { askQuestion, confirm } from '../cli/input.js'
 import { select } from '../cli/menu.js'
+import { getConfiguredAIProvider } from '../utils/ai-workflow.js'
 import { colors } from '../utils/colors.js'
 import { BOX_W } from '../utils/display.js'
 import { execAsync, execSilent } from '../utils/exec.js'
@@ -183,17 +184,22 @@ export const handleRepoSettings = async (): Promise<void> => {
       let copilotModel: CopilotModel | undefined
       let openrouterModel: OpenRouterModel | undefined
       let geminiModel: GeminiModel | undefined
+      let groqModel: string | undefined
 
       const savedState = loadState()
+      const configuredProvider = getConfiguredAIProvider(savedState)
       if (
-        savedState?.aiProvider &&
-        savedState.aiProvider !== 'manual' &&
-        (savedState.copilotModel || savedState.openrouterModel || savedState.geminiModel)
+        configuredProvider &&
+        (savedState?.copilotModel ||
+          savedState?.openrouterModel ||
+          savedState?.geminiModel ||
+          savedState?.groqModel)
       ) {
-        aiProvider = savedState.aiProvider as 'gemini' | 'copilot' | 'openrouter' | 'groq'
+        aiProvider = configuredProvider
         copilotModel = savedState.copilotModel
         openrouterModel = savedState.openrouterModel
         geminiModel = savedState.geminiModel
+        groqModel = savedState.groqModel
       } else {
         let providerChosen = false
         while (!providerChosen) {
@@ -225,6 +231,10 @@ export const handleRepoSettings = async (): Promise<void> => {
               openrouterModel = chosen as OpenRouterModel
               break
             }
+            case 'groq': {
+              groqModel = chosen
+              break
+            }
           }
           providerChosen = true
         }
@@ -240,7 +250,14 @@ export const handleRepoSettings = async (): Promise<void> => {
           : `${basePrompt}${readme.slice(0, 3000)}`
 
         console.log('')
-        const currentModel = copilotModel ?? openrouterModel ?? geminiModel ?? ''
+        const currentModel =
+          aiProvider === 'copilot'
+            ? copilotModel
+            : aiProvider === 'openrouter'
+              ? openrouterModel
+              : aiProvider === 'groq'
+                ? groqModel
+                : geminiModel
         const modelDisplay = getModelValue(currentModel)
         const aiSpinner = log.spinner()
         aiSpinner.start(
@@ -254,7 +271,8 @@ export const handleRepoSettings = async (): Promise<void> => {
           prompt,
           copilotModel,
           openrouterModel,
-          geminiModel
+          geminiModel,
+          groqModel
         )
 
         if (!aiResult) {
@@ -318,6 +336,10 @@ export const handleRepoSettings = async (): Promise<void> => {
                   openrouterModel = newModel as OpenRouterModel
                   break
                 }
+                case 'groq': {
+                  groqModel = newModel
+                  break
+                }
               }
             }
             correction = ''
@@ -338,6 +360,7 @@ export const handleRepoSettings = async (): Promise<void> => {
               copilotModel = undefined
               openrouterModel = undefined
               geminiModel = undefined
+              groqModel = undefined
               switch (aiProvider) {
                 case 'gemini': {
                   geminiModel = newModel as GeminiModel
@@ -349,6 +372,10 @@ export const handleRepoSettings = async (): Promise<void> => {
                 }
                 case 'openrouter': {
                   openrouterModel = newModel as OpenRouterModel
+                  break
+                }
+                case 'groq': {
+                  groqModel = newModel
                   break
                 }
               }
