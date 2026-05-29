@@ -284,6 +284,7 @@ export const editMultiline = async (question: string, initialText = ''): Promise
   let footerRows = rows < 6 ? 1 : 2
   let scrollTop = rows < 6 ? 2 : 3
   let scrollBottom = Math.max(scrollTop, rows - footerRows)
+  let viewportTop = 0
   let resizeTimer: NodeJS.Timeout | undefined
   let stickyTimer: NodeJS.Timeout | undefined
 
@@ -335,9 +336,53 @@ export const editMultiline = async (question: string, initialText = ''): Promise
 
   const isWhitespace = (ch: string): boolean => /\s/.test(ch)
 
+  const contentHeight = (): number => Math.max(1, scrollBottom - scrollTop + 1)
+
+  const wrapWidth = (): number => Math.max(1, columns)
+
+  const visualRowsForLine = (line: string): number =>
+    Math.max(1, Math.ceil(line.length / wrapWidth()))
+
+  const visualRowBeforeLine = (lineIndex: number): number => {
+    let total = 0
+    for (let i = 0; i < lineIndex; i++) {
+      total += visualRowsForLine(lines[i] ?? '')
+    }
+    return total
+  }
+
+  const cursorVisualRow = (): number => visualRowBeforeLine(li) + Math.floor(ci / wrapWidth())
+
+  const cursorVisualColumn = (): number => ci % wrapWidth()
+
+  const ensureCursorVisible = (): void => {
+    const row = cursorVisualRow()
+    if (row < viewportTop) {
+      viewportTop = row
+    } else if (row >= viewportTop + contentHeight()) {
+      viewportTop = row - contentHeight() + 1
+    }
+    viewportTop = Math.max(0, viewportTop)
+  }
+
+  const getVisualLine = (targetRow: number): string => {
+    let row = 0
+    const width = wrapWidth()
+    for (const line of lines) {
+      const visualRows = visualRowsForLine(line)
+      if (targetRow < row + visualRows) {
+        const offset = (targetRow - row) * width
+        return line.slice(offset, offset + width)
+      }
+      row += visualRows
+    }
+    return ''
+  }
+
   const moveCursorToInput = (): void => {
-    const row = Math.min(scrollBottom, scrollTop + li)
-    const col = Math.max(1, ci + 1)
+    ensureCursorVisible()
+    const row = Math.min(scrollBottom, scrollTop + cursorVisualRow() - viewportTop)
+    const col = Math.max(1, cursorVisualColumn() + 1)
     process.stdout.write(`\u001B[${row};${col}H`)
   }
 
@@ -346,12 +391,11 @@ export const editMultiline = async (question: string, initialText = ''): Promise
     updateTerminalSize()
     process.stdout.write('\u001B[r')
     if (clearScreen) process.stdout.write('\u001B[2J')
+    ensureCursorVisible()
     printHeader()
-    process.stdout.write(`\u001B[${scrollTop};${scrollBottom}r`)
-    process.stdout.write(`\u001B[${scrollTop};1H\u001B[J`)
-    for (let i = 0; i < lines.length; i++) {
-      process.stdout.write(lines[i] ?? '')
-      if (i < lines.length - 1) process.stdout.write('\n')
+    for (let row = 0; row < contentHeight(); row++) {
+      process.stdout.write(`\u001B[${scrollTop + row};1H\u001B[2K`)
+      process.stdout.write(getVisualLine(viewportTop + row))
     }
     printHints()
     moveCursorToInput()
@@ -441,7 +485,7 @@ export const editMultiline = async (question: string, initialText = ''): Promise
       if (stickyTimer) clearInterval(stickyTimer)
       process.off('SIGWINCH', handleResize)
       process.stdout.write('\u001B[r\u001B[?1049l')
-      rl.resume()
+      process.stdin.pause()
       resolve(value)
     }
 
