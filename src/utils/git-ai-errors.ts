@@ -76,7 +76,13 @@ export function isContextLimitFailure(s: string | null | undefined): boolean {
     return true
   }
 
-  if (low.includes('large') || low.includes('many files')) {
+  if (
+    low.includes('many files') ||
+    low.includes('input is too large') ||
+    low.includes('input too large') ||
+    low.includes('request too large') ||
+    low.includes('payload too large')
+  ) {
     return true
   }
 

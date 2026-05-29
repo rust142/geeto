@@ -1,5 +1,6 @@
 import type { CopilotModel } from '../api/copilot.js'
 import type { GeminiModel } from '../api/gemini.js'
+import type { GroqModel } from '../api/groq.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 
 import { DEFAULT_GEMINI_MODEL } from './config.js'
@@ -89,7 +90,8 @@ export async function generateBranchNameWithProvider(
   correction?: string,
   copilotModel?: CopilotModel,
   openrouterModel?: OpenRouterModel,
-  geminiModel?: GeminiModel
+  geminiModel?: GeminiModel,
+  groqModel?: GroqModel
 ): Promise<string | null> {
   switch (aiProvider) {
     case 'gemini': {
@@ -102,7 +104,7 @@ export async function generateBranchNameWithProvider(
     }
     case 'groq': {
       const { generateBranchName } = await import('../api/groq.js')
-      return generateBranchName(title, correction)
+      return generateBranchName(title, correction, groqModel)
     }
     default: {
       const { generateBranchName } = await import('../api/openrouter.js')
@@ -118,7 +120,8 @@ export async function generateReleaseNotesWithProvider(
   correction?: string,
   copilotModel?: CopilotModel,
   openrouterModel?: OpenRouterModel,
-  geminiModel?: GeminiModel
+  geminiModel?: GeminiModel,
+  groqModel?: GroqModel
 ): Promise<string | null> {
   switch (aiProvider) {
     case 'gemini': {
@@ -131,7 +134,7 @@ export async function generateReleaseNotesWithProvider(
     }
     case 'groq': {
       const { generateReleaseNotes } = await import('../api/groq.js')
-      return generateReleaseNotes(commits, language, correction)
+      return generateReleaseNotes(commits, language, correction, groqModel)
     }
     default: {
       const { generateReleaseNotes } = await import('../api/openrouter.js')
@@ -146,7 +149,8 @@ export async function generateTextWithProvider(
   prompt: string,
   copilotModel?: CopilotModel,
   openrouterModel?: OpenRouterModel,
-  geminiModel?: GeminiModel
+  geminiModel?: GeminiModel,
+  groqModel?: GroqModel
 ): Promise<string | null> {
   switch (aiProvider) {
     case 'gemini': {
@@ -159,7 +163,7 @@ export async function generateTextWithProvider(
     }
     case 'groq': {
       const { generateText } = await import('../api/groq.js')
-      return generateText(prompt)
+      return generateText(prompt, groqModel)
     }
     default: {
       const { generateText } = await import('../api/openrouter.js')
@@ -175,7 +179,8 @@ export async function generateCommitMessageWithProvider(
   correction?: string,
   copilotModel?: CopilotModel,
   openrouterModel?: OpenRouterModel,
-  geminiModel?: GeminiModel
+  geminiModel?: GeminiModel,
+  groqModel?: GroqModel
 ): Promise<string | null> {
   switch (aiProvider) {
     case 'gemini': {
@@ -188,7 +193,7 @@ export async function generateCommitMessageWithProvider(
     }
     case 'groq': {
       const { generateCommitMessage } = await import('../api/groq.js')
-      return generateCommitMessage(diff, correction)
+      return generateCommitMessage(diff, correction, groqModel)
     }
     default: {
       const { generateCommitMessage } = await import('../api/openrouter.js')
@@ -798,9 +803,19 @@ export async function getBranchNameFromDiffUsingProvider(
   diff: string,
   correction?: string,
   copilotModel?: CopilotModel,
-  openrouterModel?: OpenRouterModel
+  openrouterModel?: OpenRouterModel,
+  geminiModel?: GeminiModel,
+  groqModel?: GroqModel
 ): Promise<string | null> {
-  return generateBranchNameWithProvider(provider, diff, correction, copilotModel, openrouterModel)
+  return generateBranchNameWithProvider(
+    provider,
+    diff,
+    correction,
+    copilotModel,
+    openrouterModel,
+    geminiModel,
+    groqModel
+  )
 }
 
 /**

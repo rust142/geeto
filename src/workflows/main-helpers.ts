@@ -2,6 +2,7 @@
 
 import type { CopilotModel } from '../api/copilot.js'
 import type { GeminiModel } from '../api/gemini.js'
+import type { GroqModel } from '../api/groq.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 import type { GeetoState } from '../types/index.js'
 
@@ -49,6 +50,7 @@ export interface CheckpointResult {
   copilotModel?: CopilotModel
   openrouterModel?: OpenRouterModel
   geminiModel?: GeminiModel
+  groqModel?: GroqModel
   shouldResume: boolean
   suppressStagingDoneMessage: boolean
   savedState: GeetoState | null
@@ -69,6 +71,7 @@ export async function resolveCheckpointAndProvider(
   let copilotModel: CopilotModel | undefined
   let openrouterModel: OpenRouterModel | undefined
   let geminiModel: GeminiModel | undefined
+  let groqModel: GroqModel | undefined
   let shouldResume = false
   let suppressStagingDoneMessage = false
 
@@ -146,23 +149,38 @@ export async function resolveCheckpointAndProvider(
         copilotModel = savedState.copilotModel
         openrouterModel = savedState.openrouterModel
         geminiModel = savedState.geminiModel
+        groqModel = savedState.groqModel
       } else {
         const aiSelection = await handleAIProviderSelection()
         aiProvider = aiSelection.aiProvider
         copilotModel = aiSelection.copilotModel
         openrouterModel = aiSelection.openrouterModel
         geminiModel = aiSelection.geminiModel
+        groqModel = aiSelection.groqModel
       }
 
       const gitUtils = await import('../utils/git-ai.js')
       const providerShort = gitUtils.getAIProviderShortName(aiProvider)
       let modelToShow: string | undefined
-      if (aiProvider === 'copilot') {
-        modelToShow = copilotModel
-      } else if (aiProvider === 'openrouter') {
-        modelToShow = openrouterModel
-      } else {
-        modelToShow = geminiModel ?? DEFAULT_GEMINI_MODEL
+      switch (aiProvider) {
+        case 'copilot': {
+          modelToShow = copilotModel
+
+          break
+        }
+        case 'openrouter': {
+          modelToShow = openrouterModel
+
+          break
+        }
+        case 'groq': {
+          modelToShow = groqModel
+
+          break
+        }
+        default: {
+          modelToShow = geminiModel ?? DEFAULT_GEMINI_MODEL
+        }
       }
 
       if (!opts?.startAt) {
@@ -198,24 +216,17 @@ export async function resolveCheckpointAndProvider(
         const { ensureAIProvider } = await import('../core/setup.js')
         const aiReady = await ensureAIProvider(aiProvider)
         if (!aiReady) {
-          log.warn(
-            `${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup is no longer valid.`
-          )
-          const fixSetup = confirm(
-            `Fix ${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup now?`
-          )
+          const providerName = gitUtils.getAIProviderShortName(aiProvider)
+          log.warn(`${providerName} setup is no longer valid.`)
+          const fixSetup = confirm(`Fix ${providerName} setup now?`)
           if (fixSetup) {
             const setupSuccess = await ensureAIProvider(aiProvider)
             if (!setupSuccess) {
-              log.warn(
-                `Could not fix ${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup. Switching to manual mode.`
-              )
+              log.warn(`Could not fix ${providerName} setup. Switching to manual mode.`)
               aiProvider = 'gemini'
             }
           } else {
-            log.warn(
-              `${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup invalid. Will use manual mode for AI features.`
-            )
+            log.warn(`${providerName} setup invalid. Will use manual mode for AI features.`)
           }
         }
       }
@@ -228,12 +239,14 @@ export async function resolveCheckpointAndProvider(
         copilotModel = savedState.copilotModel
         openrouterModel = savedState.openrouterModel
         geminiModel = savedState.geminiModel
+        groqModel = savedState.groqModel
       } else {
         const aiSelection = await handleAIProviderSelection()
         aiProvider = aiSelection.aiProvider
         copilotModel = aiSelection.copilotModel
         openrouterModel = aiSelection.openrouterModel
         geminiModel = aiSelection.geminiModel
+        groqModel = aiSelection.groqModel
       }
 
       displayCurrentProviderStatus()
@@ -246,6 +259,7 @@ export async function resolveCheckpointAndProvider(
     copilotModel = aiSelection.copilotModel
     openrouterModel = aiSelection.openrouterModel
     geminiModel = aiSelection.geminiModel
+    groqModel = aiSelection.groqModel
     displayCurrentProviderStatus()
   }
 
@@ -254,6 +268,7 @@ export async function resolveCheckpointAndProvider(
     copilotModel,
     openrouterModel,
     geminiModel,
+    groqModel,
     shouldResume,
     suppressStagingDoneMessage,
     savedState,

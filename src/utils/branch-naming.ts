@@ -1,5 +1,6 @@
 import type { CopilotModel } from '../api/copilot.js'
 import type { GeminiModel } from '../api/gemini.js'
+import type { GroqModel } from '../api/groq.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 
 import { execGit } from './exec.js'
@@ -18,10 +19,10 @@ export const handleBranchNaming = async (
   trelloCardId: string,
   currentBranch: string,
   aiProvider: 'gemini' | 'copilot' | 'openrouter' | 'groq' = 'gemini',
-  model?: CopilotModel | OpenRouterModel | GeminiModel,
+  model?: CopilotModel | OpenRouterModel | GeminiModel | GroqModel,
   updateModel?: (
     provider: 'gemini' | 'copilot' | 'openrouter' | 'groq',
-    model?: CopilotModel | OpenRouterModel | GeminiModel
+    model?: CopilotModel | OpenRouterModel | GeminiModel | GroqModel
   ) => void
 ): Promise<BranchNamingResult> => {
   const { askQuestion } = await import('../cli/input.js')
@@ -312,18 +313,31 @@ export const handleBranchNaming = async (
             skipRegenerate = true
             continue
           }
-          if (prov === 'copilot') {
-            updateModel?.('copilot', chosen as unknown as CopilotModel)
-            aiProvider = 'copilot'
-            model = chosen as unknown as CopilotModel
-          } else if (prov === 'openrouter') {
-            updateModel?.('openrouter', chosen as unknown as OpenRouterModel)
-            aiProvider = 'openrouter'
-            model = chosen as unknown as OpenRouterModel
-          } else {
-            updateModel?.('gemini', chosen as unknown as GeminiModel)
-            aiProvider = 'gemini'
-            model = chosen as unknown as GeminiModel
+          switch (prov) {
+            case 'copilot': {
+              updateModel?.('copilot', chosen as unknown as CopilotModel)
+              aiProvider = 'copilot'
+              model = chosen as unknown as CopilotModel
+              break
+            }
+            case 'openrouter': {
+              updateModel?.('openrouter', chosen as unknown as OpenRouterModel)
+              aiProvider = 'openrouter'
+              model = chosen as unknown as OpenRouterModel
+              break
+            }
+            case 'groq': {
+              updateModel?.('groq', chosen)
+              aiProvider = 'groq'
+              model = chosen
+              break
+            }
+            default: {
+              updateModel?.('gemini', chosen as unknown as GeminiModel)
+              aiProvider = 'gemini'
+              model = chosen as unknown as GeminiModel
+              break
+            }
           }
           correction = ''
           continue
@@ -367,45 +381,69 @@ export const handleBranchNaming = async (
         case 'change-model': {
           // change only the current provider's model
           const currentProv = aiProvider ?? 'gemini'
-          if (currentProv === 'copilot') {
-            const cop = await import('../api/copilot.js')
-            const models = await cop.getCopilotModels()
-            const copOptions = models.some((m) => m.value === 'back')
-              ? models
-              : [...models, { label: 'Back to suggested branch selection', value: 'back' }]
-            const chosen = await select('Choose GitHub Copilot model:', copOptions)
-            if (chosen === 'back') {
-              skipRegenerate = true
-              continue
+          switch (currentProv) {
+            case 'copilot': {
+              const cop = await import('../api/copilot.js')
+              const models = await cop.getCopilotModels()
+              const copOptions = models.some((m) => m.value === 'back')
+                ? models
+                : [...models, { label: 'Back to suggested branch selection', value: 'back' }]
+              const chosen = await select('Choose GitHub Copilot model:', copOptions)
+              if (chosen === 'back') {
+                skipRegenerate = true
+                continue
+              }
+              updateModel?.('copilot', chosen as unknown as CopilotModel)
+              model = chosen as unknown as CopilotModel
+
+              break
             }
-            updateModel?.('copilot', chosen as unknown as CopilotModel)
-            model = chosen as unknown as CopilotModel
-          } else if (currentProv === 'openrouter') {
-            const or = await import('../api/openrouter.js')
-            const models = await or.getOpenRouterModels()
-            const orOptions = models.some((m) => m.value === 'back')
-              ? models
-              : [...models, { label: 'Back to suggested branch selection', value: 'back' }]
-            const chosen = await select('Choose OpenRouter model:', orOptions)
-            if (chosen === 'back') {
-              skipRegenerate = true
-              continue
+            case 'openrouter': {
+              const or = await import('../api/openrouter.js')
+              const models = await or.getOpenRouterModels()
+              const orOptions = models.some((m) => m.value === 'back')
+                ? models
+                : [...models, { label: 'Back to suggested branch selection', value: 'back' }]
+              const chosen = await select('Choose OpenRouter model:', orOptions)
+              if (chosen === 'back') {
+                skipRegenerate = true
+                continue
+              }
+              updateModel?.('openrouter', chosen as unknown as OpenRouterModel)
+              model = chosen as unknown as OpenRouterModel
+
+              break
             }
-            updateModel?.('openrouter', chosen as unknown as OpenRouterModel)
-            model = chosen as unknown as OpenRouterModel
-          } else {
-            const gm = await import('../api/gemini.js')
-            const models = await gm.getGeminiModels()
-            const gmOptions = models.some((m) => m.value === 'back')
-              ? models
-              : [...models, { label: 'Back to suggested branch selection', value: 'back' }]
-            const chosen = await select('Choose Gemini model:', gmOptions)
-            if (chosen === 'back') {
-              skipRegenerate = true
-              continue
+            case 'groq': {
+              const groq = await import('../api/groq.js')
+              const models = await groq.getGroqModels()
+              const groqOptions = models.some((m) => m.value === 'back')
+                ? models
+                : [...models, { label: 'Back to suggested branch selection', value: 'back' }]
+              const chosen = await select('Choose Groq model:', groqOptions)
+              if (chosen === 'back') {
+                skipRegenerate = true
+                continue
+              }
+              updateModel?.('groq', chosen)
+              model = chosen
+
+              break
             }
-            updateModel?.('gemini', chosen as unknown as GeminiModel)
-            model = chosen as unknown as GeminiModel
+            default: {
+              const gm = await import('../api/gemini.js')
+              const models = await gm.getGeminiModels()
+              const gmOptions = models.some((m) => m.value === 'back')
+                ? models
+                : [...models, { label: 'Back to suggested branch selection', value: 'back' }]
+              const chosen = await select('Choose Gemini model:', gmOptions)
+              if (chosen === 'back') {
+                skipRegenerate = true
+                continue
+              }
+              updateModel?.('gemini', chosen as unknown as GeminiModel)
+              model = chosen as unknown as GeminiModel
+            }
           }
           correction = ''
           continue
@@ -438,18 +476,31 @@ export const handleBranchNaming = async (
             skipRegenerate = true
             continue
           }
-          if (prov === 'copilot') {
-            updateModel?.('copilot', chosen as unknown as CopilotModel)
-            aiProvider = 'copilot'
-            model = chosen as unknown as CopilotModel
-          } else if (prov === 'openrouter') {
-            updateModel?.('openrouter', chosen as unknown as OpenRouterModel)
-            aiProvider = 'openrouter'
-            model = chosen as unknown as OpenRouterModel
-          } else {
-            updateModel?.('gemini', chosen as unknown as GeminiModel)
-            aiProvider = 'gemini'
-            model = chosen as unknown as GeminiModel
+          switch (prov) {
+            case 'copilot': {
+              updateModel?.('copilot', chosen as unknown as CopilotModel)
+              aiProvider = 'copilot'
+              model = chosen as unknown as CopilotModel
+              break
+            }
+            case 'openrouter': {
+              updateModel?.('openrouter', chosen as unknown as OpenRouterModel)
+              aiProvider = 'openrouter'
+              model = chosen as unknown as OpenRouterModel
+              break
+            }
+            case 'groq': {
+              updateModel?.('groq', chosen)
+              aiProvider = 'groq'
+              model = chosen
+              break
+            }
+            default: {
+              updateModel?.('gemini', chosen as unknown as GeminiModel)
+              aiProvider = 'gemini'
+              model = chosen as unknown as GeminiModel
+              break
+            }
           }
           correction = ''
           continue

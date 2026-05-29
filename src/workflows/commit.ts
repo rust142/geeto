@@ -534,7 +534,8 @@ export const handleCommitWorkflow = async (
         correction,
         state.copilotModel as CopilotModel,
         state.openrouterModel as OpenRouterModel,
-        state.geminiModel as GeminiModel
+        state.geminiModel as GeminiModel,
+        state.groqModel
       )
       spinner.stop()
     } catch {
@@ -579,6 +580,8 @@ export const handleCommitWorkflow = async (
             directModelName = state.copilotModel as string
           } else if (state.aiProvider === 'openrouter' && state.openrouterModel) {
             directModelName = state.openrouterModel as string
+          } else if (state.aiProvider === 'groq' && state.groqModel) {
+            directModelName = state.groqModel
           } else if (state.aiProvider === 'gemini') {
             directModelName = (state.geminiModel as string) ?? DEFAULT_GEMINI_MODEL
           }
@@ -620,6 +623,11 @@ export const handleCommitWorkflow = async (
                 )
                 break
               }
+              case 'groq': {
+                const { generateCommitMessage } = await import('../api/groq.js')
+                aiResult = await generateCommitMessage(diff, correction, state.groqModel)
+                break
+              }
               default: {
                 aiResult = null
                 break
@@ -644,12 +652,25 @@ export const handleCommitWorkflow = async (
           | 'openrouter'
           | 'groq'
         let modelChoice: CopilotModel | OpenRouterModel | GeminiModel | string
-        if (currentProv === 'copilot') {
-          modelChoice = state.copilotModel as CopilotModel
-        } else if (currentProv === 'openrouter') {
-          modelChoice = state.openrouterModel as OpenRouterModel
-        } else {
-          modelChoice = (state.geminiModel as GeminiModel) ?? DEFAULT_GEMINI_MODEL
+        switch (currentProv) {
+          case 'copilot': {
+            modelChoice = state.copilotModel as CopilotModel
+
+            break
+          }
+          case 'openrouter': {
+            modelChoice = state.openrouterModel as OpenRouterModel
+
+            break
+          }
+          case 'groq': {
+            modelChoice = state.groqModel ?? ''
+
+            break
+          }
+          default: {
+            modelChoice = (state.geminiModel as GeminiModel) ?? DEFAULT_GEMINI_MODEL
+          }
         }
 
         aiResult = await interactiveAIFallback(
@@ -677,6 +698,10 @@ export const handleCommitWorkflow = async (
                 if (model && typeof model === 'string') {
                   state.geminiModel = model as GeminiModel
                 }
+                break
+              }
+              case 'groq': {
+                state.groqModel = model
                 break
               }
               default: {
@@ -714,12 +739,23 @@ export const handleCommitWorkflow = async (
         await fs.mkdir(outDir, { recursive: true })
 
         let modelParam: string | undefined
-        if (state.aiProvider === 'copilot') {
-          modelParam = state.copilotModel as unknown as string
-        } else if (state.aiProvider === 'openrouter') {
-          modelParam = state.openrouterModel as unknown as string
-        } else {
-          modelParam = (state.geminiModel as unknown as string) ?? DEFAULT_GEMINI_MODEL
+        switch (state.aiProvider) {
+          case 'copilot': {
+            modelParam = state.copilotModel as unknown as string
+            break
+          }
+          case 'openrouter': {
+            modelParam = state.openrouterModel as unknown as string
+            break
+          }
+          case 'groq': {
+            modelParam = state.groqModel
+            break
+          }
+          default: {
+            modelParam = (state.geminiModel as unknown as string) ?? DEFAULT_GEMINI_MODEL
+            break
+          }
         }
 
         const payload: Record<string, unknown> = {
@@ -872,24 +908,28 @@ export const handleCommitWorkflow = async (
               state.copilotModel = chosenModel as unknown as CopilotModel
               state.openrouterModel = undefined
               state.geminiModel = undefined
+              state.groqModel = undefined
               break
             }
             case 'openrouter': {
               state.openrouterModel = chosenModel as unknown as OpenRouterModel
               state.copilotModel = undefined
               state.geminiModel = undefined
+              state.groqModel = undefined
               break
             }
             case 'gemini': {
               state.geminiModel = chosenModel as unknown as GeminiModel
               state.copilotModel = undefined
               state.openrouterModel = undefined
+              state.groqModel = undefined
               break
             }
-            default: {
-              state.geminiModel = chosenModel as unknown as GeminiModel
+            case 'groq': {
+              state.groqModel = chosenModel
               state.copilotModel = undefined
               state.openrouterModel = undefined
+              state.geminiModel = undefined
               break
             }
           }
@@ -905,11 +945,13 @@ export const handleCommitWorkflow = async (
             | 'gemini'
             | 'copilot'
             | 'openrouter'
+            | 'groq'
             | 'manual'
           const providerKey = (currentProv === 'manual' ? 'gemini' : currentProv) as
             | 'gemini'
             | 'copilot'
             | 'openrouter'
+            | 'groq'
           const chosen = await chooseModelForProvider(
             providerKey,
             'Choose model:',
@@ -937,6 +979,10 @@ export const handleCommitWorkflow = async (
               state.geminiModel = chosen as unknown as GeminiModel
               state.copilotModel = undefined
               state.openrouterModel = undefined
+              break
+            }
+            case 'groq': {
+              state.groqModel = chosen
               break
             }
             default: {

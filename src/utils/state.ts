@@ -9,6 +9,17 @@ import { ensureGeetoIgnored } from './config.js'
 import { STEP } from '../core/constants.js'
 
 const STATE_FILE = '.geeto/geeto-state.json'
+const AI_PROVIDERS = new Set(['gemini', 'copilot', 'openrouter', 'groq', 'manual'])
+
+const normalizeState = (state: GeetoState): GeetoState => {
+  const aiProvider = state.aiProvider?.toLowerCase()
+  return {
+    ...state,
+    aiProvider: AI_PROVIDERS.has(aiProvider ?? '')
+      ? (aiProvider as GeetoState['aiProvider'])
+      : undefined,
+  }
+}
 
 /**
  * Save state to checkpoint file
@@ -32,7 +43,7 @@ export const saveState = (state: GeetoState): void => {
 export const loadState = (): GeetoState | null => {
   try {
     if (fs.existsSync(STATE_FILE)) {
-      return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')) as GeetoState
+      return normalizeState(JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')) as GeetoState)
     }
   } catch {
     // Ignore errors
@@ -56,6 +67,7 @@ export const preserveProviderState = (state: GeetoState): void => {
       copilotModel: state.copilotModel,
       openrouterModel: state.openrouterModel,
       geminiModel: state.geminiModel,
+      groqModel: state.groqModel,
     }
 
     // Reuse save logic to ensure .geeto exists and is ignored

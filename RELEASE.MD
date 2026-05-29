@@ -2,6 +2,21 @@
 
 ## v0.9.1 — April 9, 2026
 
+### What's New?
+
+#### New Features
+
+- Added an interactive submodule manager for adding, updating, and managing Git submodules from the CLI.
+- Added a local install helper so the CLI can be installed and tested locally more easily.
+- Added interactive package.json version bump support during release workflows.
+
+#### Other Improvements
+
+- Improved Copilot integration with required API headers, retry handling, and force reauthentication support.
+- Improved release sync review flow so generated release notes can be checked before publishing.
+
+---
+
 ## v0.9.0 — April 4, 2026
 
 ### What's New?
