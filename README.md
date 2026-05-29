@@ -38,7 +38,20 @@ brew install geeto
 ### APT (Debian / Ubuntu)
 
 ```bash
-curl -fsSL "https://github.com/rust142/geeto/releases/latest/download/geeto_$(curl -s https://api.github.com/repos/rust142/geeto/releases/latest | grep tag_name | cut -d '"' -f4 | tr -d v)_amd64.deb" -o geeto.deb
+ARCH="$(dpkg --print-architecture)"
+case "$ARCH" in
+  amd64|arm64) ;;
+  *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
+esac
+
+DEB_URL="$(
+  curl -fsSL https://api.github.com/repos/rust142/geeto/releases/latest \
+    | grep -Eo "https://github.com/rust142/geeto/releases/download/[^\"]+/geeto_[^\"]+_${ARCH}\.deb" \
+    | head -n 1
+)"
+[ -n "$DEB_URL" ] || { echo "Could not find latest Geeto .deb for ${ARCH}"; exit 1; }
+
+curl -fL "$DEB_URL" -o geeto.deb
 sudo dpkg -i geeto.deb
 rm geeto.deb
 ```
