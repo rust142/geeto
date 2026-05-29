@@ -163,27 +163,31 @@ main() {
   git clone --depth 1 https://github.com/rust142/geeto.git "$CLEANUP_TMP" >>"$LOGFILE" 2>&1 &
   local clone_pid=$!
   step_spinner $clone_pid 2 "Cloning repository" || {
-    step_fail 2 "Cloning repository"
     echo -e "  ${RED}Failed to clone. Check network or see ${LOGFILE}${NC}"
     cleanup_and_exit 1
   }
 
+  if [ ! -f "$CLEANUP_TMP/package.json" ]; then
+    step_fail 2 "Cloning repository"
+    echo -e "  ${RED}Repository clone did not contain package.json.${NC}"
+    echo -e "  ${YELLOW}See ${LOGFILE} for details.${NC}"
+    cleanup_and_exit 1
+  fi
+
   cd "$CLEANUP_TMP" || cleanup_and_exit 1
 
   # ── Step 3: Install packages ────────────────────────────────────
-  bun install >>"$LOGFILE" 2>&1 &
+  bun install --cwd "$CLEANUP_TMP" >>"$LOGFILE" 2>&1 &
   local install_pid=$!
   step_spinner $install_pid 3 "Installing packages" || {
-    step_fail 3 "Installing packages"
     echo -e "  ${RED}Failed to install dependencies. See ${LOGFILE}${NC}"
     cleanup_and_exit 1
   }
 
   # ── Step 4: Build TypeScript ────────────────────────────────────
-  bun run build >>"$LOGFILE" 2>&1 &
+  bun run --cwd "$CLEANUP_TMP" build >>"$LOGFILE" 2>&1 &
   local build_pid=$!
   step_spinner $build_pid 4 "Building TypeScript" || {
-    step_fail 4 "Building TypeScript"
     echo -e "  ${RED}TypeScript build failed. See ${LOGFILE}${NC}"
     cleanup_and_exit 1
   }
@@ -216,10 +220,9 @@ main() {
     cleanup_and_exit 1
   fi
 
-  bun run "$build_target" >>"$LOGFILE" 2>&1 &
+  bun run --cwd "$CLEANUP_TMP" "$build_target" >>"$LOGFILE" 2>&1 &
   local compile_pid=$!
   step_spinner $compile_pid 5 "Compiling binary (${OS}/${ARCH})" || {
-    step_fail 5 "Compiling binary"
     echo -e "  ${RED}Binary compilation failed. See ${LOGFILE}${NC}"
     cleanup_and_exit 1
   }
