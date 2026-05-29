@@ -30,6 +30,7 @@ import {
 } from './release-utils.js'
 import { askQuestion, confirm, editMultiline } from '../cli/input.js'
 import { select } from '../cli/menu.js'
+import { getConfiguredAIProvider } from '../utils/ai-workflow.js'
 import { colors } from '../utils/colors.js'
 import { BOX_W } from '../utils/display.js'
 import { exec, execAsync, execSilent } from '../utils/exec.js'
@@ -299,15 +300,15 @@ export const handleRelease = async (): Promise<void> => {
     let groqModel: string | undefined
 
     // Use saved provider/model if available, otherwise ask user
+    const configuredProvider = getConfiguredAIProvider(savedState)
     if (
-      savedState?.aiProvider &&
-      savedState.aiProvider !== 'manual' &&
-      (savedState.copilotModel ||
-        savedState.openrouterModel ||
-        savedState.geminiModel ||
-        savedState.groqModel)
+      configuredProvider &&
+      (savedState?.copilotModel ||
+        savedState?.openrouterModel ||
+        savedState?.geminiModel ||
+        savedState?.groqModel)
     ) {
-      aiProvider = savedState.aiProvider as 'gemini' | 'copilot' | 'openrouter' | 'groq'
+      aiProvider = configuredProvider
       copilotModel = savedState.copilotModel
       openrouterModel = savedState.openrouterModel
       geminiModel = savedState.geminiModel
@@ -354,9 +355,15 @@ export const handleRelease = async (): Promise<void> => {
 
     while (!accepted) {
       const spinner = new ScrambleProgress()
-      const modelDisplay = getModelValue(
-        copilotModel ?? openrouterModel ?? groqModel ?? geminiModel ?? ''
-      )
+      const currentModel =
+        aiProvider === 'copilot'
+          ? copilotModel
+          : aiProvider === 'openrouter'
+            ? openrouterModel
+            : aiProvider === 'groq'
+              ? groqModel
+              : geminiModel
+      const modelDisplay = getModelValue(currentModel)
       spinner.start([
         `Generating release notes with ${getAIProviderShortName(aiProvider)}${modelDisplay ? ` (${modelDisplay})` : ''}`,
       ])
@@ -368,7 +375,8 @@ export const handleRelease = async (): Promise<void> => {
         correction,
         copilotModel,
         openrouterModel,
-        geminiModel
+        geminiModel,
+        groqModel
       )
 
       const failed = !result || isContextLimitFailure(result) || isTransientAIFailure(result)
@@ -451,8 +459,7 @@ export const handleRelease = async (): Promise<void> => {
         if (failureAction === 'edit') {
           const edited = await editMultiline('Release Notes', '')
           if (edited === null) {
-            log.info('Release cancelled.')
-            return
+            continue
           }
           aiReleaseNotes = edited
           accepted = true
@@ -503,8 +510,7 @@ export const handleRelease = async (): Promise<void> => {
         case 'edit': {
           const edited = await editMultiline('Release Notes', aiReleaseNotes)
           if (edited === null) {
-            log.info('Release cancelled.')
-            return
+            continue
           }
           aiReleaseNotes = edited
           accepted = true
@@ -552,6 +558,7 @@ export const handleRelease = async (): Promise<void> => {
           copilotModel = undefined
           openrouterModel = undefined
           geminiModel = undefined
+          groqModel = undefined
           const newModel = await chooseModelForProvider(aiProvider, undefined, 'Back')
           if (newModel && newModel !== 'back') {
             switch (aiProvider) {

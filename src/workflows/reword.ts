@@ -666,7 +666,8 @@ const generateNewMessages = async (
         correction,
         state.copilotModel as CopilotModel,
         state.openrouterModel as OpenRouterModel,
-        state.geminiModel as GeminiModel
+        state.geminiModel as GeminiModel,
+        state.groqModel
       )
       spinner.stop()
     } catch {
@@ -752,6 +753,10 @@ const generateNewMessages = async (
                 if (model && typeof model === 'string') {
                   state.geminiModel = model as GeminiModel
                 }
+                break
+              }
+              case 'groq': {
+                state.groqModel = model
                 break
               }
               default: {
@@ -871,12 +876,22 @@ const generateNewMessages = async (
               state.copilotModel = chosenModel as unknown as CopilotModel
               state.openrouterModel = undefined
               state.geminiModel = undefined
+              state.groqModel = undefined
               currentModel = chosenModel
               break
             }
             case 'openrouter': {
               state.openrouterModel = chosenModel as unknown as OpenRouterModel
               state.copilotModel = undefined
+              state.geminiModel = undefined
+              state.groqModel = undefined
+              currentModel = chosenModel
+              break
+            }
+            case 'groq': {
+              state.groqModel = chosenModel
+              state.copilotModel = undefined
+              state.openrouterModel = undefined
               state.geminiModel = undefined
               currentModel = chosenModel
               break
@@ -885,6 +900,7 @@ const generateNewMessages = async (
               state.geminiModel = chosenModel as unknown as GeminiModel
               state.copilotModel = undefined
               state.openrouterModel = undefined
+              state.groqModel = undefined
               currentModel = chosenModel
               break
             }
@@ -899,7 +915,8 @@ const generateNewMessages = async (
           const provKey = (
             currentProvider === 'gemini' ||
             currentProvider === 'copilot' ||
-            currentProvider === 'openrouter'
+            currentProvider === 'openrouter' ||
+            currentProvider === 'groq'
               ? currentProvider
               : 'gemini'
           ) as 'gemini' | 'copilot' | 'openrouter' | 'groq'
@@ -922,10 +939,16 @@ const generateNewMessages = async (
               currentModel = chosen
               break
             }
+            case 'groq': {
+              state.groqModel = chosen
+              currentModel = chosen
+              break
+            }
             default: {
               state.geminiModel = chosen as unknown as GeminiModel
               state.copilotModel = undefined
               state.openrouterModel = undefined
+              state.groqModel = undefined
               currentModel = chosen
               break
             }
@@ -943,6 +966,7 @@ const generateNewMessages = async (
         }
         case 'edit': {
           const edited = await editMultiline(`Edit: ${commit.shortHash}`, commitMessage)
+          if (edited === null) continue
           if (edited?.trim()) {
             newMessages.set(commit.hash, buildFinalMessage(edited.trim()).trim())
             log.success(`Message set for ${commit.shortHash}`)

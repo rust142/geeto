@@ -12,6 +12,7 @@ import { createBranch, promptManualBranch } from './branch-utils.js'
 import { askQuestion, confirm } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { STEP } from '../core/constants.js'
+import { getConfiguredAIProvider } from '../utils/ai-workflow.js'
 import {
   DEFAULT_GEMINI_MODEL,
   getBranchStrategyConfig,
@@ -257,10 +258,12 @@ export const handleBranchCreationWorkflow = async (
             }
             case 'ai': {
               // Use AI branch naming
-              let selectedModel: CopilotModel | OpenRouterModel | GeminiModel | undefined
+              let selectedModel: CopilotModel | OpenRouterModel | GeminiModel | string | undefined
               let providerToUse: 'gemini' | 'copilot' | 'openrouter' | 'groq'
               // If user previously chose manual, ask which AI provider to use now
-              if (!state.aiProvider || state.aiProvider === 'manual') {
+              if (getConfiguredAIProvider(state)) {
+                providerToUse = getConfiguredAIProvider(state) ?? 'gemini'
+              } else {
                 const prov = await select('Choose AI provider for branch generation:', [
                   { label: 'Gemini', value: 'gemini' },
                   { label: 'GitHub Copilot', value: 'copilot' },
@@ -286,8 +289,6 @@ export const handleBranchCreationWorkflow = async (
 
                 state.aiProvider = providerToUse
                 saveState(state)
-              } else {
-                providerToUse = state.aiProvider as 'gemini' | 'copilot' | 'openrouter' | 'groq'
               }
               // Ensure state reflects the provider we'll use for generation
               state.aiProvider = providerToUse
@@ -303,6 +304,10 @@ export const handleBranchCreationWorkflow = async (
                 }
                 case 'gemini': {
                   selectedModel = state.geminiModel
+                  break
+                }
+                case 'groq': {
+                  selectedModel = state.groqModel
                   break
                 }
                 // No default
@@ -330,6 +335,10 @@ export const handleBranchCreationWorkflow = async (
                     }
                     case 'gemini': {
                       state.geminiModel = model as GeminiModel
+                      break
+                    }
+                    case 'groq': {
+                      state.groqModel = model
                       break
                     }
                     // No default
@@ -406,7 +415,8 @@ export const handleBranchCreationWorkflow = async (
                 const aiSuffix = await interactiveAIFallback(
                   null,
                   providerToUse,
-                  selectedModel ?? state.geminiModel ?? DEFAULT_GEMINI_MODEL,
+                  selectedModel ??
+                    (providerToUse === 'gemini' ? (state.geminiModel ?? DEFAULT_GEMINI_MODEL) : ''),
                   diff,
                   correction,
                   state.currentBranch,
@@ -423,6 +433,10 @@ export const handleBranchCreationWorkflow = async (
                       }
                       case 'gemini': {
                         state.geminiModel = model as GeminiModel
+                        break
+                      }
+                      case 'groq': {
+                        state.groqModel = model
                         break
                       }
                       // No default
@@ -486,49 +500,74 @@ export const handleBranchCreationWorkflow = async (
                         continue
                       }
                       case 'change-model': {
-                        const currentProv = state.aiProvider ?? 'gemini'
-                        if (currentProv === 'copilot') {
-                          const cop = await import('../api/copilot.js')
-                          const models = await cop.getCopilotModels()
-                          const copOptions = models.some((m) => m.value === 'back')
-                            ? models
-                            : [
-                                ...models,
-                                { label: 'Back to suggested branch selection', value: 'back' },
-                              ]
-                          const chosen = await select('Choose GitHub Copilot model:', copOptions)
-                          if (chosen === 'back') {
-                            continue
+                        const currentProv = getConfiguredAIProvider(state) ?? 'gemini'
+                        switch (currentProv) {
+                          case 'copilot': {
+                            const cop = await import('../api/copilot.js')
+                            const models = await cop.getCopilotModels()
+                            const copOptions = models.some((m) => m.value === 'back')
+                              ? models
+                              : [
+                                  ...models,
+                                  { label: 'Back to suggested branch selection', value: 'back' },
+                                ]
+                            const chosen = await select('Choose GitHub Copilot model:', copOptions)
+                            if (chosen === 'back') {
+                              continue
+                            }
+                            state.copilotModel = chosen as unknown as CopilotModel
+
+                            break
                           }
-                          state.copilotModel = chosen as unknown as CopilotModel
-                        } else if (currentProv === 'openrouter') {
-                          const or = await import('../api/openrouter.js')
-                          const models = await or.getOpenRouterModels()
-                          const orOptions = models.some((m) => m.value === 'back')
-                            ? models
-                            : [
-                                ...models,
-                                { label: 'Back to suggested branch selection', value: 'back' },
-                              ]
-                          const chosen = await select('Choose OpenRouter model:', orOptions)
-                          if (chosen === 'back') {
-                            continue
+                          case 'openrouter': {
+                            const or = await import('../api/openrouter.js')
+                            const models = await or.getOpenRouterModels()
+                            const orOptions = models.some((m) => m.value === 'back')
+                              ? models
+                              : [
+                                  ...models,
+                                  { label: 'Back to suggested branch selection', value: 'back' },
+                                ]
+                            const chosen = await select('Choose OpenRouter model:', orOptions)
+                            if (chosen === 'back') {
+                              continue
+                            }
+                            state.openrouterModel = chosen as unknown as OpenRouterModel
+
+                            break
                           }
-                          state.openrouterModel = chosen as unknown as OpenRouterModel
-                        } else {
-                          const gm = await import('../api/gemini.js')
-                          const models = await gm.getGeminiModels()
-                          const gmOptions = models.some((m) => m.value === 'back')
-                            ? models
-                            : [
-                                ...models,
-                                { label: 'Back to suggested branch selection', value: 'back' },
-                              ]
-                          const chosen = await select('Choose Gemini model:', gmOptions)
-                          if (chosen === 'back') {
-                            continue
+                          case 'groq': {
+                            const groq = await import('../api/groq.js')
+                            const models = await groq.getGroqModels()
+                            const groqOptions = models.some((m) => m.value === 'back')
+                              ? models
+                              : [
+                                  ...models,
+                                  { label: 'Back to suggested branch selection', value: 'back' },
+                                ]
+                            const chosen = await select('Choose Groq model:', groqOptions)
+                            if (chosen === 'back') {
+                              continue
+                            }
+                            state.groqModel = chosen
+
+                            break
                           }
-                          state.geminiModel = chosen as unknown as GeminiModel
+                          default: {
+                            const gm = await import('../api/gemini.js')
+                            const models = await gm.getGeminiModels()
+                            const gmOptions = models.some((m) => m.value === 'back')
+                              ? models
+                              : [
+                                  ...models,
+                                  { label: 'Back to suggested branch selection', value: 'back' },
+                                ]
+                            const chosen = await select('Choose Gemini model:', gmOptions)
+                            if (chosen === 'back') {
+                              continue
+                            }
+                            state.geminiModel = chosen as unknown as GeminiModel
+                          }
                         }
                         saveState(state)
                         branchMenuShown = false
@@ -582,12 +621,14 @@ export const handleBranchCreationWorkflow = async (
                             state.geminiModel = chosen as unknown as GeminiModel
                             state.copilotModel = undefined
                             state.openrouterModel = undefined
+                            state.groqModel = undefined
                             break
                           }
-                          default: {
-                            state.geminiModel = chosen as unknown as GeminiModel
+                          case 'groq': {
+                            state.groqModel = chosen
                             state.copilotModel = undefined
                             state.openrouterModel = undefined
+                            state.geminiModel = undefined
                             break
                           }
                         }

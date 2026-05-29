@@ -269,6 +269,7 @@ export const main = async (opts?: MainOpts): Promise<void> => {
       copilotModel,
       openrouterModel,
       geminiModel,
+      groqModel,
       shouldResume,
       suppressStagingDoneMessage,
       savedState,
@@ -286,6 +287,7 @@ export const main = async (opts?: MainOpts): Promise<void> => {
       copilotModel,
       openrouterModel,
       geminiModel,
+      groqModel,
     }
 
     if (shouldResume && savedState) {
@@ -303,6 +305,7 @@ export const main = async (opts?: MainOpts): Promise<void> => {
           copilotModel,
           openrouterModel,
           geminiModel,
+          groqModel,
         }
         saveState(state)
       } else {
@@ -315,6 +318,7 @@ export const main = async (opts?: MainOpts): Promise<void> => {
           copilotModel,
           openrouterModel,
           geminiModel,
+          groqModel,
         }
         // Save state if provider info was just selected
         if (!savedState.aiProvider && aiProvider) {

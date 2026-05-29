@@ -4,6 +4,7 @@
 
 import type { CopilotModel } from '../api/copilot.js'
 import type { GeminiModel } from '../api/gemini.js'
+import type { GroqModel } from '../api/groq.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 
 // SelectOption type previously used for model lists; not needed after refactor
@@ -16,11 +17,13 @@ export const handleAIProviderSelection = async (): Promise<{
   copilotModel?: CopilotModel
   openrouterModel?: OpenRouterModel
   geminiModel?: GeminiModel
+  groqModel?: GroqModel
 }> => {
   let aiProvider: 'gemini' | 'copilot' | 'openrouter' | 'groq' | 'manual'
   let copilotModel: CopilotModel | undefined
   let openrouterModel: OpenRouterModel | undefined
   let geminiModel: GeminiModel | undefined
+  let groqModel: GroqModel | undefined
 
   // AI provider selection loop
   while (true) {
@@ -69,6 +72,11 @@ export const handleAIProviderSelection = async (): Promise<{
 
         break
       }
+      case 'groq': {
+        groqModel = chosen
+
+        break
+      }
       // No default
     }
 
@@ -76,5 +84,5 @@ export const handleAIProviderSelection = async (): Promise<{
     break
   }
 
-  return { aiProvider, copilotModel, openrouterModel, geminiModel }
+  return { aiProvider, copilotModel, openrouterModel, geminiModel, groqModel }
 }

@@ -19,6 +19,7 @@ import type { OpenRouterModel } from '../api/openrouter.js'
 import { getCurrentVersion, updatePackageVersion } from './release-utils.js'
 import { askQuestion, confirm, editMultiline } from '../cli/input.js'
 import { select } from '../cli/menu.js'
+import { getConfiguredAIProvider } from '../utils/ai-workflow.js'
 import { colors } from '../utils/colors.js'
 import { BOX_W } from '../utils/display.js'
 import { exec, execAsync } from '../utils/exec.js'
@@ -297,17 +298,22 @@ const aiRewriteMergedNotes = async (
   let copilotModel: CopilotModel | undefined
   let openrouterModel: OpenRouterModel | undefined
   let geminiModel: GeminiModel | undefined
+  let groqModel: string | undefined
 
   // Use saved provider/model if available
+  const configuredProvider = getConfiguredAIProvider(savedState)
   if (
-    savedState?.aiProvider &&
-    savedState.aiProvider !== 'manual' &&
-    (savedState.copilotModel || savedState.openrouterModel || savedState.geminiModel)
+    configuredProvider &&
+    (savedState?.copilotModel ||
+      savedState?.openrouterModel ||
+      savedState?.geminiModel ||
+      savedState?.groqModel)
   ) {
-    aiProvider = savedState.aiProvider as 'gemini' | 'copilot' | 'openrouter' | 'groq'
+    aiProvider = configuredProvider
     copilotModel = savedState.copilotModel
     openrouterModel = savedState.openrouterModel
     geminiModel = savedState.geminiModel
+    groqModel = savedState.groqModel
   } else {
     let providerChosen = false
     while (!providerChosen) {
@@ -334,6 +340,10 @@ const aiRewriteMergedNotes = async (
           openrouterModel = chosen as OpenRouterModel
           break
         }
+        case 'groq': {
+          groqModel = chosen
+          break
+        }
       }
       providerChosen = true
     }
@@ -348,7 +358,15 @@ const aiRewriteMergedNotes = async (
     const fullPrompt = correction ? `${prompt}\n\nUser feedback: ${correction}` : prompt
 
     const spinner = new ScrambleProgress()
-    const modelDisplay = getModelValue(copilotModel ?? openrouterModel ?? geminiModel ?? '')
+    const currentModel =
+      aiProvider === 'copilot'
+        ? copilotModel
+        : aiProvider === 'openrouter'
+          ? openrouterModel
+          : aiProvider === 'groq'
+            ? groqModel
+            : geminiModel
+    const modelDisplay = getModelValue(currentModel)
     spinner.start([
       `Merging release notes with ${getAIProviderShortName(aiProvider)}${modelDisplay ? ` (${modelDisplay})` : ''}`,
     ])
@@ -358,7 +376,8 @@ const aiRewriteMergedNotes = async (
       fullPrompt,
       copilotModel,
       openrouterModel,
-      geminiModel
+      geminiModel,
+      groqModel
     )
 
     spinner.succeed('Merged release notes generated')
@@ -393,6 +412,7 @@ const aiRewriteMergedNotes = async (
       }
       case 'edit': {
         const edited = await editMultiline('Merged Release Notes', finalNotes)
+        if (edited === null) continue
         return edited
       }
       case 'correct': {
@@ -417,6 +437,10 @@ const aiRewriteMergedNotes = async (
               openrouterModel = newModel as OpenRouterModel
               break
             }
+            case 'groq': {
+              groqModel = newModel
+              break
+            }
           }
         }
         correction = undefined
@@ -433,6 +457,7 @@ const aiRewriteMergedNotes = async (
         copilotModel = undefined
         openrouterModel = undefined
         geminiModel = undefined
+        groqModel = undefined
         const provModel = await chooseModelForProvider(aiProvider, undefined, 'Back')
         if (provModel && provModel !== 'back') {
           switch (aiProvider) {
@@ -446,6 +471,10 @@ const aiRewriteMergedNotes = async (
             }
             case 'openrouter': {
               openrouterModel = provModel as OpenRouterModel
+              break
+            }
+            case 'groq': {
+              groqModel = provModel
               break
             }
           }
