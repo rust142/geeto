@@ -1,8 +1,6 @@
 /**
  * OpenRouter integration for AI-powered branch naming and commit messages
  */
-import path from 'node:path'
-
 import {
   generateBranchName as sdkGenerateBranchName,
   generateCommitMessage as sdkGenerateCommitMessage,
@@ -11,6 +9,7 @@ import {
   isAvailable as sdkIsAvailable,
 } from './openrouter-sdk.js'
 import { saveAISuggestion } from '../utils/ai-provider-helpers.js'
+import { resolveConfigPath } from '../utils/config.js'
 import { log } from '../utils/logging.js'
 
 // Supported models on OpenRouter
@@ -25,7 +24,7 @@ export const getOpenRouterModels = async (): Promise<
   try {
     // Prefer persisted list in .geeto/openrouter-model.json per project sync
     const fs = await import('node:fs')
-    const cfgPath = path.join(process.cwd(), '.geeto', 'openrouter-model.json')
+    const cfgPath = resolveConfigPath('openrouter-model.json')
     if (fs.existsSync(cfgPath)) {
       try {
         const raw = fs.readFileSync(cfgPath, 'utf8')

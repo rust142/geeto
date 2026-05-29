@@ -8,7 +8,7 @@ import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 
 import { getPlatformAPI } from '../api/platform.js'
-import { askMultiline, askQuestion, confirm, editInline } from '../cli/input.js'
+import { askQuestion, confirm, editMultiline } from '../cli/input.js'
 import { multiSelect, select } from '../cli/menu.js'
 import { getModelForProvider, showAIPreview, updateModelInState } from '../utils/ai-workflow.js'
 import { colors } from '../utils/colors.js'
@@ -110,7 +110,7 @@ export const handleCreateIssue = async (): Promise<void> => {
     aiUsed = true
 
     if (process.stdin.isTTY) process.stdin.setRawMode(false)
-    const description = askMultiline('Brief description for AI: ', '')
+    const description = await editMultiline('Brief description for AI: ', '')
     if (!description) {
       log.warn('No description provided. Falling back to manual.')
       aiUsed = false
@@ -159,7 +159,7 @@ export const handleCreateIssue = async (): Promise<void> => {
           continue
         }
         case 'edit': {
-          const editedBody = await editInline(body, 'Edit issue body:', 'md')
+          const editedBody = await editMultiline('Edit issue body:', body)
           if (editedBody !== null) body = editedBody
           if (process.stdin.isTTY) process.stdin.setRawMode(false)
           const editedTitle = askQuestion('Edit title (Enter to keep): ').trim()
@@ -242,7 +242,7 @@ export const handleCreateIssue = async (): Promise<void> => {
         break
       }
       case 'inline': {
-        const edited = await editInline('', 'Enter issue description', 'md')
+        const edited = await editMultiline('Enter issue description', '')
         if (edited !== null) body = edited
         break
       }

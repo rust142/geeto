@@ -3,25 +3,23 @@
  */
 
 import fs from 'node:fs'
+import path from 'node:path'
 
 import { askQuestion, confirm } from '../cli/input.js'
-import { ensureGeetoIgnored, getGroqConfigPath } from '../utils/config.js'
+import { GLOBAL_GEETO_DIR, resolveConfigPath } from '../utils/config.js'
 import { openBrowser } from '../utils/exec.js'
 import { log } from '../utils/logging.js'
 
 export const setupGroqConfigInteractive = (): boolean => {
-  const configPath = getGroqConfigPath()
   try {
-    if (fs.existsSync(configPath)) {
-      return true
-    }
+    if (fs.existsSync(resolveConfigPath('groq.toml'))) return true
   } catch {
     // fall through to interactive setup
   }
 
   log.info('Groq provides free access to fast LLM models (Llama, Gemma, Mixtral).\n')
   log.info('Get your free API key at: https://console.groq.com/keys')
-  log.info(`Config will be saved to: ${configPath}\n`)
+  log.info('Config will be saved to .geeto/groq.toml (or ~/.geeto/ globally).\n')
 
   const shouldSetup = confirm('Setup Groq integration now?')
   if (!shouldSetup) return false
@@ -45,11 +43,11 @@ export const setupGroqConfigInteractive = (): boolean => {
     log.info('Saving anyway — if authentication fails, re-run setup with a valid key.')
   }
 
-  ensureGeetoIgnored()
+  const configDir = GLOBAL_GEETO_DIR
+  const configPath = path.join(configDir, 'groq.toml')
 
-  const dir = configPath.slice(0, configPath.lastIndexOf('/'))
   try {
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    if (!fs.existsSync(configDir)) fs.mkdirSync(configDir, { recursive: true })
   } catch (error) {
     log.error(`Failed to create config directory: ${(error as Error).message}`)
     return false

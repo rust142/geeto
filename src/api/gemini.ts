@@ -2,8 +2,6 @@
  * Gemini integration for AI-powered branch naming and commit messages
  */
 
-import path from 'node:path'
-
 import {
   generateBranchName as sdkGenerateBranchName,
   generateCommitMessage as sdkGenerateCommitMessage,
@@ -13,6 +11,7 @@ import {
   isAvailable as sdkIsAvailable,
 } from './gemini-sdk.js'
 import { saveAISuggestion } from '../utils/ai-provider-helpers.js'
+import { resolveConfigPath } from '../utils/config.js'
 import { log } from '../utils/logging.js'
 
 // Supported models on Gemini
@@ -26,7 +25,7 @@ export const getGeminiModels = async (): Promise<Array<{ label: string; value: G
   try {
     // Check persisted favorites first
     const fs = await import('node:fs')
-    const cfgPath = path.join(process.cwd(), '.geeto', 'gemini-model.json')
+    const cfgPath = resolveConfigPath('gemini-model.json')
     if (fs.existsSync(cfgPath)) {
       try {
         const raw = fs.readFileSync(cfgPath, 'utf8')

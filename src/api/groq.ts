@@ -1,4 +1,4 @@
-import path from 'node:path'
+import { resolveConfigPath } from '../utils/config.js'
 
 export type { GroqModel } from './groq-sdk.js'
 export {
@@ -23,7 +23,7 @@ const FALLBACK_MODELS: Array<{ label: string; value: string }> = [
 export const getGroqModels = async (): Promise<Array<{ label: string; value: string }>> => {
   try {
     const fs = await import('node:fs')
-    const modelFile = path.join(process.cwd(), '.geeto', 'groq-model.json')
+    const modelFile = resolveConfigPath('groq-model.json')
     if (fs.existsSync(modelFile)) {
       const data = JSON.parse(fs.readFileSync(modelFile, 'utf8')) as Array<{
         label: string

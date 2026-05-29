@@ -5,13 +5,38 @@
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
-import path from 'node:path'
 import readline from 'node:readline'
 
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout,
 })
+
+const readStdinText = (): string => {
+  try {
+    return fs.readFileSync(0, 'utf8')
+  } catch {
+    return ''
+  }
+}
+
+const supportsStickyTerminalLayout = (): boolean => {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) return false
+
+  const term = process.env.TERM?.toLowerCase()
+  if (term === 'dumb') return false
+
+  if (process.platform !== 'win32') return term !== undefined
+
+  return [
+    process.env.WT_SESSION,
+    // cspell:ignore ANSICON
+    process.env.ANSICON,
+    process.env.ConEmuANSI === 'ON' ? '1' : undefined,
+    process.env.TERM_PROGRAM === 'vscode' ? '1' : undefined,
+    term !== undefined && term !== 'dumb' ? term : undefined,
+  ].some(Boolean)
+}
 
 /**
  * Ask a question and return user input
@@ -72,7 +97,9 @@ export const confirm = (question: string, defaultYes: boolean = true): boolean =
   if (process.stdin.isTTY && process.stdin.isRaw) {
     process.stdin.setRawMode(false)
   }
-  process.stdout.write('\u001B[?25h')
+  if (supportsStickyTerminalLayout()) {
+    process.stdout.write('\u001B[?25h')
+  }
 
   // Non-TTY fallback — plain text input
   if (!process.stdin.isTTY) {
@@ -202,218 +229,388 @@ export const confirm = (question: string, defaultYes: boolean = true): boolean =
  *
  * Returns trimmed text or `null` when cancelled.
  */
-export const askMultiline = (question: string, initialText = ''): string | null => {
+export const editMultiline = async (question: string, initialText = ''): Promise<string | null> => {
   if (process.stdin.isTTY && process.stdin.isRaw) {
     process.stdin.setRawMode(false)
   }
-  process.stdout.write('\u001B[?25h')
 
   const isMac = process.platform === 'darwin'
   const delWordHint = isMac ? '⌥⌫' : 'Ctrl+W'
+  const cleanQuestion = question.trim()
+  const hintText1 = 'Enter=newline | Ctrl+D=submit | Ctrl+C=cancel'
+  const hintText2 = `${delWordHint}=del word | Ctrl+U=del line | Ctrl+L=clear all`
+  const compactHintText = `Enter=newline | Ctrl+D=submit | Ctrl+C=cancel | ${delWordHint}=del word | Ctrl+U=line | Ctrl+L=clear`
 
-  const showHeader = (): void => {
-    console.log(`\n\u001B[36m?\u001B[0m ${question}`)
-    console.log(`  \u001B[90mEnter=newline | Ctrl+D=submit | Ctrl+C=cancel\u001B[0m`)
-    console.log(`  \u001B[90m${delWordHint}=del word | Ctrl+U=del line | Ctrl+L=clear all\u001B[0m`)
+  const printPlainIntro = (): void => {
+    console.log(`\n? ${cleanQuestion}`)
+    if (initialText.trim()) {
+      console.log('  -- current --')
+      for (const l of initialText.split('\n')) {
+        console.log(`  ${l}`)
+      }
+      console.log('  -- type below (empty = keep) --')
+    }
   }
 
-  showHeader()
-
-  if (initialText.trim()) {
-    console.log('  \u001B[90m── current ──\u001B[0m')
-    for (const l of initialText.split('\n')) {
-      console.log(`  \u001B[90m${l}\u001B[0m`)
-    }
-    console.log('  \u001B[90m── type below (Ctrl+D empty = keep) ──\u001B[0m')
+  const getTextResult = (rawText: string): string | null => {
+    const t = rawText.trim()
+    if (!t && initialText.trim()) return initialText.trim()
+    return t || null
   }
 
   // Non-TTY fallback (piped input)
   if (!process.stdin.isTTY) {
-    const r = spawnSync('cat', [], {
-      stdio: ['inherit', 'pipe', 'inherit'],
-      encoding: 'utf8',
-    })
-    const t = r.stdout?.trim() ?? ''
-    if (!t && initialText.trim()) return initialText.trim()
-    return t || null
+    printPlainIntro()
+    return getTextResult(readStdinText())
   }
+
+  if (!supportsStickyTerminalLayout()) {
+    printPlainIntro()
+    console.log('  Submit with EOF: Ctrl+D on Unix/macOS, Ctrl+Z then Enter on Windows.')
+    rl.pause()
+    const text = getTextResult(readStdinText())
+    rl.resume()
+    return text
+  }
+
+  process.stdout.write('\u001B[?25h')
 
   // Pause readline so fs.readSync can use fd 0
   rl.pause()
   process.stdin.setRawMode(true)
 
-  const lines: string[] = ['']
-  let li = 0
-  const buf = Buffer.alloc(16)
+  let rows = process.stdout.rows ?? 24
+  let columns = process.stdout.columns ?? 80
+  let footerRows = rows < 6 ? 1 : 2
+  let scrollTop = rows < 6 ? 2 : 3
+  let scrollBottom = Math.max(scrollTop, rows - footerRows)
+  let resizeTimer: NodeJS.Timeout | undefined
+  let stickyTimer: NodeJS.Timeout | undefined
 
-  /** Redraw all text from scratch (clears screen) */
-  const fullRedraw = (): void => {
-    process.stdout.write('\u001B[2J\u001B[H')
-    showHeader()
-    for (let i = 0; i <= li; i++) {
-      process.stdout.write(lines[i] ?? '')
-      if (i < li) process.stdout.write('\n')
+  const updateTerminalSize = (): void => {
+    rows = process.stdout.rows ?? 24
+    columns = process.stdout.columns ?? 80
+    footerRows = rows < 6 ? 1 : 2
+    scrollTop = rows < 6 ? 2 : 3
+    scrollBottom = Math.max(scrollTop, rows - footerRows)
+  }
+
+  const printHeader = (): void => {
+    process.stdout.write(`\u001B[1;1H\u001B[2K\u001B[36m?\u001B[0m ${cleanQuestion}`)
+  }
+
+  const printHints = (): void => {
+    const formatHint = (text: string): string => {
+      const maxLength = Math.max(1, columns - 2)
+      const trimmed =
+        text.length > maxLength
+          ? maxLength <= 3
+            ? '.'.repeat(maxLength)
+            : text.slice(0, maxLength - 3) + '...'
+          : text
+      return `  \u001B[90m${trimmed}\u001B[0m`
+    }
+
+    if (footerRows === 1) {
+      process.stdout.write(`\u001B[${rows};1H\u001B[2K${formatHint(compactHintText)}`)
+      return
+    }
+    process.stdout.write(`\u001B[${rows - 1};1H\u001B[2K${formatHint(hintText1)}`)
+    process.stdout.write(`\u001B[${rows};1H\u001B[2K${formatHint(hintText2)}`)
+  }
+
+  const refreshStickyChrome = (): void => {
+    const currentRows = process.stdout.rows ?? 24
+    const currentColumns = process.stdout.columns ?? 80
+    if (currentRows !== rows || currentColumns !== columns) {
+      fullRedraw(true)
     }
   }
+
+  const lines: string[] = initialText.trim() ? initialText.split('\n') : ['']
+  let li = lines.length - 1
+  let ci = (lines[li] ?? '').length
+
+  const currentLine = (): string => lines[li] ?? ''
+
+  const isWhitespace = (ch: string): boolean => /\s/.test(ch)
+
+  const moveCursorToInput = (): void => {
+    const row = Math.min(scrollBottom, scrollTop + li)
+    const col = Math.max(1, ci + 1)
+    process.stdout.write(`\u001B[${row};${col}H`)
+  }
+
+  /** Redraw editor layout; header+hints stay fixed around the scrollable content area. */
+  const fullRedraw = (clearScreen = false): void => {
+    updateTerminalSize()
+    process.stdout.write('\u001B[r')
+    if (clearScreen) process.stdout.write('\u001B[2J')
+    printHeader()
+    process.stdout.write(`\u001B[${scrollTop};${scrollBottom}r`)
+    process.stdout.write(`\u001B[${scrollTop};1H\u001B[J`)
+    for (let i = 0; i < lines.length; i++) {
+      process.stdout.write(lines[i] ?? '')
+      if (i < lines.length - 1) process.stdout.write('\n')
+    }
+    printHints()
+    moveCursorToInput()
+  }
+
+  const handleResize = (): void => {
+    if (resizeTimer) clearTimeout(resizeTimer)
+    resizeTimer = setTimeout(() => {
+      fullRedraw(true)
+    }, 25)
+  }
+
+  process.on('SIGWINCH', handleResize)
+
+  // Use the alternate screen so sticky multiline editing does not fight shell scrollback.
+  process.stdout.write('\u001B[?1049h')
+  fullRedraw(true)
+  stickyTimer = setInterval(refreshStickyChrome, 150)
 
   /** Delete word backwards on current line */
   const deleteWord = (): void => {
-    const cur = lines[li] ?? ''
-    if (!cur) return
-    const stripped = cur.replace(/\s+$/, '')
+    const cur = currentLine()
+    if (!cur || ci === 0) return
+    const before = cur.slice(0, ci)
+    const after = cur.slice(ci)
+    const stripped = before.replace(/\s+$/, '')
     const sp = stripped.lastIndexOf(' ')
-    lines[li] = sp === -1 ? '' : stripped.slice(0, sp + 1)
-    process.stdout.write(`\r\u001B[K${lines[li]}`)
+    const nextBefore = sp === -1 ? '' : stripped.slice(0, sp + 1)
+    lines[li] = nextBefore + after
+    ci = nextBefore.length
+    fullRedraw()
   }
 
-  try {
-    for (;;) {
-      let n: number
-      try {
-        n = fs.readSync(0, buf, 0, buf.length, null)
-      } catch {
-        break
+  const moveWordLeft = (): void => {
+    if (ci === 0) {
+      if (li > 0) {
+        li--
+        ci = currentLine().length
       }
-      if (n === 0) break
+      moveCursorToInput()
+      return
+    }
 
-      const b = buf[0] as number | undefined
-      if (b === undefined) break
+    const cur = currentLine()
+    let nextCursor = ci
+    while (nextCursor > 0 && isWhitespace(cur[nextCursor - 1] ?? '')) nextCursor--
+    while (nextCursor > 0 && !isWhitespace(cur[nextCursor - 1] ?? '')) nextCursor--
+    ci = nextCursor
+    moveCursorToInput()
+  }
 
-      // Ctrl+C → cancel
-      if (b === 3) {
-        process.stdout.write('\n')
-        return null
-      }
-
-      // Escape (standalone, not arrow sequence) → cancel
-      if (b === 27 && (n === 1 || buf[1] !== 0x5b)) {
-        process.stdout.write('\n')
-        return null
-      }
-
-      // Ctrl+D → submit
-      if (b === 4) {
-        process.stdout.write('\n')
-        const text = lines.join('\n').trim()
-        if (!text && initialText.trim()) return initialText.trim()
-        return text || null
-      }
-
-      // Enter → new line
-      if (b === 13 || b === 10) {
-        process.stdout.write('\n')
+  const moveWordRight = (): void => {
+    const cur = currentLine()
+    if (ci >= cur.length) {
+      if (li < lines.length - 1) {
         li++
-        lines.splice(li, 0, '')
-        continue
+        ci = 0
       }
+      moveCursorToInput()
+      return
+    }
 
-      // Backspace
-      if (b === 127 || b === 8) {
-        const cur = lines[li] ?? ''
-        if (cur.length > 0) {
-          // Delete within current line
-          lines[li] = cur.slice(0, -1)
-          process.stdout.write('\b \b')
-        } else if (li > 0) {
-          // At start of line → merge with previous line
-          lines.splice(li, 1)
-          li--
+    let nextCursor = ci
+    while (nextCursor < cur.length && !isWhitespace(cur[nextCursor] ?? '')) nextCursor++
+    while (nextCursor < cur.length && isWhitespace(cur[nextCursor] ?? '')) nextCursor++
+    ci = nextCursor
+    moveCursorToInput()
+  }
+
+  const getFinalText = (): string | null => {
+    const text = lines.join('\n').trim()
+    if (!text && initialText.trim()) return initialText.trim()
+    return text || null
+  }
+
+  return await new Promise<string | null>((resolve) => {
+    let done = false
+
+    const finish = (value: string | null): void => {
+      if (done) return
+      done = true
+      process.stdin.off('data', handleData)
+      if (process.stdin.isTTY) {
+        process.stdin.setRawMode(false)
+      }
+      if (resizeTimer) clearTimeout(resizeTimer)
+      if (stickyTimer) clearInterval(stickyTimer)
+      process.off('SIGWINCH', handleResize)
+      process.stdout.write('\u001B[r\u001B[?1049l')
+      rl.resume()
+      resolve(value)
+    }
+
+    function handleData(chunk: Buffer | string): void {
+      const input = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+      const n = input.length
+
+      for (let offset = 0; offset < n; offset++) {
+        const b = input[offset] as number | undefined
+        if (b === undefined) break
+
+        // Ctrl+C → cancel
+        if (b === 3) {
+          process.stdout.write('\n')
+          finish(null)
+          return
+        }
+
+        // Ctrl+D → submit
+        if (b === 4) {
+          process.stdout.write('\n')
+          finish(getFinalText())
+          return
+        }
+
+        // Enter → new line
+        if (b === 13 || b === 10) {
+          const cur = currentLine()
+          lines[li] = cur.slice(0, ci)
+          li++
+          lines.splice(li, 0, cur.slice(ci))
+          ci = 0
           fullRedraw()
+          continue
         }
-        continue
-      }
 
-      // Ctrl+W → delete word
-      if (b === 23) {
-        deleteWord()
-        continue
-      }
+        // Backspace
+        if (b === 127 || b === 8) {
+          const cur = currentLine()
+          if (ci > 0) {
+            // Delete within current line
+            lines[li] = cur.slice(0, ci - 1) + cur.slice(ci)
+            ci--
+            fullRedraw()
+          } else if (li > 0) {
+            // At start of line → merge with previous line
+            const previousLength = (lines[li - 1] ?? '').length
+            lines[li - 1] = (lines[li - 1] ?? '') + cur
+            lines.splice(li, 1)
+            li--
+            ci = previousLength
+            fullRedraw()
+          }
+          continue
+        }
 
-      // Ctrl+U → clear current line
-      if (b === 21) {
-        lines[li] = ''
-        process.stdout.write('\r\u001B[K')
-        continue
-      }
-
-      // Ctrl+L → clear all, restart
-      if (b === 12) {
-        lines.length = 0
-        lines.push('')
-        li = 0
-        fullRedraw()
-        continue
-      }
-
-      // ESC sequences → Option+Backspace (ESC+DEL) = del word
-      if (b === 27) {
-        if (n >= 2 && buf[1] === 0x7f) {
+        // Ctrl+W → delete word
+        if (b === 23) {
           deleteWord()
+          continue
         }
-        continue
+
+        // Ctrl+U → clear current line
+        if (b === 21) {
+          lines[li] = ''
+          ci = 0
+          fullRedraw()
+          continue
+        }
+
+        // Ctrl+L → clear all, restart
+        if (b === 12) {
+          lines.length = 0
+          lines.push('')
+          li = 0
+          ci = 0
+          fullRedraw()
+          continue
+        }
+
+        // ESC sequences → Option+Backspace / Option+Arrow / Ctrl+Arrow
+        if (b === 27) {
+          const next = input[offset + 1]
+          if (next === 0x7f) {
+            deleteWord()
+            offset += 1
+            continue
+          }
+          if (next === 0x62) {
+            moveWordLeft()
+            offset += 1
+            continue
+          }
+          if (next === 0x66) {
+            moveWordRight()
+            offset += 1
+            continue
+          }
+          if (next === 0x5b) {
+            let sequenceEnd = offset + 2
+            while (sequenceEnd < n) {
+              const value = input[sequenceEnd]
+              if (value !== undefined && value >= 0x40 && value <= 0x7e) break
+              sequenceEnd++
+            }
+            const code = input[sequenceEnd]
+            const sequence = input.toString('utf8', offset, sequenceEnd + 1)
+            const isWordArrow =
+              sequence.includes(';3') ||
+              sequence.includes(';5') ||
+              /^\u001B\[[35][CD]$/.test(sequence)
+            if (code === 0x44) {
+              if (isWordArrow) {
+                moveWordLeft()
+              } else if (ci > 0) {
+                ci--
+              } else if (li > 0) {
+                li--
+                ci = currentLine().length
+              }
+              moveCursorToInput()
+            } else if (code === 0x43) {
+              if (isWordArrow) {
+                moveWordRight()
+              } else if (ci < currentLine().length) {
+                ci++
+              } else if (li < lines.length - 1) {
+                li++
+                ci = 0
+              }
+              moveCursorToInput()
+            } else if (code === 0x41 && li > 0) {
+              li--
+              ci = Math.min(ci, currentLine().length)
+              moveCursorToInput()
+            } else if (code === 0x42 && li < lines.length - 1) {
+              li++
+              ci = Math.min(ci, currentLine().length)
+              moveCursorToInput()
+            }
+            offset = sequenceEnd
+            continue
+          }
+          process.stdout.write('\n')
+          finish(null)
+          return
+        }
+
+        // Printable text segment. A raw read can contain text plus control keys.
+        if (b >= 32) {
+          let end = offset + 1
+          while (end < n) {
+            const next = input[end]
+            if (next === undefined || next < 32 || next === 127 || next === 27) break
+            end++
+          }
+          const ch = input.toString('utf8', offset, end)
+          const cur = currentLine()
+          lines[li] = cur.slice(0, ci) + ch + cur.slice(ci)
+          ci += ch.length
+          fullRedraw()
+          offset = end - 1
+        }
       }
-
-      // Printable characters
-      if (b >= 32) {
-        const ch = buf.toString('utf8', 0, n)
-        lines[li] = (lines[li] ?? '') + ch
-        process.stdout.write(ch)
-      }
     }
-  } finally {
-    if (process.stdin.isTTY) {
-      process.stdin.setRawMode(false)
-    }
-    rl.resume()
-  }
 
-  const text = lines.join('\n').trim()
-  if (!text && initialText.trim()) return initialText.trim()
-  return text || null
-}
-
-/**
- * Inline multi-line text editor using the system's terminal editor.
- * Opens vim (macOS/Linux) or notepad (Windows) with the initial text.
- *
- * Kept async (returns Promise) so all existing callers using
- * `await editInline(...)` continue to work without changes.
- */
-export const editInline = (
-  initialText: string,
-  label = 'Edit Message',
-  _syntax = ''
-): Promise<string | null> => {
-  if (process.stdin.isTTY && process.stdin.isRaw) {
-    process.stdin.setRawMode(false)
-  }
-  process.stdout.write('\u001B[?25h')
-
-  console.log(`\n  \u001B[36m${label}\u001B[0m`)
-
-  const tmpDir = os.tmpdir()
-  const tmpPath = path.join(tmpDir, `geeto-${Date.now()}.md`)
-  try {
-    fs.writeFileSync(tmpPath, initialText, { encoding: 'utf8' })
-  } catch {
-    return Promise.resolve(null)
-  }
-
-  const editor = process.platform === 'win32' ? 'notepad' : 'vim'
-  try {
-    spawnSync(editor, [tmpPath], { stdio: 'inherit' })
-    const edited = fs.readFileSync(tmpPath, { encoding: 'utf8' }).trim()
-    if (!edited) return Promise.resolve(null)
-    return Promise.resolve(edited)
-  } catch {
-    return Promise.resolve(null)
-  } finally {
-    try {
-      fs.unlinkSync(tmpPath)
-    } catch {
-      // ignore cleanup errors
-    }
-  }
+    process.stdin.on('data', handleData)
+    process.stdin.resume()
+  })
 }
 
 /**

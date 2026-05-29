@@ -28,7 +28,7 @@ import {
   promoteToStable,
   updatePackageVersion,
 } from './release-utils.js'
-import { askQuestion, confirm, editInline } from '../cli/input.js'
+import { askQuestion, confirm, editMultiline } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
 import { BOX_W } from '../utils/display.js'
@@ -411,7 +411,7 @@ export const handleRelease = async (): Promise<void> => {
           continue
         }
         case 'edit': {
-          const edited = await editInline(aiReleaseNotes, 'Release Notes', '.md')
+          const edited = await editMultiline('Release Notes', aiReleaseNotes)
           aiReleaseNotes = edited
           accepted = true
           break

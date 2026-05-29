@@ -52,6 +52,12 @@ export interface TrelloChecklist {
   checkItems: TrelloChecklistItem[]
 }
 
+export interface TrelloLabel {
+  id: string
+  name: string
+  color: string | null
+}
+
 export interface TrelloCard {
   id: string
   name: string
@@ -60,6 +66,7 @@ export interface TrelloCard {
   shortLink: string
   url: string
   idList: string
+  labels?: TrelloLabel[]
   checklists?: TrelloChecklist[]
 }
 

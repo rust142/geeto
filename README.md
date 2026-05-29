@@ -256,6 +256,52 @@ Creates `.github/instructions/tasks.instructions.md` with structured task lists 
 
 ---
 
+## `.geeto/` Directory
+
+> **v0.10.0+** — `.geeto/` is the only supported config location. Any config from previous versions outside this directory is no longer read.
+
+Geeto supports two config locations with **local priority**:
+
+| Location    | Scope                 | Priority                            |
+| ----------- | --------------------- | ----------------------------------- |
+| `.geeto/`   | Project-local         | **Higher** — overrides global       |
+| `~/.geeto/` | Global (all projects) | Fallback when no local config found |
+
+Set up once globally, every new project picks it up automatically. Override per-project by creating a local `.geeto/` config.
+
+**New project setup:** run any `--setup-*` command and choose "Save globally" when prompted — no copy-paste needed.
+
+**Already have local config?** Open Settings (`geeto --settings` or via main menu) → AI → **Save AI config globally (~/.geeto/)** — moves all local AI config files to global in one step.
+
+The `.geeto/` folder is automatically added to `.gitignore` on first run (never committed). `~/.geeto/` lives outside any repo.
+
+### Config files
+
+| File                   | Created by                | Purpose                                                                   |
+| ---------------------- | ------------------------- | ------------------------------------------------------------------------- |
+| `gemini.toml`          | `--setup-gemini`          | Gemini API key                                                            |
+| `openrouter.toml`      | `--setup-openrouter`      | OpenRouter API key                                                        |
+| `groq.toml`            | `--setup-groq`            | Groq API key                                                              |
+| `github.toml`          | `--setup-github`          | GitHub personal access token                                              |
+| `gitlab.toml`          | `--setup-gitlab`          | GitLab token + instance URL                                               |
+| `trello.toml`          | `--setup-trello`          | Trello API key, token, board ID                                           |
+| `branch-strategy.toml` | `--separator` / first run | Branch separator char and last naming strategy (project-only, not global) |
+
+### State & cache files
+
+These are always project-local — not read from `~/.geeto/`.
+
+| File                      | Created by                          | Purpose                                                                  |
+| ------------------------- | ----------------------------------- | ------------------------------------------------------------------------ |
+| `geeto-state.json`        | Automatically                       | Checkpoint state for workflow recovery (`-r, --resume`)                  |
+| `openrouter-model.json`   | `--sync-models`                     | Persisted OpenRouter model list (filtered, text/code only)               |
+| `gemini-model.json`       | `--sync-models`                     | Persisted Gemini model list                                              |
+| `groq-model.json`         | `--sync-models`                     | Persisted Groq model list                                                |
+| `copilot-model.json`      | `--setup-copilot` / `--sync-models` | Persisted GitHub Copilot model list                                      |
+| `last-ai-suggestion.json` | Every AI call                       | Last raw AI response — inspect when branch/commit suggestions look wrong |
+
+---
+
 ## Development
 
 ```bash

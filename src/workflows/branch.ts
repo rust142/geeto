@@ -15,6 +15,8 @@ import { STEP } from '../core/constants.js'
 import {
   DEFAULT_GEMINI_MODEL,
   getBranchStrategyConfig,
+  hasSkippedTrelloPrompt,
+  hasTrelloConfig,
   saveBranchStrategyConfig,
 } from '../utils/config.js'
 import { displayChangedFiles, getStepProgress } from '../utils/display.js'
@@ -209,13 +211,17 @@ export const handleBranchCreationWorkflow = async (
       // Branch naming menu (separator already selected above)
       if (!branchMenuShown) {
         while (!branchMenuShown) {
-          // Now show branch naming strategy menu
-          const branchChoice = await select('Branch naming:', [
-            { label: 'Link to Trello Card', value: 'trello' },
+          const branchChoices = [
             { label: 'Generate with AI', value: 'ai' },
             { label: 'Enter custom name', value: 'custom' },
             { label: 'Cancel', value: 'cancel' },
-          ])
+          ]
+          if (hasTrelloConfig() || !hasSkippedTrelloPrompt()) {
+            branchChoices.unshift({ label: 'Link to Trello Card', value: 'trello' })
+          }
+
+          // Now show branch naming strategy menu
+          const branchChoice = await select('Branch naming:', branchChoices)
 
           if (branchChoice === 'cancel') {
             log.warn('Branch creation cancelled.')
