@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.10.0](https://github.com/rust142/geeto/compare/v0.9.1...v0.10.0) (2026-05-29)
+
+### Features
+
+* feat(ai): integrate Groq provider and improve state validation ([0875ffd](https://github.com/rust142/geeto/commit/0875ffd))
+* feat(cli): support global config, native multiline editing, and Trello tools ([221352c](https://github.com/rust142/geeto/commit/221352c))
+* feat(ai): add Groq provider and migrate SDKs to OpenAI client ([9258b13](https://github.com/rust142/geeto/commit/9258b13))
+
+### Other Changes
+
+* refactor(parsers): remove security gate prompt file ([2c3c96c](https://github.com/rust142/geeto/commit/2c3c96c))
+* chore(workflow): remove security gate and fix installer scripts ([d8395ed](https://github.com/rust142/geeto/commit/d8395ed))
+* refactor(input): improve multiline edit handling ([2958347](https://github.com/rust142/geeto/commit/2958347))
+* refactor(core): enhance release workflow and CLI ([9afcde7](https://github.com/rust142/geeto/commit/9afcde7))
+* refactor(ai): add Groq provider support ([d645848](https://github.com/rust142/geeto/commit/d645848))
+* refactor(cli): streamline workflows and improve terminal rendering ([8e07306](https://github.com/rust142/geeto/commit/8e07306))
+* chore(release): v0.9.0 ([e97e4a4](https://github.com/rust142/geeto/commit/e97e4a4))
+* chore(release): v0.8.0 ([ee5deec](https://github.com/rust142/geeto/commit/ee5deec))
+
 ## [0.9.1](https://github.com/rust142/geeto/compare/v0.9.0...v0.9.1) (2026-04-09)
 
 ### Features
