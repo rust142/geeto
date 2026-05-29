@@ -338,7 +338,9 @@ export const editMultiline = async (question: string, initialText = ''): Promise
 
   const contentHeight = (): number => Math.max(1, scrollBottom - scrollTop + 1)
 
-  const wrapWidth = (): number => Math.max(1, columns)
+  // Keep one column free so redraws never trigger terminal auto-wrap by writing
+  // exactly at the right edge. That keeps cursor math stable for long AI text.
+  const wrapWidth = (): number => Math.max(1, columns - 1)
 
   const visualRowsForLine = (line: string): number =>
     Math.max(1, Math.ceil(line.length / wrapWidth()))
@@ -377,6 +379,35 @@ export const editMultiline = async (question: string, initialText = ''): Promise
       row += visualRows
     }
     return ''
+  }
+
+  const totalVisualRows = (): number => {
+    let total = 0
+    for (const line of lines) {
+      total += visualRowsForLine(line)
+    }
+    return Math.max(1, total)
+  }
+
+  const setCursorFromVisualPosition = (targetRow: number, targetColumn: number): void => {
+    let row = 0
+    const width = wrapWidth()
+
+    for (const [lineIndex, line] of lines.entries()) {
+      const visualRows = visualRowsForLine(line)
+
+      if (targetRow < row + visualRows) {
+        const offset = (targetRow - row) * width
+        li = lineIndex
+        ci = Math.min(line.length, offset + targetColumn)
+        return
+      }
+
+      row += visualRows
+    }
+
+    li = lines.length - 1
+    ci = currentLine().length
   }
 
   const moveCursorToInput = (): void => {
@@ -462,6 +493,12 @@ export const editMultiline = async (question: string, initialText = ''): Promise
     while (nextCursor < cur.length && !isWhitespace(cur[nextCursor] ?? '')) nextCursor++
     while (nextCursor < cur.length && isWhitespace(cur[nextCursor] ?? '')) nextCursor++
     ci = nextCursor
+    moveCursorToInput()
+  }
+
+  const moveVisualLine = (delta: -1 | 1): void => {
+    const nextRow = Math.min(Math.max(0, cursorVisualRow() + delta), totalVisualRows() - 1)
+    setCursorFromVisualPosition(nextRow, cursorVisualColumn())
     moveCursorToInput()
   }
 
@@ -597,34 +634,39 @@ export const editMultiline = async (question: string, initialText = ''): Promise
               sequence.includes(';3') ||
               sequence.includes(';5') ||
               /^\u001B\[[35][CD]$/.test(sequence)
-            if (code === 0x44) {
-              if (isWordArrow) {
-                moveWordLeft()
-              } else if (ci > 0) {
-                ci--
-              } else if (li > 0) {
-                li--
-                ci = currentLine().length
+            switch (code) {
+              case 0x44: {
+                if (isWordArrow) {
+                  moveWordLeft()
+                } else if (ci > 0) {
+                  ci--
+                } else if (li > 0) {
+                  li--
+                  ci = currentLine().length
+                }
+                moveCursorToInput()
+                break
               }
-              moveCursorToInput()
-            } else if (code === 0x43) {
-              if (isWordArrow) {
-                moveWordRight()
-              } else if (ci < currentLine().length) {
-                ci++
-              } else if (li < lines.length - 1) {
-                li++
-                ci = 0
+              case 0x43: {
+                if (isWordArrow) {
+                  moveWordRight()
+                } else if (ci < currentLine().length) {
+                  ci++
+                } else if (li < lines.length - 1) {
+                  li++
+                  ci = 0
+                }
+                moveCursorToInput()
+                break
               }
-              moveCursorToInput()
-            } else if (code === 0x41 && li > 0) {
-              li--
-              ci = Math.min(ci, currentLine().length)
-              moveCursorToInput()
-            } else if (code === 0x42 && li < lines.length - 1) {
-              li++
-              ci = Math.min(ci, currentLine().length)
-              moveCursorToInput()
+              case 0x41: {
+                moveVisualLine(-1)
+                break
+              }
+              case 0x42: {
+                moveVisualLine(1)
+                break
+              }
             }
             offset = sequenceEnd
             continue
