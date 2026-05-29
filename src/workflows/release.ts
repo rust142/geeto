@@ -28,7 +28,7 @@ import {
   promoteToStable,
   updatePackageVersion,
 } from './release-utils.js'
-import { askQuestion, confirm, editInline } from '../cli/input.js'
+import { askQuestion, confirm, editMultiline } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
 import { BOX_W } from '../utils/display.js'
@@ -290,30 +290,36 @@ export const handleRelease = async (): Promise<void> => {
 
     // Read saved AI config from state
     const savedState = loadState()
-    let aiProvider: 'gemini' | 'copilot' | 'openrouter' = 'copilot'
+    let aiProvider: 'gemini' | 'copilot' | 'openrouter' | 'groq' = 'copilot'
     let copilotModel: CopilotModel | undefined
     let openrouterModel: OpenRouterModel | undefined
     let geminiModel: GeminiModel | undefined
+    let groqModel: string | undefined
 
     // Use saved provider/model if available, otherwise ask user
     if (
       savedState?.aiProvider &&
       savedState.aiProvider !== 'manual' &&
-      (savedState.copilotModel || savedState.openrouterModel || savedState.geminiModel)
+      (savedState.copilotModel ||
+        savedState.openrouterModel ||
+        savedState.geminiModel ||
+        savedState.groqModel)
     ) {
-      aiProvider = savedState.aiProvider as 'gemini' | 'copilot' | 'openrouter'
+      aiProvider = savedState.aiProvider as 'gemini' | 'copilot' | 'openrouter' | 'groq'
       copilotModel = savedState.copilotModel
       openrouterModel = savedState.openrouterModel
       geminiModel = savedState.geminiModel
+      groqModel = savedState.groqModel
     } else {
       // No saved config — ask user to pick provider + model
       let providerChosen = false
       while (!providerChosen) {
         aiProvider = (await select('Choose AI Provider:', [
-          { label: 'GitHub (Recommended)', value: 'copilot' },
+          { label: 'GitHub Copilot', value: 'copilot' },
           { label: 'Gemini', value: 'gemini' },
           { label: 'OpenRouter', value: 'openrouter' },
-        ])) as 'gemini' | 'copilot' | 'openrouter'
+          { label: 'Groq', value: 'groq' },
+        ])) as 'gemini' | 'copilot' | 'openrouter' | 'groq'
 
         const chosen = await chooseModelForProvider(
           aiProvider,
@@ -346,7 +352,9 @@ export const handleRelease = async (): Promise<void> => {
 
     while (!accepted) {
       const spinner = new ScrambleProgress()
-      const modelDisplay = getModelValue(copilotModel ?? openrouterModel ?? geminiModel ?? '')
+      const modelDisplay = getModelValue(
+        copilotModel ?? openrouterModel ?? groqModel ?? geminiModel ?? ''
+      )
       spinner.start([
         `Generating release notes with ${getAIProviderShortName(aiProvider)}${modelDisplay ? ` (${modelDisplay})` : ''}`,
       ])
@@ -403,7 +411,7 @@ export const handleRelease = async (): Promise<void> => {
           continue
         }
         case 'edit': {
-          const edited = await editInline(aiReleaseNotes, 'Release Notes', '.md')
+          const edited = await editMultiline('Release Notes', aiReleaseNotes)
           aiReleaseNotes = edited
           accepted = true
           break
@@ -437,10 +445,11 @@ export const handleRelease = async (): Promise<void> => {
         }
         case 'change-provider': {
           const prov = (await select('Choose AI provider:', [
-            { label: 'Copilot', value: 'copilot' },
+            { label: 'GitHub Copilot', value: 'copilot' },
             { label: 'Gemini', value: 'gemini' },
             { label: 'OpenRouter', value: 'openrouter' },
-          ])) as 'gemini' | 'copilot' | 'openrouter'
+            { label: 'Groq', value: 'groq' },
+          ])) as 'gemini' | 'copilot' | 'openrouter' | 'groq'
           aiProvider = prov
           copilotModel = undefined
           openrouterModel = undefined

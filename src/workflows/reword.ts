@@ -15,7 +15,7 @@ import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 import type { GeetoState } from '../types/index.js'
 
-import { askQuestion, confirm, editInline } from '../cli/input.js'
+import { askQuestion, confirm, editMultiline } from '../cli/input.js'
 import { multiSelect, select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
 import {
@@ -318,11 +318,12 @@ interface RewordContext {
 /** Resolve current AI provider and model from persisted state. */
 const resolveAIProvider = (
   state: GeetoState
-): { provider: 'gemini' | 'copilot' | 'openrouter'; model: string | undefined } => {
-  const provider: 'gemini' | 'copilot' | 'openrouter' =
+): { provider: 'gemini' | 'copilot' | 'openrouter' | 'groq'; model: string | undefined } => {
+  const provider: 'gemini' | 'copilot' | 'openrouter' | 'groq' =
     (state.aiProvider === 'manual' ? undefined : state.aiProvider) ?? 'gemini'
 
   if (provider === 'copilot') return { provider, model: state.copilotModel as unknown as string }
+  if (provider === 'groq') return { provider, model: state.groqModel ?? undefined }
   if (provider === 'openrouter')
     return { provider, model: state.openrouterModel as unknown as string }
   return { provider, model: (state.geminiModel as unknown as string) ?? DEFAULT_GEMINI_MODEL }
@@ -363,6 +364,8 @@ const regenerateDirect = async (
       modelName = state.copilotModel as string
     } else if (state.aiProvider === 'openrouter' && state.openrouterModel) {
       modelName = state.openrouterModel as string
+    } else if (state.aiProvider === 'groq') {
+      modelName = state.groqModel ?? ''
     } else if (state.aiProvider === 'gemini') {
       modelName = (state.geminiModel as string) ?? DEFAULT_GEMINI_MODEL
     }
@@ -396,6 +399,11 @@ const regenerateDirect = async (
         case 'gemini': {
           const { generateCommitMessage } = await import('../api/gemini.js')
           aiResult = await generateCommitMessage(diff, correction, state.geminiModel as GeminiModel)
+          break
+        }
+        case 'groq': {
+          const { generateCommitMessage } = await import('../api/groq.js')
+          aiResult = await generateCommitMessage(diff, correction, state.groqModel)
           break
         }
         default: {
@@ -603,7 +611,7 @@ const generateNewMessages = async (
     }
 
     if (method === 'manual') {
-      const edited = await editInline(currentMsg, `Edit: ${commit.shortHash} ${commit.subject}`)
+      const edited = await editMultiline(`Edit: ${commit.shortHash} ${commit.subject}`, currentMsg)
 
       if (edited === null) {
         log.info(`Skipped ${commit.shortHash}`)
@@ -631,7 +639,7 @@ const generateNewMessages = async (
     const diff = getCommitDiff(commit.hash)
     if (!diff) {
       log.warn(`No diff found for ${commit.shortHash}, falling back to manual edit`)
-      const edited = await editInline(currentMsg, `Edit: ${commit.shortHash} ${commit.subject}`)
+      const edited = await editMultiline(`Edit: ${commit.shortHash} ${commit.subject}`, currentMsg)
       if (edited && edited.trim() !== currentMsg.trim()) {
         newMessages.set(commit.hash, edited.trim())
       }
@@ -663,7 +671,7 @@ const generateNewMessages = async (
       spinner.stop()
     } catch {
       spinner.fail('AI generation failed, falling back to manual edit')
-      const edited = await editInline(currentMsg, `Edit: ${commit.shortHash} ${commit.subject}`)
+      const edited = await editMultiline(`Edit: ${commit.shortHash} ${commit.subject}`, currentMsg)
       if (edited && edited.trim() !== currentMsg.trim()) {
         newMessages.set(commit.hash, edited.trim())
       }
@@ -699,13 +707,27 @@ const generateNewMessages = async (
           | 'gemini'
           | 'copilot'
           | 'openrouter'
+          | 'groq'
         let modelChoice: CopilotModel | OpenRouterModel | GeminiModel | string
-        if (provForFallback === 'copilot') {
-          modelChoice = state.copilotModel as CopilotModel
-        } else if (provForFallback === 'openrouter') {
-          modelChoice = state.openrouterModel as OpenRouterModel
-        } else {
-          modelChoice = (state.geminiModel as GeminiModel) ?? DEFAULT_GEMINI_MODEL
+        switch (provForFallback) {
+          case 'copilot': {
+            modelChoice = state.copilotModel as CopilotModel
+
+            break
+          }
+          case 'openrouter': {
+            modelChoice = state.openrouterModel as OpenRouterModel
+
+            break
+          }
+          case 'groq': {
+            modelChoice = state.groqModel ?? ''
+
+            break
+          }
+          default: {
+            modelChoice = (state.geminiModel as GeminiModel) ?? DEFAULT_GEMINI_MODEL
+          }
         }
 
         aiResult = await interactiveAIFallback(
@@ -715,7 +737,7 @@ const generateNewMessages = async (
           diff,
           correction,
           branch,
-          (provider: 'gemini' | 'copilot' | 'openrouter', model?: string) => {
+          (provider: 'gemini' | 'copilot' | 'openrouter' | 'groq', model?: string) => {
             state.aiProvider = provider
             switch (provider) {
               case 'copilot': {
@@ -749,7 +771,10 @@ const generateNewMessages = async (
       const commitMessage = aiResult ?? ''
       if (!commitMessage) {
         log.warn('Could not generate message; falling back to manual edit')
-        const edited = await editInline(currentMsg, `Edit: ${commit.shortHash} ${commit.subject}`)
+        const edited = await editMultiline(
+          `Edit: ${commit.shortHash} ${commit.subject}`,
+          currentMsg
+        )
         if (edited && edited.trim() !== currentMsg.trim()) {
           newMessages.set(commit.hash, edited.trim())
         }
@@ -815,10 +840,11 @@ const generateNewMessages = async (
           const prov = await select('Choose AI provider:', [
             { label: 'Gemini', value: 'gemini' },
             {
-              label: 'GitHub (Recommended)',
+              label: 'GitHub Copilot',
               value: 'copilot',
             },
             { label: 'OpenRouter', value: 'openrouter' },
+            { label: 'Groq', value: 'groq' },
             { label: 'Back', value: 'back' },
           ])
 
@@ -828,7 +854,7 @@ const generateNewMessages = async (
           }
 
           const chosenModel = await chooseModelForProvider(
-            prov as 'gemini' | 'copilot' | 'openrouter',
+            prov as 'gemini' | 'copilot' | 'openrouter' | 'groq',
             'Choose model:',
             'Back'
           )
@@ -838,8 +864,8 @@ const generateNewMessages = async (
             continue
           }
 
-          state.aiProvider = prov as 'gemini' | 'copilot' | 'openrouter'
-          currentProvider = prov as 'gemini' | 'copilot' | 'openrouter'
+          state.aiProvider = prov as 'gemini' | 'copilot' | 'openrouter' | 'groq'
+          currentProvider = prov as 'gemini' | 'copilot' | 'openrouter' | 'groq'
           switch (prov) {
             case 'copilot': {
               state.copilotModel = chosenModel as unknown as CopilotModel
@@ -876,7 +902,7 @@ const generateNewMessages = async (
             currentProvider === 'openrouter'
               ? currentProvider
               : 'gemini'
-          ) as 'gemini' | 'copilot' | 'openrouter'
+          ) as 'gemini' | 'copilot' | 'openrouter' | 'groq'
 
           const chosen = await chooseModelForProvider(provKey, 'Choose model:', 'Back')
 
@@ -916,7 +942,7 @@ const generateNewMessages = async (
           continue
         }
         case 'edit': {
-          const edited = await editInline(commitMessage, `Edit: ${commit.shortHash}`)
+          const edited = await editMultiline(`Edit: ${commit.shortHash}`, commitMessage)
           if (edited?.trim()) {
             newMessages.set(commit.hash, buildFinalMessage(edited.trim()).trim())
             log.success(`Message set for ${commit.shortHash}`)

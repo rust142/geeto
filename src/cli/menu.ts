@@ -8,13 +8,24 @@ import { colors } from '../utils/colors.js'
 
 let currentDataListener: ((key: Buffer) => void) | null = null
 
+const stripAnsi = (str: string): string =>
+  str.replaceAll(/\u001B\[\d*;?\d*m|\u001B\]8;;[^\u0007]*\u0007/g, '')
+
+/** Count how many terminal lines a string occupies, accounting for wrapping */
+const getLineCount = (text: string): number => {
+  const cols = process.stdout.columns || 80
+  const visible = stripAnsi(text)
+  return Math.max(1, Math.ceil(visible.length / cols))
+}
+
 /**
  * Interactive select menu with arrow keys and search
  */
 export const select = async (question: string, options: SelectOption[]): Promise<string> => {
   return new Promise((resolve) => {
     let selectedIndex = 0
-    const maxVisibleItems = 15 // Show max 15 items at once
+    // Overhead: blank + scroll-above + scroll-below-blank + scroll-below + separator + hint(1-2) + question = ~8
+    const maxVisibleItems = Math.max(3, Math.min(15, (process.stdout.rows || 24) - 8))
     let scrollOffset = 0
     let searchMode = false
     let searchQuery = ''
@@ -43,10 +54,17 @@ export const select = async (question: string, options: SelectOption[]): Promise
       return options.filter((opt) => opt.label.toLowerCase().includes(query.toLowerCase()))
     }
 
+    const getSectionStart = (idx: number): number => {
+      for (let i = idx - 1; i >= 0; i--) {
+        if (filteredOptions[i]?.disabled) return i
+      }
+      return idx
+    }
+
     const getVisibleRange = () => {
       // Keep selected item in view
       if (selectedIndex < scrollOffset) {
-        scrollOffset = selectedIndex
+        scrollOffset = getSectionStart(selectedIndex)
       } else if (selectedIndex >= scrollOffset + maxVisibleItems) {
         scrollOffset = selectedIndex - maxVisibleItems + 1
       }
@@ -55,12 +73,6 @@ export const select = async (question: string, options: SelectOption[]): Promise
       const end = Math.min(scrollOffset + maxVisibleItems, filteredOptions.length)
       return { start, end }
     }
-
-    /**
-     * Strip ANSI escape codes to get visible text length
-     */
-    const stripAnsi = (str: string): string =>
-      str.replaceAll(/\u001B\[\d*;?\d*m|\u001B\]8;;[^\u0007]*\u0007/g, '')
 
     const renderItem = (opt: SelectOption, idx: number) => {
       // Disabled items render as section headers (non-selectable)
@@ -102,8 +114,9 @@ export const select = async (question: string, options: SelectOption[]): Promise
         process.stdout.write('\u001B[2K\r') // Clear current search input line
       }
 
-      // Clear previous render
-      for (let i = 0; i < lastRenderedLines; i++) {
+      // Clear previous render (clamp to avoid scrolling past top of viewport)
+      const clearCount = Math.min(lastRenderedLines, (process.stdout.rows || 24) - 2)
+      for (let i = 0; i < clearCount; i++) {
         process.stdout.write('\u001B[1A\u001B[2K')
       }
 
@@ -142,7 +155,7 @@ export const select = async (question: string, options: SelectOption[]): Promise
         ? `  (Esc cancel search, Enter select)`
         : `  (↑↓/jk arrows, / search, Enter select, Esc back, 'c' clear, 'q' quit)`
       console.log(`${colors.gray}${hintText}${colors.reset}`)
-      linesRendered++
+      linesRendered += getLineCount(hintText)
 
       if (searchMode) {
         process.stdout.write(`${colors.cyan}/ search:${colors.reset} ${searchQuery}`)
@@ -187,10 +200,9 @@ export const select = async (question: string, options: SelectOption[]): Promise
       // Hint at bottom
       console.log('')
       initLines++
-      console.log(
-        `${colors.gray}  (↑↓/jk arrows, / search, Enter select, 'c' clear, 'q' quit)${colors.reset}`
-      )
-      initLines++
+      const initHintText = `  (↑↓/jk arrows, / search, Enter select, 'c' clear, 'q' quit)`
+      console.log(`${colors.gray}${initHintText}${colors.reset}`)
+      initLines += getLineCount(initHintText)
       lastRenderedLines = initLines
     }
 
@@ -345,10 +357,9 @@ export const select = async (question: string, options: SelectOption[]): Promise
 
           console.log('')
           clearLines++
-          console.log(
-            `${colors.gray}  (↑↓/jk arrows, / search, Enter select, Esc back, 'c' clear, 'q' quit)${colors.reset}`
-          )
-          clearLines++
+          const clearHintText = `  (↑↓/jk arrows, / search, Enter select, Esc back, 'c' clear, 'q' quit)`
+          console.log(`${colors.gray}${clearHintText}${colors.reset}`)
+          clearLines += getLineCount(clearHintText)
           lastRenderedLines = clearLines
           break
         }
@@ -378,7 +389,8 @@ export const multiSelect = async (
     ) {
       selectedIndex++
     }
-    const maxVisibleItems = 15
+    // Overhead: Selected + blank + scroll indicators + separator + hint + question = ~9
+    const maxVisibleItems = Math.max(3, Math.min(15, (process.stdout.rows || 24) - 9))
     let scrollOffset = 0
     let searchMode = false
     let rangeMode = false
@@ -434,12 +446,6 @@ export const multiSelect = async (
       const end = Math.min(scrollOffset + maxVisibleItems, filteredOptions.length)
       return { start, end }
     }
-
-    /**
-     * Strip ANSI escape codes to get visible text length
-     */
-    const stripAnsi = (str: string): string =>
-      str.replaceAll(/\u001B\[\d*;?\d*m|\u001B\]8;;[^\u0007]*\u0007/g, '')
 
     const renderItem = (opt: SelectOption, idx: number) => {
       // Group header (folder) — selectable, toggles children
@@ -500,7 +506,9 @@ export const multiSelect = async (
       if (rangeMode) {
         process.stdout.write('\u001B[2K\r') // Clear current range input line
       }
-      for (let i = 0; i < lastRenderedLines; i++) {
+      // Clamp to avoid scrolling past top of viewport
+      const clearCount = Math.min(lastRenderedLines, (process.stdout.rows || 24) - 2)
+      for (let i = 0; i < clearCount; i++) {
         process.stdout.write('\u001B[1A\u001B[2K')
       }
 
@@ -552,7 +560,7 @@ export const multiSelect = async (
           ? `  (Esc cancel search, Space toggle, Enter confirm)`
           : `  (↑↓/jk Space toggle, 'a' all, 'n' none, '#' range, / search, Enter confirm, Esc back, 'q' quit)`
       console.log(`${colors.gray}${hintText}${colors.reset}`)
-      linesRendered++
+      linesRendered += getLineCount(hintText)
 
       // Range input at the very bottom (no newline so cursor stays at end)
       if (rangeMode) {

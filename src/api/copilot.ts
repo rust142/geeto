@@ -2,8 +2,6 @@
  * Copilot integration for AI-powered branch naming and commit messages
  */
 
-import path from 'node:path'
-
 import {
   generateBranchName as sdkGenerateBranchName,
   generateCommitMessage as sdkGenerateCommitMessage,
@@ -13,6 +11,7 @@ import {
   isAvailable as sdkIsAvailable,
 } from './copilot-sdk.js'
 import { saveAISuggestion } from '../utils/ai-provider-helpers.js'
+import { resolveConfigPath } from '../utils/config.js'
 import { log } from '../utils/logging.js'
 
 // Supported models on Copilot
@@ -27,7 +26,7 @@ export const getCopilotModels = async (): Promise<
   // Check persisted file first
   try {
     const fs = await import('node:fs')
-    const modelFile = path.join(process.cwd(), '.geeto', 'copilot-model.json')
+    const modelFile = resolveConfigPath('copilot-model.json')
     if (fs.existsSync(modelFile)) {
       const data = JSON.parse(fs.readFileSync(modelFile, 'utf8')) as Array<{
         label: string
@@ -65,7 +64,7 @@ export const getCopilotModels = async (): Promise<
 export const generateBranchName = async (
   text: string,
   correction?: string,
-  model: CopilotModel = 'gpt-5-mini'
+  model: CopilotModel = 'GPT-4.1'
 ): Promise<string | null> => {
   try {
     const ok = await sdkIsAvailable()
@@ -97,7 +96,7 @@ export const generateBranchName = async (
 export const generateCommitMessage = async (
   diff: string,
   correction?: string,
-  model: CopilotModel = 'gpt-5-mini'
+  model: CopilotModel = 'GPT-4.1'
 ): Promise<string | null> => {
   try {
     const ok = await sdkIsAvailable()
@@ -119,7 +118,7 @@ export const generateReleaseNotes = async (
   commits: string,
   language: 'en' | 'id',
   correction?: string,
-  model: CopilotModel = 'gpt-5-mini'
+  model: CopilotModel = 'GPT-4.1'
 ): Promise<string | null> => {
   try {
     const ok = await sdkIsAvailable()
@@ -138,7 +137,7 @@ export const generateReleaseNotes = async (
 
 export const generateText = async (
   prompt: string,
-  model: CopilotModel = 'gpt-5-mini'
+  model: CopilotModel = 'GPT-4.1'
 ): Promise<string | null> => {
   try {
     const ok = await sdkIsAvailable()

@@ -4,6 +4,7 @@
 
 import fs from 'node:fs'
 import os from 'node:os'
+import path from 'node:path'
 import type {
   BranchStrategyConfig,
   GeminiConfig,
@@ -14,6 +15,19 @@ import type {
 } from '../types/index.js'
 
 import { log } from './logging.js'
+
+export const GLOBAL_GEETO_DIR = path.join(os.homedir(), '.geeto')
+
+/**
+ * Resolve a config filename: local .geeto/ first, then ~/.geeto/, then local as default.
+ */
+export const resolveConfigPath = (filename: string): string => {
+  const local = path.join(process.cwd(), '.geeto', filename)
+  if (fs.existsSync(local)) return local
+  const globalPath = path.join(GLOBAL_GEETO_DIR, filename)
+  if (fs.existsSync(globalPath)) return globalPath
+  return local
+}
 
 /**
  * Ensure .geeto folder is ignored in .gitignore
@@ -133,18 +147,16 @@ export const setSkipTrelloPrompt = (v = true): void => {
   }
 }
 
-const GEMINI_CONFIG_PATH = getGeminiConfigPath()
 export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash'
 
 /**
- * Read Gemini config from project-local `.geeto/gemini.toml`.
- * Expected format:
- * api_key = "YOUR_API_KEY"
+ * Read Gemini config — project-local `.geeto/gemini.toml` first, then `~/.geeto/gemini.toml`.
  */
 export const getGeminiConfig = (): GeminiConfig => {
   try {
-    if (fs.existsSync(GEMINI_CONFIG_PATH)) {
-      const content = fs.readFileSync(GEMINI_CONFIG_PATH, 'utf8')
+    const configPath = resolveConfigPath('gemini.toml')
+    if (fs.existsSync(configPath)) {
+      const content = fs.readFileSync(configPath, 'utf8')
       // Look for gemini_api_key first, fall back to api_key or apiKey for compatibility
       const apiKey = content.match(/gemini_api_key\s*=\s*["']([^"']+)["']/)
       const apiKeyMatch = content.match(/api_key\s*=\s*["']([^"']+)["']/)
@@ -179,9 +191,9 @@ export const hasGeminiConfig = (): boolean => {
  */
 export const getTrelloConfig = (): TrelloConfig => {
   try {
-    const path = getTrelloConfigPath()
-    if (fs.existsSync(path)) {
-      const content = fs.readFileSync(path, 'utf8')
+    const configPath = resolveConfigPath('trello.toml')
+    if (fs.existsSync(configPath)) {
+      const content = fs.readFileSync(configPath, 'utf8')
       const apiKeyMatch = content.match(/api_key\s*=\s*["']([^"']+)["']/)
       const tokenMatch = content.match(/token\s*=\s*["']([^"']+)["']/)
       const boardIdMatch = content.match(/board_id\s*=\s*["']([^"']+)["']/)
@@ -217,9 +229,9 @@ export const getOpenRouterConfigPath = (): string => {
  */
 export const getOpenRouterConfig = (): OpenRouterConfig => {
   try {
-    const path = getOpenRouterConfigPath()
-    if (fs.existsSync(path)) {
-      const content = fs.readFileSync(path, 'utf8')
+    const configPath = resolveConfigPath('openrouter.toml')
+    if (fs.existsSync(configPath)) {
+      const content = fs.readFileSync(configPath, 'utf8')
       const apiKey = content.match(/openrouter_api_key\s*=\s*["']([^"']+)["']/)
       const apiKeyMatch = content.match(/api_key\s*=\s*["']([^"']+)["']/)
       const apiKeyAlt = content.match(/apiKey\s*=\s*["']([^"']+)["']/)
@@ -240,6 +252,24 @@ export const hasOpenRouterConfig = (): boolean => {
   const config = getOpenRouterConfig()
   return !!config.apiKey
 }
+
+export const getGroqConfigPath = (): string => '.geeto/groq.toml'
+
+export const getGroqConfig = (): { apiKey: string } => {
+  try {
+    const configPath = resolveConfigPath('groq.toml')
+    if (fs.existsSync(configPath)) {
+      const content = fs.readFileSync(configPath, 'utf8')
+      const m = content.match(/api_key\s*=\s*["']([^"']+)["']/)
+      return { apiKey: m?.[1] ?? '' }
+    }
+  } catch {
+    /* ignore */
+  }
+  return { apiKey: '' }
+}
+
+export const hasGroqConfig = (): boolean => !!getGroqConfig().apiKey
 
 /**
  * Read branch strategy config
@@ -356,9 +386,9 @@ export const getGithubConfigPath = (): string => {
  */
 export const getGithubConfig = (): GitHubConfig => {
   try {
-    const path = getGithubConfigPath()
-    if (fs.existsSync(path)) {
-      const content = fs.readFileSync(path, 'utf8')
+    const configPath = resolveConfigPath('github.toml')
+    if (fs.existsSync(configPath)) {
+      const content = fs.readFileSync(configPath, 'utf8')
       const tokenMatch = content.match(/token\s*=\s*["']([^"']+)["']/)
       return { token: tokenMatch?.[1] ?? '' }
     }
@@ -390,9 +420,9 @@ export const getGitlabConfigPath = (): string => {
  */
 export const getGitlabConfig = (): GitLabConfig => {
   try {
-    const path = getGitlabConfigPath()
-    if (fs.existsSync(path)) {
-      const content = fs.readFileSync(path, 'utf8')
+    const configPath = resolveConfigPath('gitlab.toml')
+    if (fs.existsSync(configPath)) {
+      const content = fs.readFileSync(configPath, 'utf8')
       const tokenMatch = content.match(/token\s*=\s*["']([^"']+)["']/)
       const urlMatch = content.match(/url\s*=\s*["']([^"']+)["']/)
       return {

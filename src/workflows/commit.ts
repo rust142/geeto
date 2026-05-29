@@ -9,7 +9,7 @@ import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 import type { GeetoState } from '../types/index.js'
 
-import { askQuestion, confirm, editInline } from '../cli/input.js'
+import { askQuestion, confirm, editMultiline } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
 import { extractCommitTitle, getCommitTypes, normalizeAIOutput } from '../utils/commit-helpers.js'
@@ -31,7 +31,7 @@ import { ScrambleProgress } from '../utils/scramble.js'
 import { saveState } from '../utils/state.js'
 
 export const getDefaultCommitTool = (
-  aiProvider: 'gemini' | 'copilot' | 'openrouter' | 'manual'
+  aiProvider: 'gemini' | 'copilot' | 'openrouter' | 'groq' | 'manual'
 ): string => {
   switch (aiProvider) {
     case 'gemini': {
@@ -42,6 +42,9 @@ export const getDefaultCommitTool = (
     }
     case 'openrouter': {
       return 'openrouter'
+    }
+    case 'groq': {
+      return 'groq'
     }
     default: {
       return 'manual'
@@ -194,7 +197,7 @@ async function attemptCommit(titleStr: string, bodyStr?: string | null): Promise
     ])
 
     if (action === 'edit') {
-      const edited = await editInline(`${titleStr}\n\n${bodyStr ?? ''}`)
+      const edited = await editMultiline('Edit Commit Message', `${titleStr}\n\n${bodyStr ?? ''}`)
       if (!edited?.trim()) {
         return false
       }
@@ -237,7 +240,7 @@ async function handleManualCommitFlow(state: GeetoState): Promise<boolean> {
   if (mode === 'manual') {
     // Freeform manual commit: open inline editor
     log.info('Write your commit message below:')
-    const edited = await editInline('')
+    const edited = await editMultiline('Commit Message', '')
     if (!edited?.trim()) {
       log.error('Commit message cannot be empty!')
       process.exit(1)
@@ -307,7 +310,7 @@ async function handleManualCommitFlow(state: GeetoState): Promise<boolean> {
 
   let finalMsg = commitMsg
   if (reviewChoice === 'edit') {
-    const edited = await editInline(commitMsg)
+    const edited = await editMultiline('Edit Commit Message', commitMsg)
     if (!edited?.trim()) {
       log.warn('Commit cancelled.')
       process.exit(0)
@@ -335,13 +338,15 @@ export const handleCommitWorkflow = async (
     | 'gemini'
     | 'copilot'
     | 'openrouter'
+    | 'groq'
     | 'manual'
   let selectedTool = getDefaultCommitTool(aiProvider)
 
   const aiTools = [
     { label: 'Gemini', value: 'gemini' },
-    { label: 'GitHub (Recommended)', value: 'copilot' },
+    { label: 'GitHub Copilot', value: 'copilot' },
     { label: 'OpenRouter', value: 'openrouter' },
+    { label: 'Groq', value: 'groq' },
     { label: 'Manual commit', value: 'manual' },
   ]
 
@@ -355,6 +360,8 @@ export const handleCommitWorkflow = async (
     modelName = state.copilotModel
   } else if (aiProvider === 'openrouter' && state.openrouterModel) {
     modelName = state.openrouterModel
+  } else if (aiProvider === 'groq') {
+    modelName = state.groqModel ?? ''
   } else if (aiProvider === 'gemini') {
     // prefer persisted state selection, otherwise fall back to default
     modelName = state.geminiModel ?? DEFAULT_GEMINI_MODEL
@@ -388,8 +395,10 @@ export const handleCommitWorkflow = async (
   console.log('')
 
   // Use chosen provider; prompt model and allow going back to provider selection.
-  let effectiveProvider: 'gemini' | 'copilot' | 'openrouter' =
-    aiProvider === 'manual' ? 'gemini' : (aiProvider as 'gemini' | 'copilot' | 'openrouter')
+  let effectiveProvider: 'gemini' | 'copilot' | 'openrouter' | 'groq' =
+    aiProvider === 'manual'
+      ? 'gemini'
+      : (aiProvider as 'gemini' | 'copilot' | 'openrouter' | 'groq')
   if (selectedTool !== 'manual') {
     // Determine if model prompt is needed (skip if default & persisted)
     const defaultTool = getDefaultCommitTool(aiProvider)
@@ -406,6 +415,9 @@ export const handleCommitWorkflow = async (
         case 'gemini': {
           return !!state.geminiModel
         }
+        case 'groq': {
+          return !!state.groqModel
+        }
         default: {
           return false
         }
@@ -419,7 +431,7 @@ export const handleCommitWorkflow = async (
       let providerPick: string = selectedTool
 
       while (true) {
-        effectiveProvider = providerPick as 'gemini' | 'copilot' | 'openrouter'
+        effectiveProvider = providerPick as 'gemini' | 'copilot' | 'openrouter' | 'groq'
         state.aiProvider = effectiveProvider
         saveState(state)
 
@@ -456,6 +468,10 @@ export const handleCommitWorkflow = async (
             state.geminiModel = chosenModel as unknown as GeminiModel
             break
           }
+          case 'groq': {
+            state.groqModel = chosenModel
+            break
+          }
           default: {
             break
           }
@@ -466,7 +482,7 @@ export const handleCommitWorkflow = async (
       // end while
     } else {
       // no interactive model prompt required — persist chosen provider and continue
-      state.aiProvider = selectedTool as 'gemini' | 'copilot' | 'openrouter'
+      state.aiProvider = selectedTool as 'gemini' | 'copilot' | 'openrouter' | 'groq'
       saveState(state)
     }
   }
@@ -480,19 +496,32 @@ export const handleCommitWorkflow = async (
 
     const spinner = new ScrambleProgress()
     try {
-      let currentProvider: 'gemini' | 'copilot' | 'openrouter' | undefined
+      let currentProvider: 'gemini' | 'copilot' | 'openrouter' | 'groq' | undefined
       if (state.aiProvider && state.aiProvider !== 'manual') {
         currentProvider = state.aiProvider
       } else {
-        currentProvider = aiProvider as 'gemini' | 'copilot' | 'openrouter'
+        currentProvider = aiProvider as 'gemini' | 'copilot' | 'openrouter' | 'groq'
       }
 
-      if (currentProvider === 'copilot') {
-        currentModel = state.copilotModel
-      } else if (currentProvider === 'openrouter') {
-        currentModel = state.openrouterModel
-      } else {
-        currentModel = state.geminiModel ?? DEFAULT_GEMINI_MODEL
+      switch (currentProvider) {
+        case 'copilot': {
+          currentModel = state.copilotModel
+
+          break
+        }
+        case 'openrouter': {
+          currentModel = state.openrouterModel
+
+          break
+        }
+        case 'groq': {
+          currentModel = state.groqModel ?? ''
+
+          break
+        }
+        default: {
+          currentModel = state.geminiModel ?? DEFAULT_GEMINI_MODEL
+        }
       }
 
       spinner.start([
@@ -609,7 +638,11 @@ export const handleCommitWorkflow = async (
           }
         }
       } else {
-        const currentProv = (state.aiProvider ?? 'gemini') as 'gemini' | 'copilot' | 'openrouter'
+        const currentProv = (state.aiProvider ?? 'gemini') as
+          | 'gemini'
+          | 'copilot'
+          | 'openrouter'
+          | 'groq'
         let modelChoice: CopilotModel | OpenRouterModel | GeminiModel | string
         if (currentProv === 'copilot') {
           modelChoice = state.copilotModel as CopilotModel
@@ -626,7 +659,7 @@ export const handleCommitWorkflow = async (
           diff,
           correction,
           state.currentBranch,
-          (provider: 'gemini' | 'copilot' | 'openrouter', model?: string) => {
+          (provider: 'gemini' | 'copilot' | 'openrouter' | 'groq', model?: string) => {
             log.info(`AI provider switched to: ${getAIProviderShortName(provider)}`)
             state.aiProvider = provider
 
@@ -803,8 +836,9 @@ export const handleCommitWorkflow = async (
         case 'change-provider': {
           const prov = await select('Choose AI provider:', [
             { label: 'Gemini', value: 'gemini' },
-            { label: 'GitHub (Recommended)', value: 'copilot' },
+            { label: 'GitHub Copilot', value: 'copilot' },
             { label: 'OpenRouter', value: 'openrouter' },
+            { label: 'Groq', value: 'groq' },
             { label: 'Back to suggested commit selection', value: 'back' },
           ])
 
@@ -816,7 +850,7 @@ export const handleCommitWorkflow = async (
 
           // Use centralized helper to choose model for the provider
           const chosenModel = await chooseModelForProvider(
-            prov as 'gemini' | 'copilot' | 'openrouter',
+            prov as 'gemini' | 'copilot' | 'openrouter' | 'groq',
             'Choose model:',
             'Back to suggested commit selection'
           )
@@ -832,7 +866,7 @@ export const handleCommitWorkflow = async (
             continue
           }
 
-          state.aiProvider = prov as 'gemini' | 'copilot' | 'openrouter'
+          state.aiProvider = prov as 'gemini' | 'copilot' | 'openrouter' | 'groq'
           switch (prov) {
             case 'copilot': {
               state.copilotModel = chosenModel as unknown as CopilotModel
@@ -927,7 +961,7 @@ export const handleCommitWorkflow = async (
         case 'edit': {
           // Open inline editor for multi-line editing
           const initial = commitMessage
-          const edited = await editInline(initial)
+          const edited = await editMultiline('Edit Commit Message', initial)
           if (edited?.trim()) {
             const editedMessage = edited.trim()
 

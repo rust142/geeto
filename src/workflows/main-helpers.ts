@@ -45,7 +45,7 @@ export type MainOpts = {
 }
 
 export interface CheckpointResult {
-  aiProvider: 'gemini' | 'copilot' | 'openrouter' | 'manual'
+  aiProvider: 'gemini' | 'copilot' | 'openrouter' | 'groq' | 'manual'
   copilotModel?: CopilotModel
   openrouterModel?: OpenRouterModel
   geminiModel?: GeminiModel
@@ -198,21 +198,23 @@ export async function resolveCheckpointAndProvider(
         const { ensureAIProvider } = await import('../core/setup.js')
         const aiReady = await ensureAIProvider(aiProvider)
         if (!aiReady) {
-          log.warn(`${aiProvider === 'gemini' ? 'Gemini' : 'Copilot'} setup is no longer valid.`)
+          log.warn(
+            `${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup is no longer valid.`
+          )
           const fixSetup = confirm(
-            `Fix ${aiProvider === 'gemini' ? 'Gemini' : 'Copilot'} setup now?`
+            `Fix ${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup now?`
           )
           if (fixSetup) {
             const setupSuccess = await ensureAIProvider(aiProvider)
             if (!setupSuccess) {
               log.warn(
-                `Could not fix ${aiProvider === 'gemini' ? 'Gemini' : 'Copilot'} setup. Switching to manual mode.`
+                `Could not fix ${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup. Switching to manual mode.`
               )
               aiProvider = 'gemini'
             }
           } else {
             log.warn(
-              `${aiProvider === 'gemini' ? 'Gemini' : 'Copilot'} setup invalid. Will use manual mode for AI features.`
+              `${aiProvider === 'gemini' ? 'Gemini' : 'GitHub Copilot'} setup invalid. Will use manual mode for AI features.`
             )
           }
         }
@@ -328,17 +330,7 @@ export async function handleStagingStep(
     if (changedFiles.length === 0) {
       log.info(`Changed files: ${colors.gray}none${colors.reset}`)
       if (!opts?.stageAll) {
-        const noChangesChoice = await select(
-          'No changes detected. How would you like to proceed?',
-          [
-            { label: 'Continue without staging', value: 'without' },
-            { label: 'Cancel', value: 'cancel' },
-          ]
-        )
-        if (noChangesChoice === 'cancel') {
-          log.warn('Cancelled.')
-          process.exit(0)
-        }
+        log.info('No changes detected, continuing...')
       }
     } else {
       log.info(`Changed files: ${colors.bright}${changedFiles.length}${colors.reset}`)
@@ -349,7 +341,7 @@ export async function handleStagingStep(
         log.step(`Step 1: Stage Changes  ${getStepProgress(1)}`)
       }
 
-      let stageChoice: 'all' | 'select' | 'skip' | 'without' | 'cancel'
+      let stageChoice: 'all' | 'select' | 'skip' | 'cancel'
       if (opts?.stageAll) {
         stageChoice = 'all'
         if (!suppressLogs) {
@@ -360,9 +352,8 @@ export async function handleStagingStep(
           { label: 'Stage all changes', value: 'all' },
           { label: 'Select files to stage', value: 'select' },
           { label: 'Already staged', value: 'skip' },
-          { label: 'Continue without staging', value: 'without' },
           { label: 'Cancel', value: 'cancel' },
-        ])) as 'all' | 'select' | 'skip' | 'without' | 'cancel'
+        ])) as 'all' | 'select' | 'skip' | 'cancel'
       }
 
       switch (stageChoice) {
@@ -384,10 +375,6 @@ export async function handleStagingStep(
           }
           break
         }
-        case 'without': {
-          log.info('Continuing without staging')
-          break
-        }
         case 'cancel': {
           log.warn('Cancelled.')
           process.exit(0)
@@ -396,7 +383,7 @@ export async function handleStagingStep(
       }
 
       const stagedFiles = getStagedFiles()
-      if (stagedFiles.length === 0 && stageChoice !== 'without') {
+      if (stagedFiles.length === 0) {
         log.error('No staged files!')
         process.exit(0)
       }

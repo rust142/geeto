@@ -12,12 +12,12 @@ import { select } from '../cli/menu.js'
 import { chooseModelForProvider } from '../utils/git-ai.js'
 
 export const handleAIProviderSelection = async (): Promise<{
-  aiProvider: 'gemini' | 'copilot' | 'openrouter' | 'manual'
+  aiProvider: 'gemini' | 'copilot' | 'openrouter' | 'groq' | 'manual'
   copilotModel?: CopilotModel
   openrouterModel?: OpenRouterModel
   geminiModel?: GeminiModel
 }> => {
-  let aiProvider: 'gemini' | 'copilot' | 'openrouter' | 'manual'
+  let aiProvider: 'gemini' | 'copilot' | 'openrouter' | 'groq' | 'manual'
   let copilotModel: CopilotModel | undefined
   let openrouterModel: OpenRouterModel | undefined
   let geminiModel: GeminiModel | undefined
@@ -26,10 +26,11 @@ export const handleAIProviderSelection = async (): Promise<{
   while (true) {
     aiProvider = (await select('Choose AI Provider for branch naming and commit messages:', [
       { label: 'Gemini', value: 'gemini' },
-      { label: 'GitHub (Recommended)', value: 'copilot' },
+      { label: 'GitHub Copilot', value: 'copilot' },
       { label: 'OpenRouter', value: 'openrouter' },
+      { label: 'Groq', value: 'groq' },
       { label: 'Manual', value: 'manual' },
-    ])) as 'gemini' | 'copilot' | 'openrouter' | 'manual'
+    ])) as 'gemini' | 'copilot' | 'openrouter' | 'groq' | 'manual'
 
     // Setup the selected AI provider using centralized helper where possible
     if (aiProvider === 'manual') {
@@ -38,7 +39,7 @@ export const handleAIProviderSelection = async (): Promise<{
     }
 
     const chosen = await chooseModelForProvider(
-      aiProvider as 'gemini' | 'copilot' | 'openrouter',
+      aiProvider as 'gemini' | 'copilot' | 'openrouter' | 'groq',
       undefined,
       'Back to AI provider menu'
     )

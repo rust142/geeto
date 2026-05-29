@@ -16,12 +16,168 @@ import { closeInput, confirm } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { STEP } from '../core/constants.js'
 import { colors } from '../utils/colors.js'
+import { hasSkippedTrelloPrompt, hasTrelloConfig } from '../utils/config.js'
 import { displayCompletionSummary, displayCurrentProviderStatus } from '../utils/display.js'
 import { isDryRun } from '../utils/dry-run.js'
 import { exec } from '../utils/exec.js'
 import { getCurrentBranch, getStagedFiles } from '../utils/git.js'
 import { log } from '../utils/logging.js'
 import { loadState, preserveProviderState, saveState } from '../utils/state.js'
+
+type QuickAction = {
+  label: string
+  value: string
+  module: string
+  handler: string
+}
+
+type QuickActionModule = Record<string, () => void | Promise<void>>
+
+const GIT_TOOL_ACTIONS: QuickAction[] = [
+  {
+    label: 'Status overview (-st)',
+    value: 'quick:status',
+    module: './status.js',
+    handler: 'handleStatus',
+  },
+  {
+    label: 'Pull from remote (-pl)',
+    value: 'quick:pull',
+    module: './pull.js',
+    handler: 'handlePull',
+  },
+  {
+    label: 'Fetch latest (-ft)',
+    value: 'quick:fetch',
+    module: './fetch.js',
+    handler: 'handleFetch',
+  },
+  {
+    label: 'Switch branch (-sw)',
+    value: 'quick:switch',
+    module: './switch.js',
+    handler: 'handleBranchSwitch',
+  },
+  {
+    label: 'Compare branches (-cmp)',
+    value: 'quick:compare',
+    module: './compare.js',
+    handler: 'handleBranchCompare',
+  },
+  {
+    label: 'Stash manager (-sh)',
+    value: 'quick:stash',
+    module: './stash.js',
+    handler: 'handleStash',
+  },
+  {
+    label: 'Commit history (-lg)',
+    value: 'quick:log',
+    module: './history.js',
+    handler: 'handleHistory',
+  },
+  {
+    label: 'Reword commits (-rw)',
+    value: 'quick:reword',
+    module: './reword.js',
+    handler: 'handleReword',
+  },
+  {
+    label: 'Amend last commit (-am)',
+    value: 'quick:amend',
+    module: './amend.js',
+    handler: 'handleAmend',
+  },
+  {
+    label: 'Undo last git action (-u)',
+    value: 'quick:undo',
+    module: './undo.js',
+    handler: 'handleUndo',
+  },
+  {
+    label: 'Repository stats (-sts)',
+    value: 'quick:stats',
+    module: './stats.js',
+    handler: 'handleStats',
+  },
+  {
+    label: 'Cleanup branches (-cl)',
+    value: 'quick:cleanup',
+    module: './cleanup.js',
+    handler: 'handleInteractiveCleanup',
+  },
+  {
+    label: 'Submodules (-sm)',
+    value: 'quick:submodules',
+    module: './submodules.js',
+    handler: 'handleSubmodules',
+  },
+]
+
+const COLLABORATION_ACTIONS: QuickAction[] = [
+  {
+    label: 'Create PR / MR (-pr)',
+    value: 'quick:pr',
+    module: './pr.js',
+    handler: 'handleCreatePR',
+  },
+  {
+    label: 'Create issue (-i)',
+    value: 'quick:issue',
+    module: './issue.js',
+    handler: 'handleCreateIssue',
+  },
+  {
+    label: 'Release / tag manager (-t)',
+    value: 'quick:tag',
+    module: './release.js',
+    handler: 'handleRelease',
+  },
+]
+
+const TRELLO_QUICK_ACTIONS: QuickAction[] = [
+  {
+    label: 'Trello management (-tr)',
+    value: 'quick:trello',
+    module: './trello-menu.js',
+    handler: 'showTrelloMenu',
+  },
+  {
+    label: 'Generate Trello tasks (-tg)',
+    value: 'quick:trello-generate',
+    module: './trello-menu.js',
+    handler: 'handleGenerateTaskInstructions',
+  },
+]
+
+const runQuickAction = async (value: string): Promise<boolean> => {
+  const action = [...GIT_TOOL_ACTIONS, ...COLLABORATION_ACTIONS, ...TRELLO_QUICK_ACTIONS].find(
+    (a) => a.value === value
+  )
+  if (!action) return false
+
+  try {
+    exec('git rev-parse --is-inside-work-tree', true)
+  } catch {
+    log.error('Not a git repository!')
+    return true
+  }
+
+  try {
+    const mod = (await import(action.module)) as QuickActionModule
+    const handler = mod[action.handler]
+    if (typeof handler !== 'function') {
+      log.error(`Handler not found: ${action.handler}`)
+      return true
+    }
+    await handler()
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error)
+    log.error(`Failed to run ${action.label}: ${msg}`)
+  }
+
+  return true
+}
 
 export const main = async (opts?: MainOpts): Promise<void> => {
   try {
@@ -51,23 +207,32 @@ export const main = async (opts?: MainOpts): Promise<void> => {
       initialChoice = 'start'
     } else {
       while (true) {
-        initialChoice = await select('Welcome to Geeto! What would you like to do?', [
-          { label: 'Start new workflow', value: 'start' },
-          { label: 'Trello tasks', value: 'trello' },
-          { label: 'Security & Quality Gate', value: 'security' },
-          { label: 'Settings', value: 'settings' },
-          { label: 'Exit', value: 'exit' },
-        ])
+        const showTrelloManagement = hasTrelloConfig() || !hasSkippedTrelloPrompt()
+        const mainChoices = [
+          { label: 'Workflow', value: '_workflow', disabled: true },
+          { label: '  Start new workflow', value: 'start' },
+          { label: '  Settings', value: 'settings' },
+          { label: '  Exit', value: 'exit' },
+          { label: 'Git tools', value: '_git_tools', disabled: true },
+          ...GIT_TOOL_ACTIONS.map((a) => ({ label: `  ${a.label}`, value: a.value })),
+          { label: 'Collaboration', value: '_collaboration', disabled: true },
+          ...COLLABORATION_ACTIONS.map((a) => ({ label: `  ${a.label}`, value: a.value })),
+        ]
+        if (showTrelloManagement) {
+          mainChoices.splice(2, 0, { label: '  Trello management', value: 'trello' })
+          mainChoices.splice(
+            mainChoices.length,
+            0,
+            { label: 'Trello', value: '_trello', disabled: true },
+            ...TRELLO_QUICK_ACTIONS.map((a) => ({ label: `  ${a.label}`, value: a.value }))
+          )
+        }
+
+        initialChoice = await select('Welcome to Geeto! What would you like to do?', mainChoices)
 
         if (initialChoice === 'exit' || initialChoice === 'back') {
           log.info('Goodbye!')
           return
-        }
-
-        if (initialChoice === 'security') {
-          const { showSecurityGateMenu } = await import('./security-gate.js')
-          await showSecurityGateMenu()
-          continue
         }
 
         if (initialChoice === 'settings') {
@@ -78,6 +243,10 @@ export const main = async (opts?: MainOpts): Promise<void> => {
         if (initialChoice === 'trello') {
           const { showTrelloMenu } = await import('./trello-menu.js')
           await showTrelloMenu()
+          continue
+        }
+
+        if (await runQuickAction(initialChoice)) {
           continue
         }
 

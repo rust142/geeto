@@ -16,11 +16,12 @@ import type { CopilotModel } from '../api/copilot.js'
 import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 
-import { askQuestion, confirm, editInline } from '../cli/input.js'
+import { getCurrentVersion, updatePackageVersion } from './release-utils.js'
+import { askQuestion, confirm, editMultiline } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
 import { BOX_W } from '../utils/display.js'
-import { execAsync } from '../utils/exec.js'
+import { exec, execAsync } from '../utils/exec.js'
 import {
   chooseModelForProvider,
   generateTextWithProvider,
@@ -292,7 +293,7 @@ const aiRewriteMergedNotes = async (
   language: 'en' | 'id'
 ): Promise<string | null> => {
   const savedState = loadState()
-  let aiProvider: 'gemini' | 'copilot' | 'openrouter' = 'copilot'
+  let aiProvider: 'gemini' | 'copilot' | 'openrouter' | 'groq' = 'copilot'
   let copilotModel: CopilotModel | undefined
   let openrouterModel: OpenRouterModel | undefined
   let geminiModel: GeminiModel | undefined
@@ -303,7 +304,7 @@ const aiRewriteMergedNotes = async (
     savedState.aiProvider !== 'manual' &&
     (savedState.copilotModel || savedState.openrouterModel || savedState.geminiModel)
   ) {
-    aiProvider = savedState.aiProvider as 'gemini' | 'copilot' | 'openrouter'
+    aiProvider = savedState.aiProvider as 'gemini' | 'copilot' | 'openrouter' | 'groq'
     copilotModel = savedState.copilotModel
     openrouterModel = savedState.openrouterModel
     geminiModel = savedState.geminiModel
@@ -311,10 +312,11 @@ const aiRewriteMergedNotes = async (
     let providerChosen = false
     while (!providerChosen) {
       aiProvider = (await select('Choose AI Provider:', [
-        { label: 'GitHub (Recommended)', value: 'copilot' },
+        { label: 'GitHub Copilot', value: 'copilot' },
         { label: 'Gemini', value: 'gemini' },
         { label: 'OpenRouter', value: 'openrouter' },
-      ])) as 'gemini' | 'copilot' | 'openrouter'
+        { label: 'Groq', value: 'groq' },
+      ])) as 'gemini' | 'copilot' | 'openrouter' | 'groq'
 
       const chosen = await chooseModelForProvider(aiProvider, undefined, 'Back to AI provider menu')
       if (!chosen || chosen === 'back') continue
@@ -390,7 +392,7 @@ const aiRewriteMergedNotes = async (
         continue
       }
       case 'edit': {
-        const edited = await editInline(finalNotes, 'Merged Release Notes', '.md')
+        const edited = await editMultiline('Merged Release Notes', finalNotes)
         return edited
       }
       case 'correct': {
@@ -422,10 +424,11 @@ const aiRewriteMergedNotes = async (
       }
       case 'change-provider': {
         const prov = (await select('Choose AI provider:', [
-          { label: 'Copilot', value: 'copilot' },
+          { label: 'GitHub Copilot', value: 'copilot' },
           { label: 'Gemini', value: 'gemini' },
           { label: 'OpenRouter', value: 'openrouter' },
-        ])) as 'gemini' | 'copilot' | 'openrouter'
+          { label: 'Groq', value: 'groq' },
+        ])) as 'gemini' | 'copilot' | 'openrouter' | 'groq'
         aiProvider = prov
         copilotModel = undefined
         openrouterModel = undefined
@@ -668,6 +671,32 @@ export const handleMergeReleases = async (): Promise<void> => {
       mergeSpinner.succeed(
         `Merged into ${stableTag}, but ${allPrereleases.length - deleteCount}/${allPrereleases.length} deletions failed`
       )
+    }
+
+    // Step 3: bump package.json to stable version
+    const currentVer = getCurrentVersion()
+    if (currentVer !== baseVer && isPrerelease(`v${currentVer}`)) {
+      console.log('')
+      console.log(
+        `  ${colors.yellow}package.json${colors.reset} is still at ${colors.bright}v${currentVer}${colors.reset}`
+      )
+      const doBump = confirm(`Bump package.json to v${baseVer}?`)
+      if (doBump) {
+        try {
+          updatePackageVersion(baseVer)
+          log.success(`package.json → v${baseVer}`)
+
+          // Offer to commit the version bump
+          const doCommit = confirm('Commit version bump?')
+          if (doCommit) {
+            exec('git add package.json src/version.ts', true)
+            exec(`git commit --no-verify -m "chore(release): bump version to v${baseVer}"`, true)
+            log.success('Version bump committed')
+          }
+        } catch (error) {
+          log.error('Failed to update package.json: ' + String(error))
+        }
+      }
     }
   }
 }

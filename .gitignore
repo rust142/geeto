@@ -49,6 +49,9 @@ tmp/
 .env.production.local
 .env.local
 
+# Source maps
+index.js.map
+
 # caches
 .eslintcache
 .cache

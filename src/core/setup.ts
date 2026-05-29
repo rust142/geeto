@@ -4,18 +4,21 @@ import { log } from '../utils/logging.js'
  * Check and setup gemini API + API key
  */
 export const ensureGemini = async (): Promise<boolean> => {
-  // Delegate interactive setup to dedicated file
   try {
+    const { getGeminiConfig, getGeminiConfigPath } = await import('../utils/config.js')
+    const { existsSync } = await import('node:fs')
+    if (existsSync(getGeminiConfigPath())) {
+      const { apiKey } = getGeminiConfig()
+      log.info(`Gemini API key: ${apiKey ? apiKey.slice(0, 8) + '...' : 'configured'}`)
+      return true
+    }
     const mod = await import('./gemini-setup.js')
     if (typeof mod.setupGeminiConfigInteractive === 'function') {
       return mod.setupGeminiConfigInteractive()
     }
   } catch {
-    log.warn(
-      'Gemini setup helper not available; please run setup manually or ensure gemini-setup is present'
-    )
+    log.warn('Gemini setup helper not available.')
   }
-
   return false
 }
 
@@ -25,16 +28,18 @@ export const ensureGemini = async (): Promise<boolean> => {
 export const ensureGitHubCopilot = async (): Promise<boolean> => {
   try {
     const mod = await import('./copilot-setup.js')
+    // Silent check first — skip setup flow if already configured
+    if (typeof mod.isCopilotReady === 'function' && (await mod.isCopilotReady())) {
+      return true
+    }
     if (typeof mod.setupGitHubCopilotInteractive === 'function') {
       return mod.setupGitHubCopilotInteractive()
     }
   } catch {
-    log.warn('Copilot setup helper not available, falling back to inline setup')
+    log.warn('Copilot setup helper not available.')
   }
 
-  // Fallback: cannot perform interactive setup because helper is missing
-  log.warn('Unable to run Copilot setup helper.')
-  log.info('Authenticate: copilot auth')
+  log.warn('Unable to run Copilot setup.')
   return false
 }
 
@@ -43,14 +48,19 @@ export const ensureGitHubCopilot = async (): Promise<boolean> => {
  */
 export const ensureOpenRouter = async (): Promise<boolean> => {
   try {
+    const { getOpenRouterConfig, getOpenRouterConfigPath } = await import('../utils/config.js')
+    const { existsSync } = await import('node:fs')
+    if (existsSync(getOpenRouterConfigPath())) {
+      const { apiKey } = getOpenRouterConfig()
+      log.info(`OpenRouter API key: ${apiKey ? apiKey.slice(0, 8) + '...' : 'configured'}`)
+      return true
+    }
     const mod = await import('./openrouter-setup.js')
     if (typeof mod.setupOpenRouterConfigInteractive === 'function') {
       return mod.setupOpenRouterConfigInteractive()
     }
   } catch {
-    log.warn(
-      'OpenRouter setup helper not available; please run setup manually or ensure openrouter-setup is present'
-    )
+    log.warn('OpenRouter setup helper not available.')
   }
   return false
 }
@@ -76,8 +86,27 @@ export const setupTrelloConfig = (): void => {
 /**
  * Unified AI provider setup function
  */
+export const ensureGroq = async (): Promise<boolean> => {
+  try {
+    const { getGroqConfig, getGroqConfigPath } = await import('../utils/config.js')
+    const { existsSync } = await import('node:fs')
+    if (existsSync(getGroqConfigPath())) {
+      const { apiKey } = getGroqConfig()
+      log.info(`Groq API key: ${apiKey ? apiKey.slice(0, 8) + '...' : 'configured'}`)
+      return true
+    }
+    const mod = await import('./groq-setup.js')
+    if (typeof mod.setupGroqConfigInteractive === 'function') {
+      return mod.setupGroqConfigInteractive()
+    }
+  } catch {
+    log.warn('Groq setup helper not available.')
+  }
+  return false
+}
+
 export const ensureAIProvider = async (
-  aiProvider: 'gemini' | 'copilot' | 'openrouter'
+  aiProvider: 'gemini' | 'copilot' | 'openrouter' | 'groq'
 ): Promise<boolean> => {
   switch (aiProvider) {
     case 'gemini': {
@@ -88,6 +117,9 @@ export const ensureAIProvider = async (
     }
     case 'openrouter': {
       return ensureOpenRouter()
+    }
+    case 'groq': {
+      return ensureGroq()
     }
     default: {
       log.error(`Unknown AI provider: ${aiProvider}`)

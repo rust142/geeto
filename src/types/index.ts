@@ -1,5 +1,6 @@
 import type { CopilotModel } from '../api/copilot.js'
 import type { GeminiModel } from '../api/gemini.js'
+import type { GroqModel } from '../api/groq.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 
 export interface SelectOption {
@@ -17,10 +18,11 @@ export interface GeetoState {
   targetBranch: string
   currentBranch: string
   timestamp: string
-  aiProvider?: 'gemini' | 'copilot' | 'openrouter' | 'manual'
+  aiProvider?: 'gemini' | 'copilot' | 'openrouter' | 'groq' | 'manual'
   copilotModel?: CopilotModel
   openrouterModel?: OpenRouterModel
   geminiModel?: GeminiModel
+  groqModel?: GroqModel
   // Flags for explicitly skipped steps
   skippedCommit?: boolean
   skippedPush?: boolean
@@ -50,6 +52,12 @@ export interface TrelloChecklist {
   checkItems: TrelloChecklistItem[]
 }
 
+export interface TrelloLabel {
+  id: string
+  name: string
+  color: string | null
+}
+
 export interface TrelloCard {
   id: string
   name: string
@@ -58,6 +66,7 @@ export interface TrelloCard {
   shortLink: string
   url: string
   idList: string
+  labels?: TrelloLabel[]
   checklists?: TrelloChecklist[]
 }
 

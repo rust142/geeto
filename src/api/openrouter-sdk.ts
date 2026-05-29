@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-import { OpenRouter } from '@openrouter/sdk'
+import OpenAI from 'openai'
 
 import { OpenRouterModel } from './openrouter.js'
 import {
@@ -14,30 +14,19 @@ import {
 import { getOpenRouterConfig } from '../utils/config.js'
 import { log } from '../utils/logging.js'
 
-// OpenRouter SDK wrapper (lazy-load, optional)
+const OPENROUTER_BASE = 'https://openrouter.ai/api/v1'
 
-let client: OpenRouter | null = null
+let client: OpenAI | null = null
 
 const ensureClient = (): boolean => {
-  if (client) {
-    return true
-  }
+  if (client) return true
   try {
-    client = new OpenRouter({ apiKey: getOpenRouterConfig().apiKey })
-    // Narrow client into a local const to satisfy strict no-non-null assertions
-    const startedClient = client
-    if (!startedClient) {
-      return false
-    }
+    client = new OpenAI({
+      baseURL: OPENROUTER_BASE,
+      apiKey: getOpenRouterConfig().apiKey,
+    })
     return true
-  } catch (error) {
-    // SDK optional: log info and fall back
-    try {
-      const msg = error && (error as Error).message ? (error as Error).message : String(error)
-      log.info(msg)
-    } catch {
-      log.info('OpenRouter SDK not available — falling back to OpenRouter.')
-    }
+  } catch {
     client = null
     return false
   }
@@ -52,31 +41,25 @@ export const generateBranchName = async (
   correction?: string,
   model?: OpenRouterModel
 ): Promise<string | null> => {
+  if (!ensureClient()) return null
   const prompt = buildPromptWithCorrection('branch-name-prompt.md', text, 'Input', correction)
 
-  const completion = await client?.chat.send({
-    model: model ?? 'gemini-2.5-flash',
-    messages: [
-      {
-        role: 'user',
-        content: prompt,
-      },
-    ],
-  })
-
   try {
-    const content = completion?.choices[0]?.message?.content as string
+    const completion = await (client as OpenAI).chat.completions.create({
+      model: model ?? 'gemini-2.5-flash',
+      messages: [{ role: 'user', content: prompt }],
+    })
+    const content = completion.choices[0]?.message?.content
+    if (!content) return null
     const first =
-      String(content)
+      content
         .trim()
         .split('\n')
         .find((l: string) => !!l) ?? ''
-    const cleaned = normalizeBranchName(first)
-    return cleaned || null
+    return normalizeBranchName(first) || null
   } catch (error) {
     log.clearLine()
-    log.gap()
-    log.error('OpenRouter Error: ' + String(error))
+    log.warn('OpenRouter Error: ' + String(error))
     return null
   }
 }
@@ -85,28 +68,20 @@ export const generateCommitMessage = async (
   correction?: string,
   model?: OpenRouterModel
 ): Promise<string | null> => {
+  if (!ensureClient()) return null
   const prompt = buildPromptWithCorrection('commit-message-prompt.md', diff, 'Diff', correction)
 
-  const completion = await client?.chat.send({
-    model: model ?? 'gemini-2.5-flash',
-    messages: [
-      {
-        role: 'user',
-        content: prompt,
-      },
-    ],
-  })
-
   try {
-    const content = completion?.choices[0]?.message?.content as string
-    return cleanAIContent(String(content), {
-      normalizeBlankLines: true,
-      minLength: MIN_AI_RESPONSE_LENGTH,
+    const completion = await (client as OpenAI).chat.completions.create({
+      model: model ?? 'gemini-2.5-flash',
+      messages: [{ role: 'user', content: prompt }],
     })
+    const content = completion.choices[0]?.message?.content
+    if (!content) return null
+    return cleanAIContent(content, { normalizeBlankLines: true, minLength: MIN_AI_RESPONSE_LENGTH })
   } catch (error) {
     log.clearLine()
-    log.gap()
-    log.error('OpenRouter Error: ' + String(error))
+    log.warn('OpenRouter Error: ' + String(error))
     return null
   }
 }
@@ -153,13 +128,15 @@ type ModelDetail = {
 }
 
 export const getAvailableModelsDetailed = async (): Promise<ModelDetail[] | null> => {
-  const ok = ensureClient()
-  if (!ok || !client) {
-    return null
-  }
+  const apiKey = getOpenRouterConfig().apiKey
+  if (!apiKey) return null
 
   try {
-    const resp: any = await client.models.list()
+    const res = await fetch(`${OPENROUTER_BASE}/models`, {
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    })
+    if (!res.ok) return null
+    const resp: any = await res.json()
 
     let list: any[] = []
     if (Array.isArray(resp.data)) {
@@ -360,7 +337,7 @@ export const getAvailableModelsDetailed = async (): Promise<ModelDetail[] | null
           value: id || name,
         }
       })
-      .filter((m) => m.outputTokenLimit)
+      .filter((m) => m.id)
       // eslint-disable-next-line unicorn/no-array-sort
       .sort((a, b) => a.name.localeCompare(b.name)) // sort by name
 
@@ -409,25 +386,20 @@ export const generateReleaseNotes = async (
   correction?: string,
   model?: OpenRouterModel
 ): Promise<string | null> => {
+  if (!ensureClient()) return null
   const prompt = buildReleaseNotesPrompt(commits, language, correction)
 
-  const completion = await client?.chat.send({
-    model: model ?? 'gemini-2.5-flash',
-    messages: [
-      {
-        role: 'user',
-        content: prompt,
-      },
-    ],
-  })
-
   try {
-    const content = completion?.choices[0]?.message?.content as string
-    return cleanAIContent(String(content))
+    const completion = await (client as OpenAI).chat.completions.create({
+      model: model ?? 'gemini-2.5-flash',
+      messages: [{ role: 'user', content: prompt }],
+    })
+    const content = completion.choices[0]?.message?.content
+    if (!content) return null
+    return cleanAIContent(content)
   } catch (error) {
     log.clearLine()
-    log.gap()
-    log.error('OpenRouter Error: ' + String(error))
+    log.warn('OpenRouter Error: ' + String(error))
     return null
   }
 }
@@ -436,14 +408,14 @@ export const generateReleaseNotes = async (
 export const generateText = async (prompt: string, model?: string): Promise<string | null> => {
   if (!ensureClient()) return null
 
-  const completion = await client?.chat.send({
-    model: model ?? 'gemini-2.5-flash',
-    messages: [{ role: 'user', content: prompt }],
-  })
-
   try {
-    const content = completion?.choices[0]?.message?.content as string
-    return cleanAIContent(String(content))
+    const completion = await (client as OpenAI).chat.completions.create({
+      model: model ?? 'gemini-2.5-flash',
+      messages: [{ role: 'user', content: prompt }],
+    })
+    const content = completion.choices[0]?.message?.content
+    if (!content) return null
+    return cleanAIContent(content)
   } catch {
     return null
   }

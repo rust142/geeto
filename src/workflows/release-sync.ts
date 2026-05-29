@@ -34,7 +34,19 @@ export const getExistingGithubReleases = async (cli = 'gh'): Promise<string[]> =
       true
     )
     const output = result.stdout.trim()
-    return output ? output.split('\n').filter(Boolean) : []
+    const tags = output ? output.split('\n').filter(Boolean) : []
+    // eslint-disable-next-line unicorn/no-array-sort -- toSorted needs ES2023
+    return [...tags].sort((a, b) => {
+      const pa = a.replace(/^v/, '').split(/[-.]/)
+      const pb = b.replace(/^v/, '').split(/[-.]/)
+      for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+        const na = Number(pa[i]) || 0
+        const nb = Number(pb[i]) || 0
+        if (na !== nb) return nb - na
+        if (pa[i] !== pb[i]) return (pb[i] ?? '').localeCompare(pa[i] ?? '')
+      }
+      return 0
+    })
   } catch {
     return []
   }
@@ -116,10 +128,11 @@ export const handleSyncReleases = async (): Promise<void> => {
   // AI setup if needed
   let useAI = notesMode === 'ai'
   let language: 'en' | 'id' = 'en'
-  let aiProvider: 'gemini' | 'copilot' | 'openrouter' = 'copilot'
+  let aiProvider: 'gemini' | 'copilot' | 'openrouter' | 'groq' = 'copilot'
   let copilotModel: CopilotModel | undefined
   let openrouterModel: OpenRouterModel | undefined
   let geminiModel: GeminiModel | undefined
+  let groqModel: string | undefined
 
   if (useAI) {
     language = (await select('Release notes language:', [
@@ -132,20 +145,25 @@ export const handleSyncReleases = async (): Promise<void> => {
     if (
       savedState?.aiProvider &&
       savedState.aiProvider !== 'manual' &&
-      (savedState.copilotModel || savedState.openrouterModel || savedState.geminiModel)
+      (savedState.copilotModel ||
+        savedState.openrouterModel ||
+        savedState.geminiModel ||
+        savedState.groqModel)
     ) {
-      aiProvider = savedState.aiProvider as 'gemini' | 'copilot' | 'openrouter'
+      aiProvider = savedState.aiProvider as 'gemini' | 'copilot' | 'openrouter' | 'groq'
       copilotModel = savedState.copilotModel
       openrouterModel = savedState.openrouterModel
       geminiModel = savedState.geminiModel
+      groqModel = savedState.groqModel
     } else {
       let providerChosen = false
       while (!providerChosen) {
         aiProvider = (await select('Choose AI Provider:', [
-          { label: 'GitHub (Recommended)', value: 'copilot' },
+          { label: 'GitHub Copilot', value: 'copilot' },
           { label: 'Gemini', value: 'gemini' },
           { label: 'OpenRouter', value: 'openrouter' },
-        ])) as 'gemini' | 'copilot' | 'openrouter'
+          { label: 'Groq', value: 'groq' },
+        ])) as 'gemini' | 'copilot' | 'openrouter' | 'groq'
 
         const chosen = await chooseModelForProvider(
           aiProvider,
@@ -209,7 +227,9 @@ export const handleSyncReleases = async (): Promise<void> => {
     if (useAI && commits.length > 0) {
       console.log('')
       const aiSpinner = new ScrambleProgress()
-      const modelDisplay = getModelValue(copilotModel ?? openrouterModel ?? geminiModel ?? '')
+      const modelDisplay = getModelValue(
+        copilotModel ?? openrouterModel ?? groqModel ?? geminiModel ?? ''
+      )
       aiSpinner.start([
         `Generating release notes with ${getAIProviderShortName(aiProvider)}${modelDisplay ? ` (${modelDisplay})` : ''}`,
       ])
@@ -332,13 +352,32 @@ export const handleDeleteReleases = async (): Promise<void> => {
 
   console.log('')
   const spinner = new ScrambleProgress()
-  spinner.start([`Fetching ${platformName} releases`])
+  spinner.start([`Fetching ${platformName} releases`, 'Fetching local tags'])
 
   const ghReleases = await getExistingGithubReleases(cli)
+  const localTags = getExistingTags()
+  const ghSet = new Set(ghReleases)
+  const localOnlyTags = localTags.filter((t) => !ghSet.has(t))
 
-  spinner.succeed(`Found ${ghReleases.length} ${platformName} releases`)
+  const allTags = [...ghReleases, ...localOnlyTags]
+  // eslint-disable-next-line unicorn/no-array-sort -- toSorted needs ES2023
+  const sorted = [...allTags].sort((a, b) => {
+    const pa = a.replace(/^v/, '').split(/[-.]/)
+    const pb = b.replace(/^v/, '').split(/[-.]/)
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+      const na = Number(pa[i]) || 0
+      const nb = Number(pb[i]) || 0
+      if (na !== nb) return nb - na
+      if (pa[i] !== pb[i]) return (pb[i] ?? '').localeCompare(pa[i] ?? '')
+    }
+    return 0
+  })
 
-  if (ghReleases.length === 0) {
+  const total = sorted.length
+  const localCount = localOnlyTags.length
+  spinner.succeed(`Found ${total} releases${localCount > 0 ? ` (${localCount} local only)` : ''}`)
+
+  if (total === 0) {
     console.log('')
     log.info(`No ${platformName} Releases to delete.`)
     return
@@ -346,7 +385,11 @@ export const handleDeleteReleases = async (): Promise<void> => {
 
   console.log('')
   const { multiSelect } = await import('../cli/menu.js')
-  const choices = ghReleases.map((t) => ({ label: t, value: t }))
+  const choices = sorted.map((t) => {
+    const isLocal = !ghSet.has(t)
+    const label = isLocal ? `${t} ${colors.yellow}(local)${colors.reset}` : t
+    return { label, value: t }
+  })
   const selected = await multiSelect('Select releases to delete:', choices)
 
   if (selected.length === 0) {
@@ -368,8 +411,26 @@ export const handleDeleteReleases = async (): Promise<void> => {
   for (const release of selected) {
     console.log('')
     const releaseSpinner = new ScrambleProgress()
-    releaseSpinner.start([`Deleting release ${release}`])
+    const isLocalOnly = !ghSet.has(release)
 
+    if (isLocalOnly) {
+      releaseSpinner.start([`Deleting local tag ${release}`])
+      try {
+        await execAsync(`git tag -d ${release}`, true)
+        try {
+          await execAsync(`git push origin --delete ${release} --no-verify`, true)
+        } catch {
+          /* Remote tag may not exist */
+        }
+        releaseSpinner.succeed(`Local tag ${release} deleted`)
+        successCount++
+      } catch {
+        releaseSpinner.fail(`Failed to delete tag ${release}`)
+      }
+      continue
+    }
+
+    releaseSpinner.start([`Deleting release ${release}`])
     try {
       await execAsync(`${cli} release delete ${release} --yes`, true)
       if (alsoDeleteTag) {

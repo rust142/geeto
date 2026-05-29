@@ -179,7 +179,7 @@ export const handleRepoSettings = async (): Promise<void> => {
     const readme = readReadme()
     if (readme) {
       // AI provider setup
-      let aiProvider: 'gemini' | 'copilot' | 'openrouter' = 'copilot'
+      let aiProvider: 'gemini' | 'copilot' | 'openrouter' | 'groq' = 'copilot'
       let copilotModel: CopilotModel | undefined
       let openrouterModel: OpenRouterModel | undefined
       let geminiModel: GeminiModel | undefined
@@ -190,7 +190,7 @@ export const handleRepoSettings = async (): Promise<void> => {
         savedState.aiProvider !== 'manual' &&
         (savedState.copilotModel || savedState.openrouterModel || savedState.geminiModel)
       ) {
-        aiProvider = savedState.aiProvider as 'gemini' | 'copilot' | 'openrouter'
+        aiProvider = savedState.aiProvider as 'gemini' | 'copilot' | 'openrouter' | 'groq'
         copilotModel = savedState.copilotModel
         openrouterModel = savedState.openrouterModel
         geminiModel = savedState.geminiModel
@@ -199,10 +199,11 @@ export const handleRepoSettings = async (): Promise<void> => {
         while (!providerChosen) {
           console.log('')
           aiProvider = (await select('Choose AI Provider:', [
-            { label: 'GitHub (Recommended)', value: 'copilot' },
+            { label: 'GitHub Copilot', value: 'copilot' },
             { label: 'Gemini', value: 'gemini' },
             { label: 'OpenRouter', value: 'openrouter' },
-          ])) as 'gemini' | 'copilot' | 'openrouter'
+            { label: 'Groq', value: 'groq' },
+          ])) as 'gemini' | 'copilot' | 'openrouter' | 'groq'
 
           const chosen = await chooseModelForProvider(
             aiProvider,
@@ -325,10 +326,11 @@ export const handleRepoSettings = async (): Promise<void> => {
           case 'change-provider': {
             console.log('')
             aiProvider = (await select('Choose AI Provider:', [
-              { label: 'GitHub (Recommended)', value: 'copilot' },
+              { label: 'GitHub Copilot', value: 'copilot' },
               { label: 'Gemini', value: 'gemini' },
               { label: 'OpenRouter', value: 'openrouter' },
-            ])) as 'gemini' | 'copilot' | 'openrouter'
+              { label: 'Groq', value: 'groq' },
+            ])) as 'gemini' | 'copilot' | 'openrouter' | 'groq'
 
             const newModel = await chooseModelForProvider(aiProvider, undefined, 'Back')
             if (newModel && newModel !== 'back') {

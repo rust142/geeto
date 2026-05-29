@@ -47,8 +47,18 @@ export class ScrambleProgress {
     this.interval = setInterval(() => {
       const f = SPINNER_FRAMES[this.frame % SPINNER_FRAMES.length]
       const elapsed = Math.floor((Date.now() - this.startTime) / 1000)
-      const time = elapsed > 0 ? ` ${colors.gray}(${elapsed}s)${colors.reset}` : ''
-      process.stdout.write(`\r${colors.cyan}${f}${colors.reset} ${this.message}${time}\u001B[K`)
+      const timeDisplay = elapsed > 0 ? ` (${elapsed}s)` : ''
+      const cols = process.stdout.columns || 80
+      const maxLen = Math.max(10, cols - 1)
+      const fullText = `${f} ${this.message}${timeDisplay}`
+      let output: string
+      if (fullText.length <= maxLen) {
+        output = `${colors.cyan}${f}${colors.reset} ${this.message}${elapsed > 0 ? ` ${colors.gray}(${elapsed}s)${colors.reset}` : ''}`
+      } else {
+        const truncated = fullText.slice(0, maxLen - 1) + '\u2026'
+        output = `${colors.cyan}${truncated[0]}${colors.reset} ${truncated.slice(2)}`
+      }
+      process.stdout.write(`\r\u001B[2K${output}`)
       this.frame++
     }, 80)
   }
@@ -64,7 +74,7 @@ export class ScrambleProgress {
       clearInterval(this.interval)
       this.interval = null
     }
-    process.stdout.write('\r\u001B[K')
+    process.stdout.write('\r\u001B[2K') // Clear spinner line
     process.stdout.write('\u001B[?25h') // Show cursor
   }
 
