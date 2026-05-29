@@ -3,9 +3,10 @@
  */
 
 import fs from 'node:fs'
+import path from 'node:path'
 
 import { askQuestion, confirm } from '../cli/input.js'
-import { ensureGeetoIgnored, getGitlabConfigPath } from '../utils/config.js'
+import { GLOBAL_GEETO_DIR, resolveConfigPath } from '../utils/config.js'
 import { exec, openBrowser } from '../utils/exec.js'
 import { log } from '../utils/logging.js'
 
@@ -19,6 +20,12 @@ const detectGlabToken = (): string | null => {
 }
 
 export const setupGitlabConfigInteractive = (): boolean => {
+  try {
+    if (fs.existsSync(resolveConfigPath('gitlab.toml'))) return true
+  } catch {
+    // fall through to interactive setup
+  }
+
   log.info('GitLab integration is not configured for this project.\n')
   log.info('To enable GitLab features (create MR, issues), you need:')
   log.info('  1. A Personal Access Token (PAT) with api scope')
@@ -63,9 +70,9 @@ export const setupGitlabConfigInteractive = (): boolean => {
   const instanceUrl =
     askQuestion('GitLab instance URL (press Enter for gitlab.com): ').trim() || 'https://gitlab.com'
 
-  const path = getGitlabConfigPath()
-  const configDir = path.slice(0, path.lastIndexOf('/'))
-  ensureGeetoIgnored()
+  const configDir = GLOBAL_GEETO_DIR
+  const configPath = path.join(configDir, 'gitlab.toml')
+
   try {
     if (!fs.existsSync(configDir)) fs.mkdirSync(configDir, { recursive: true })
   } catch (error: unknown) {
@@ -76,8 +83,8 @@ export const setupGitlabConfigInteractive = (): boolean => {
 
   const configContent = `# Geeto GitLab Configuration\n# Generated on ${new Date().toISOString()}\n\ntoken = "${token}"\nurl = "${instanceUrl}"\n`
   try {
-    fs.writeFileSync(path, configContent, 'utf8')
-    log.success(`GitLab config saved to: ${path}`)
+    fs.writeFileSync(configPath, configContent, 'utf8')
+    log.success(`GitLab config saved to: ${configPath}`)
     return true
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error)

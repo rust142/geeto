@@ -2,7 +2,7 @@
  * Settings workflow - handles all settings menu interactions
  */
 
-import { existsSync, unlinkSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 
 import { askQuestion, confirm } from '../cli/input.js'
@@ -11,6 +11,7 @@ import { colors } from '../utils/colors.js'
 import {
   getBranchStrategyConfig,
   getProtectedBranches,
+  GLOBAL_GEETO_DIR,
   hasGeminiConfig,
   hasTrelloConfig,
   saveBranchStrategyConfig,
@@ -29,6 +30,139 @@ const removeConfigFile = (name: string): boolean => {
     return true
   }
   return false
+}
+
+const isConfigLocal = (name: string): boolean => existsSync(configFilePath(name))
+
+const moveConfigToGlobal = (name: string): boolean => {
+  const localPath = configFilePath(name)
+  if (!existsSync(localPath)) return false
+  try {
+    if (!existsSync(GLOBAL_GEETO_DIR)) mkdirSync(GLOBAL_GEETO_DIR, { recursive: true })
+    writeFileSync(
+      path.join(GLOBAL_GEETO_DIR, `${name}.toml`),
+      readFileSync(localPath, 'utf8'),
+      'utf8'
+    )
+    unlinkSync(localPath)
+    return true
+  } catch {
+    return false
+  }
+}
+
+const AI_PROVIDERS = ['gemini', 'openrouter', 'groq', 'github', 'gitlab'] as const
+type AiProvider = (typeof AI_PROVIDERS)[number]
+
+const globalConfigPath = (name: string) => path.join(GLOBAL_GEETO_DIR, `${name}.toml`)
+
+const isConfigGlobal = (name: string): boolean => existsSync(globalConfigPath(name))
+
+const globalProviders = (): AiProvider[] => AI_PROVIDERS.filter((p) => isConfigGlobal(p))
+
+const maskValue = (val: string): string =>
+  val.length <= 8 ? '***' : `${val.slice(0, 4)}...${val.slice(-4)}`
+
+const readGlobalConfigInfo = (name: AiProvider): string => {
+  try {
+    const content = readFileSync(globalConfigPath(name), 'utf8')
+    const match = content.match(
+      /(?:gemini_api_key|openrouter_api_key|api_key|token)\s*=\s*["']([^"']+)["']/
+    )
+    return match?.[1] ? maskValue(match[1]) : '(configured)'
+  } catch {
+    return '(configured)'
+  }
+}
+
+const handleGlobalConfigSetting = async (): Promise<boolean | void> => {
+  while (true) {
+    const configured = globalProviders()
+
+    if (configured.length === 0) {
+      log.info('No global AI config found in ~/.geeto/')
+      return false
+    }
+
+    const action = await select('Global config (~/.geeto/):', [
+      { label: 'View info', value: 'view' },
+      { label: 'Configure a provider globally', value: 'configure' },
+      { label: 'Remove a provider from global', value: 'remove' },
+      { label: 'Back to settings menu', value: 'back' },
+    ])
+
+    if (action === 'back') return true
+
+    if (action === 'view') {
+      log.info(`Global config directory: ${GLOBAL_GEETO_DIR}\n`)
+      for (const p of configured) {
+        log.info(`  ${p.padEnd(12)} ${readGlobalConfigInfo(p)}`)
+      }
+      askQuestion(`\n  ${colors.gray}Press Enter to go back${colors.reset}`)
+      continue
+    }
+
+    if (action === 'configure') {
+      const provider = await select('Which provider to configure globally?', [
+        { label: 'Gemini', value: 'gemini' },
+        { label: 'OpenRouter', value: 'openrouter' },
+        { label: 'Groq', value: 'groq' },
+        { label: 'GitHub Copilot', value: 'github' },
+        { label: 'GitLab', value: 'gitlab' },
+        { label: 'Back', value: 'back' },
+      ])
+      if (provider === 'back') continue
+
+      const gp = globalConfigPath(provider)
+      if (existsSync(gp)) unlinkSync(gp)
+
+      switch (provider) {
+        case 'gemini': {
+          const { setupGeminiConfigInteractive } = await import('../core/gemini-setup.js')
+          setupGeminiConfigInteractive()
+          break
+        }
+        case 'openrouter': {
+          const { setupOpenRouterConfigInteractive } = await import('../core/openrouter-setup.js')
+          setupOpenRouterConfigInteractive()
+          break
+        }
+        case 'groq': {
+          const { setupGroqConfigInteractive } = await import('../core/groq-setup.js')
+          setupGroqConfigInteractive()
+          break
+        }
+        case 'github': {
+          const { setupGithubConfigInteractive } = await import('../core/github-setup.js')
+          setupGithubConfigInteractive()
+          break
+        }
+        case 'gitlab': {
+          const { setupGitlabConfigInteractive } = await import('../core/gitlab-setup.js')
+          setupGitlabConfigInteractive()
+          break
+        }
+      }
+      continue
+    }
+
+    if (action === 'remove') {
+      const choices: { label: string; value: AiProvider | 'back' }[] = configured.map((p) => ({
+        label: p,
+        value: p,
+      }))
+      choices.push({ label: 'Back', value: 'back' })
+      const provider = await select('Which provider to remove from global?', choices)
+      if (provider === 'back') continue
+
+      const gp = globalConfigPath(provider)
+      if (existsSync(gp)) {
+        unlinkSync(gp)
+        log.success(`Removed ${provider} from ~/.geeto/`)
+      }
+      continue
+    }
+  }
 }
 
 const runInteractiveSetup = async (name: 'trello' | 'openrouter' | 'gemini' | 'groq') => {
@@ -213,10 +347,6 @@ const syncOpenRouterModels = async (): Promise<void> => {
         > | null
         spinner.stop()
         if (Array.isArray(detailed) && detailed.length > 0) {
-          // Persist detailed sync file
-          const syncFile = path.join(outDir, 'openrouter-model-live-sample.json')
-          await fs.promises.writeFile(syncFile, JSON.stringify(detailed, null, 2))
-
           // Filter out image-generation-only models (geeto is for text/code tasks)
           const imageOnlyPrefixes = [
             'stabilityai/',
@@ -309,10 +439,7 @@ const syncOpenRouterModels = async (): Promise<void> => {
           const outModelFile = path.join(outDir, 'openrouter-model.json')
           await fs.promises.writeFile(outModelFile, JSON.stringify(simple, null, 2))
 
-          log.info(
-            `Saved ${simple.length} OpenRouter model(s) to .geeto/openrouter-model.json ` +
-              '(and _live-sample.json).'
-          )
+          log.info(`Saved ${simple.length} OpenRouter model(s) to .geeto/openrouter-model.json`)
           return
         }
       } catch (error: unknown) {
@@ -321,20 +448,35 @@ const syncOpenRouterModels = async (): Promise<void> => {
       }
     }
 
-    // SDK unavailable or no models; fall back to persisted file/guidance
+    // SDK unavailable or returned no models; use saved models with multiSelect
     const modelFilePath = path.join(outDir, 'openrouter-model.json')
     if (fs.existsSync(modelFilePath)) {
       try {
         const raw = fs.readFileSync(modelFilePath, 'utf8')
         const parsed = JSON.parse(raw) as Array<{ label?: string; value?: string }>
         if (Array.isArray(parsed) && parsed.length > 0) {
-          log.info(`Found ${parsed.length} OpenRouter model(s) in .geeto/openrouter-model.json:`)
-          for (const m of parsed) {
-            log.info(` - ${m.label ?? m.value ?? JSON.stringify(m)}`)
-          }
-          log.info(
-            'No new sync performed; using existing persisted OpenRouter model configuration.'
+          const choices = parsed.map((m) => ({
+            label: String(m.label ?? m.value ?? ''),
+            value: String(m.value ?? ''),
+          }))
+          const defaults = choices.map((c) => c.value)
+          const selected = await multiSelect(
+            'Pick your favorite OpenRouter models (from saved list):',
+            choices,
+            defaults
           )
+          if (!selected || selected.length === 0) {
+            log.info('No models selected. Sync cancelled.')
+            return
+          }
+          const simple = selected.map((val, idx) => {
+            const detail = parsed.find((m) => m.value === val)
+            const rawLabel = String(detail?.label ?? val)
+            const label = rawLabel.replace(/^\s*\d+\.\s*/, `${idx + 1}. `)
+            return { label, value: val }
+          })
+          await fs.promises.writeFile(modelFilePath, JSON.stringify(simple, null, 2))
+          log.success(`Saved ${simple.length} OpenRouter model(s) to .geeto/openrouter-model.json`)
           return
         }
       } catch (error: unknown) {
@@ -343,8 +485,7 @@ const syncOpenRouterModels = async (): Promise<void> => {
       }
     }
 
-    log.info('No OpenRouter model configuration found and no SDK sync possible.')
-    log.info('Run the sync again after installing/configuring the OpenRouter SDK to fetch models.')
+    log.warn('No OpenRouter models available. Run --sync-models after configuring OpenRouter.')
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error)
     log.warn(`OpenRouter model sync failed: ${msg}`)
@@ -795,31 +936,33 @@ const handleGeminiSetting = async (): Promise<boolean | void> => {
     ]
   )
 
-  if (action === 'reconfigure') {
-    log.info('Reconfiguring Gemini AI integration...')
-    if (removeConfigFile('gemini')) {
-      log.info('Cleared existing Gemini configuration')
-    }
-
-    const { setupGeminiConfigInteractive } = await import('../core/gemini-setup.js')
-    const setupSuccess = setupGeminiConfigInteractive()
-    if (setupSuccess) {
-      log.success('Gemini AI integration reconfigured!')
-    } else {
-      log.warn('Gemini setup failed or cancelled.')
-    }
-  } else if (action === 'remove') {
-    const confirmRemove = confirm('Are you sure you want to remove Gemini configuration?')
-    if (confirmRemove) {
-      if (removeConfigFile('gemini')) {
-        log.success('Gemini configuration removed!')
+  switch (action) {
+    case 'reconfigure': {
+      log.info('Reconfiguring Gemini AI integration...')
+      if (removeConfigFile('gemini')) log.info('Cleared existing Gemini configuration')
+      const { setupGeminiConfigInteractive } = await import('../core/gemini-setup.js')
+      const setupSuccess = setupGeminiConfigInteractive()
+      if (setupSuccess) {
+        log.success('Gemini AI integration reconfigured!')
       } else {
-        log.warn('Failed to remove Gemini configuration.')
+        log.warn('Gemini setup failed or cancelled.')
       }
+      break
     }
-  }
-  if (action === 'back') {
-    return true
+    case 'remove': {
+      const confirmRemove = confirm('Are you sure you want to remove Gemini configuration?')
+      if (confirmRemove) {
+        if (removeConfigFile('gemini')) {
+          log.success('Gemini configuration removed!')
+        } else {
+          log.warn('Failed to remove Gemini configuration.')
+        }
+      }
+      break
+    }
+    case 'back': {
+      return true
+    }
   }
 
   // Completed without returning to settings menu
@@ -893,26 +1036,27 @@ const handleOpenRouterSetting = async (): Promise<boolean | void> => {
     ]
   )
 
-  if (action === 'reconfigure') {
-    log.info('Reconfiguring OpenRouter integration...')
-    if (removeConfigFile('openrouter')) {
-      log.info('Cleared existing OpenRouter configuration')
+  switch (action) {
+    case 'reconfigure': {
+      log.info('Reconfiguring OpenRouter integration...')
+      if (removeConfigFile('openrouter')) log.info('Cleared existing OpenRouter configuration')
+      await runInteractiveSetup('openrouter')
+      log.success('OpenRouter integration reconfigured!')
+      break
     }
-    await runInteractiveSetup('openrouter')
-    log.success('OpenRouter integration reconfigured!')
-  } else if (action === 'remove') {
-    const confirmRemove = confirm('Are you sure you want to remove OpenRouter configuration?')
-    if (!confirmRemove) {
-      return false
+    case 'remove': {
+      const confirmRemove = confirm('Are you sure you want to remove OpenRouter configuration?')
+      if (!confirmRemove) return false
+      if (removeConfigFile('openrouter')) {
+        log.success('OpenRouter configuration removed!')
+      } else {
+        log.info('No OpenRouter configuration found to remove')
+      }
+      break
     }
-    if (removeConfigFile('openrouter')) {
-      log.success('OpenRouter configuration removed!')
-    } else {
-      log.info('No OpenRouter configuration found to remove')
+    case 'back': {
+      return true
     }
-  }
-  if (action === 'back') {
-    return true
   }
 
   // Completed without returning to settings menu
@@ -937,23 +1081,55 @@ const handleGroqSetting = async (): Promise<boolean | void> => {
     ]
   )
 
-  if (action === 'reconfigure') {
-    log.info('Reconfiguring Groq integration...')
-    if (removeConfigFile('groq')) {
-      log.info('Cleared existing Groq configuration')
+  switch (action) {
+    case 'reconfigure': {
+      log.info('Reconfiguring Groq integration...')
+      if (removeConfigFile('groq')) log.info('Cleared existing Groq configuration')
+      await runInteractiveSetup('groq')
+      log.success('Groq integration reconfigured!')
+      break
     }
-    await runInteractiveSetup('groq')
-    log.success('Groq integration reconfigured!')
-  } else if (action === 'remove') {
-    const confirmRemove = confirm('Are you sure you want to remove Groq configuration?')
-    if (!confirmRemove) return false
-    if (removeConfigFile('groq')) {
-      log.success('Groq configuration removed!')
-    } else {
-      log.info('No Groq configuration found to remove')
+    case 'remove': {
+      const confirmRemove = confirm('Are you sure you want to remove Groq configuration?')
+      if (!confirmRemove) return false
+      if (removeConfigFile('groq')) {
+        log.success('Groq configuration removed!')
+      } else {
+        log.info('No Groq configuration found to remove')
+      }
+      break
+    }
+    case 'back': {
+      return true
     }
   }
-  if (action === 'back') return true
+  return false
+}
+
+const handleSaveGlobalAiConfig = (): boolean | void => {
+  const providers = ['gemini', 'openrouter', 'groq'] as const
+  const local = providers.filter((p) => isConfigLocal(p))
+
+  if (local.length === 0) {
+    log.info('No local AI config found — already global or not configured.')
+    return false
+  }
+
+  log.info(`Local AI config found: ${local.join(', ')}`)
+  const ok = confirm(`Save all to ~/.geeto/ and use across all projects?`)
+  if (!ok) return false
+
+  let saved = 0
+  for (const p of local) {
+    if (moveConfigToGlobal(p)) {
+      log.success(`${p}: saved to ${GLOBAL_GEETO_DIR}/${p}.toml`)
+      saved++
+    } else {
+      log.error(`${p}: failed`)
+    }
+  }
+
+  if (saved > 0) log.success(`Done — ${saved} config(s) saved to ${GLOBAL_GEETO_DIR}`)
   return false
 }
 
@@ -961,7 +1137,9 @@ export const showSettingsMenu = async () => {
   while (true) {
     log.info('Settings Menu')
 
-    const settingChoice = await select('Settings:', [
+    const hasGlobalConfig = globalProviders().length > 0
+
+    const menuOptions: Array<{ label: string; value: string; disabled?: boolean }> = [
       { label: 'Branch', value: '_branch', disabled: true },
       { label: '  Branch prefix  (dev#name / dev/name)', value: 'prefix' },
       { label: '  Branch separator  (hyphen / underscore)', value: 'separator' },
@@ -969,6 +1147,12 @@ export const showSettingsMenu = async () => {
       { label: 'AI', value: '_ai', disabled: true },
       { label: '  Active model  (switch provider & model)', value: 'change-model' },
       { label: '  Saved models  (manage favorites per provider)', value: 'models' },
+      { label: '  Move local AI config to global (~/.geeto/)', value: 'save-global' },
+    ]
+    if (hasGlobalConfig) {
+      menuOptions.push({ label: '  Manage global config (~/.geeto/)', value: 'global-config' })
+    }
+    menuOptions.push(
       { label: 'Setup', value: '_setup', disabled: true },
       { label: '  GitHub Copilot', value: 'copilot' },
       { label: '  Gemini', value: 'gemini' },
@@ -978,8 +1162,10 @@ export const showSettingsMenu = async () => {
       { label: 'System', value: '_system', disabled: true },
       { label: '  Installation info', value: 'where' },
       { label: '  Uninstall geeto', value: 'uninstall' },
-      { label: 'Back', value: 'back' },
-    ])
+      { label: 'Back', value: 'back' }
+    )
+
+    const settingChoice = await select('Settings:', menuOptions)
 
     if (settingChoice === 'back') {
       break
@@ -1005,6 +1191,15 @@ export const showSettingsMenu = async () => {
     }
     if (settingChoice === 'models') {
       const back = await handleModelResetSetting()
+      if (back) {
+        continue
+      }
+    }
+    if (settingChoice === 'save-global') {
+      handleSaveGlobalAiConfig()
+    }
+    if (settingChoice === 'global-config') {
+      const back = await handleGlobalConfigSetting()
       if (back) {
         continue
       }

@@ -17,7 +17,7 @@ import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 
 import { getCurrentVersion, updatePackageVersion } from './release-utils.js'
-import { askQuestion, confirm, editInline } from '../cli/input.js'
+import { askQuestion, confirm, editMultiline } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
 import { BOX_W } from '../utils/display.js'
@@ -392,7 +392,7 @@ const aiRewriteMergedNotes = async (
         continue
       }
       case 'edit': {
-        const edited = await editInline(finalNotes, 'Merged Release Notes', '.md')
+        const edited = await editMultiline('Merged Release Notes', finalNotes)
         return edited
       }
       case 'correct': {

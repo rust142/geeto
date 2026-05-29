@@ -337,7 +337,7 @@ export const getAvailableModelsDetailed = async (): Promise<ModelDetail[] | null
           value: id || name,
         }
       })
-      .filter((m) => m.outputTokenLimit)
+      .filter((m) => m.id)
       // eslint-disable-next-line unicorn/no-array-sort
       .sort((a, b) => a.name.localeCompare(b.name)) // sort by name
 

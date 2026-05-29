@@ -15,7 +15,7 @@ import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 import type { GeetoState } from '../types/index.js'
 
-import { askQuestion, confirm, editInline } from '../cli/input.js'
+import { askQuestion, confirm, editMultiline } from '../cli/input.js'
 import { multiSelect, select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
 import {
@@ -611,7 +611,7 @@ const generateNewMessages = async (
     }
 
     if (method === 'manual') {
-      const edited = await editInline(currentMsg, `Edit: ${commit.shortHash} ${commit.subject}`)
+      const edited = await editMultiline(`Edit: ${commit.shortHash} ${commit.subject}`, currentMsg)
 
       if (edited === null) {
         log.info(`Skipped ${commit.shortHash}`)
@@ -639,7 +639,7 @@ const generateNewMessages = async (
     const diff = getCommitDiff(commit.hash)
     if (!diff) {
       log.warn(`No diff found for ${commit.shortHash}, falling back to manual edit`)
-      const edited = await editInline(currentMsg, `Edit: ${commit.shortHash} ${commit.subject}`)
+      const edited = await editMultiline(`Edit: ${commit.shortHash} ${commit.subject}`, currentMsg)
       if (edited && edited.trim() !== currentMsg.trim()) {
         newMessages.set(commit.hash, edited.trim())
       }
@@ -671,7 +671,7 @@ const generateNewMessages = async (
       spinner.stop()
     } catch {
       spinner.fail('AI generation failed, falling back to manual edit')
-      const edited = await editInline(currentMsg, `Edit: ${commit.shortHash} ${commit.subject}`)
+      const edited = await editMultiline(`Edit: ${commit.shortHash} ${commit.subject}`, currentMsg)
       if (edited && edited.trim() !== currentMsg.trim()) {
         newMessages.set(commit.hash, edited.trim())
       }
@@ -771,7 +771,10 @@ const generateNewMessages = async (
       const commitMessage = aiResult ?? ''
       if (!commitMessage) {
         log.warn('Could not generate message; falling back to manual edit')
-        const edited = await editInline(currentMsg, `Edit: ${commit.shortHash} ${commit.subject}`)
+        const edited = await editMultiline(
+          `Edit: ${commit.shortHash} ${commit.subject}`,
+          currentMsg
+        )
         if (edited && edited.trim() !== currentMsg.trim()) {
           newMessages.set(commit.hash, edited.trim())
         }
@@ -939,7 +942,7 @@ const generateNewMessages = async (
           continue
         }
         case 'edit': {
-          const edited = await editInline(commitMessage, `Edit: ${commit.shortHash}`)
+          const edited = await editMultiline(`Edit: ${commit.shortHash}`, commitMessage)
           if (edited?.trim()) {
             newMessages.set(commit.hash, buildFinalMessage(edited.trim()).trim())
             log.success(`Message set for ${commit.shortHash}`)

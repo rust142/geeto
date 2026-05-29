@@ -3,9 +3,10 @@
  */
 
 import fs from 'node:fs'
+import path from 'node:path'
 
 import { askQuestion, confirm } from '../cli/input.js'
-import { ensureGeetoIgnored, getOpenRouterConfigPath } from '../utils/config.js'
+import { GLOBAL_GEETO_DIR, resolveConfigPath } from '../utils/config.js'
 import { openBrowser } from '../utils/exec.js'
 import { log } from '../utils/logging.js'
 
@@ -13,12 +14,8 @@ import { log } from '../utils/logging.js'
  * Setup OpenRouter config interactively
  */
 export const setupOpenRouterConfigInteractive = (): boolean => {
-  const configPath = getOpenRouterConfigPath()
-  // If config already exists, nothing to do
   try {
-    if (fs.existsSync(configPath)) {
-      return true
-    }
+    if (fs.existsSync(resolveConfigPath('openrouter.toml'))) return true
   } catch {
     // fall through to interactive setup
   }
@@ -33,14 +30,13 @@ export const setupOpenRouterConfigInteractive = (): boolean => {
   log.info('Supported models include: Llama, Mistral, Gemma, WizardLM, and many more.')
   log.info('You need an OpenRouter API key to use this service.')
   log.info('Visit https://openrouter.ai/ to create an account and get your API key.\n')
-  log.info(`The OpenRouter API key will be saved to: ${getOpenRouterConfigPath()}`)
+  log.info(
+    'The OpenRouter API key will be saved to .geeto/openrouter.toml (or ~/.geeto/ globally).'
+  )
 
   const shouldSetup = confirm('Setup OpenRouter integration now?')
-  if (!shouldSetup) {
-    return false
-  }
+  if (!shouldSetup) return false
 
-  // Offer to open the API key page
   const openKeyPage = confirm('Open OpenRouter API key page in your browser?')
   if (openKeyPage) {
     const opened = openBrowser('https://openrouter.ai/keys')
@@ -51,28 +47,21 @@ export const setupOpenRouterConfigInteractive = (): boolean => {
     }
   }
 
-  if (process.stdin.isTTY) {
-    process.stdin.setRawMode(false)
-  }
+  if (process.stdin.isTTY) process.stdin.setRawMode(false)
 
   const openrouterKey = askQuestion('Enter OpenRouter API Key: ').trim()
-
   if (!openrouterKey) {
     log.warn('No API key provided. OpenRouter setup cancelled.')
     return false
   }
 
-  // Soft validation: warn if key format looks unexpected
   if (!openrouterKey.startsWith('sk-or-')) {
     log.warn('API key format looks unusual (expected: starts with "sk-or-").')
     log.info('Saving anyway\u2014if authentication fails, re-run setup with a valid key.')
   }
 
-  const path = getOpenRouterConfigPath()
-  const configDir = path.slice(0, path.lastIndexOf('/'))
-
-  // Ensure .geeto is in .gitignore
-  ensureGeetoIgnored()
+  const configDir = GLOBAL_GEETO_DIR
+  const configPath = path.join(configDir, 'openrouter.toml')
 
   try {
     if (!fs.existsSync(configDir)) {
@@ -92,12 +81,11 @@ openrouter_api_key = "${openrouterKey}"
 `
 
   try {
-    fs.writeFileSync(path, configContent, 'utf8')
-    log.success(`OpenRouter config saved to: ${path}`)
+    fs.writeFileSync(configPath, configContent, 'utf8')
+    log.success(`OpenRouter config saved to: ${configPath}`)
 
-    // Write default openrouter-model.json with recommended text/code models
     try {
-      const modelFile = `${configDir}/openrouter-model.json`
+      const modelFile = path.join(configDir, 'openrouter-model.json')
       const defaultModels = [
         { label: 'Claude Sonnet 4', value: 'anthropic/claude-sonnet-4' },
         { label: 'Claude Haiku 4.5', value: 'anthropic/claude-haiku-4.5' },
@@ -106,7 +94,6 @@ openrouter_api_key = "${openrouterKey}"
         { label: 'GPT-5 Mini', value: 'openai/gpt-5-mini' },
         { label: 'Gemini 2.5 Flash', value: 'google/gemini-2.5-flash' },
       ]
-
       fs.writeFileSync(modelFile, JSON.stringify(defaultModels, null, 2), 'utf8')
       log.info(`Saved recommended OpenRouter models to: ${modelFile}`)
     } catch {

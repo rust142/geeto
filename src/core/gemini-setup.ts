@@ -3,9 +3,10 @@
  */
 
 import fs from 'node:fs'
+import path from 'node:path'
 
 import { askQuestion, confirm } from '../cli/input.js'
-import { ensureGeetoIgnored, getGeminiConfigPath } from '../utils/config.js'
+import { GLOBAL_GEETO_DIR, resolveConfigPath } from '../utils/config.js'
 import { openBrowser } from '../utils/exec.js'
 import { log } from '../utils/logging.js'
 
@@ -13,12 +14,8 @@ import { log } from '../utils/logging.js'
  * Setup Gemini config interactively
  */
 export const setupGeminiConfigInteractive = (): boolean => {
-  const configPath = getGeminiConfigPath()
-  // If config already exists, nothing to do
   try {
-    if (fs.existsSync(configPath)) {
-      return true
-    }
+    if (fs.existsSync(resolveConfigPath('gemini.toml'))) return true
   } catch {
     // fall through to interactive setup
   }
@@ -30,7 +27,7 @@ export const setupGeminiConfigInteractive = (): boolean => {
   log.info(
     'This setup only stores a project-local API key (gemini_api_key) — model selection is interactive and persisted in workflow state.'
   )
-  log.info(`The Gemini API key will be saved to: ${getGeminiConfigPath()}`)
+  log.info('The Gemini API key will be saved to .geeto/gemini.toml (or ~/.geeto/ globally).')
   log.info(
     'You need a Gemini API key to use this service. Get one from: https://aistudio.google.com/apikey\n'
   )
@@ -68,11 +65,8 @@ export const setupGeminiConfigInteractive = (): boolean => {
     log.info('Saving anyway\u2014if authentication fails, re-run setup with a valid key.')
   }
 
-  const path = getGeminiConfigPath()
-  const configDir = path.slice(0, path.lastIndexOf('/'))
-
-  // Ensure .geeto is in .gitignore
-  ensureGeetoIgnored()
+  const configDir = GLOBAL_GEETO_DIR
+  const configPath = path.join(configDir, 'gemini.toml')
 
   try {
     if (!fs.existsSync(configDir)) {
@@ -92,9 +86,8 @@ export const setupGeminiConfigInteractive = (): boolean => {
     fs.writeFileSync(configPath, configContent, 'utf8')
     log.success(`Gemini config saved to: ${configPath}`)
 
-    // Write default gemini-model.json with recommended models
     try {
-      const modelFile = `${configDir}/gemini-model.json`
+      const modelFile = path.join(configDir, 'gemini-model.json')
       const defaultModels = [
         { label: 'Gemini 2.5 Flash', value: 'gemini-2.5-flash' },
         { label: 'Gemini 2.5 Pro', value: 'gemini-2.5-pro' },
@@ -103,7 +96,6 @@ export const setupGeminiConfigInteractive = (): boolean => {
         { label: 'Gemini Flash Latest', value: 'gemini-flash-latest' },
         { label: 'Gemini Pro Latest', value: 'gemini-pro-latest' },
       ]
-
       fs.writeFileSync(modelFile, JSON.stringify(defaultModels, null, 2), 'utf8')
       log.info(`Saved recommended Gemini models to: ${modelFile}`)
     } catch {

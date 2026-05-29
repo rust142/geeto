@@ -52,20 +52,7 @@ export const ensureOpenRouter = async (): Promise<boolean> => {
     const { existsSync } = await import('node:fs')
     if (existsSync(getOpenRouterConfigPath())) {
       const { apiKey } = getOpenRouterConfig()
-      // Try to get key label from OpenRouter /auth/key
-      let label: string | null = null
-      try {
-        const res = await fetch('https://openrouter.ai/api/v1/auth/key', {
-          headers: { Authorization: `Bearer ${apiKey}` },
-        })
-        if (res.ok) {
-          const data = (await res.json()) as { data?: { label?: string; name?: string } }
-          label = data.data?.label ?? data.data?.name ?? null
-        }
-      } catch {
-        /* ignore */
-      }
-      log.info(`OpenRouter authenticated${label ? ` as: ${label}` : ' (API key active)'}`)
+      log.info(`OpenRouter API key: ${apiKey ? apiKey.slice(0, 8) + '...' : 'configured'}`)
       return true
     }
     const mod = await import('./openrouter-setup.js')

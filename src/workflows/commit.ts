@@ -9,7 +9,7 @@ import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 import type { GeetoState } from '../types/index.js'
 
-import { askQuestion, confirm, editInline } from '../cli/input.js'
+import { askQuestion, confirm, editMultiline } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { colors } from '../utils/colors.js'
 import { extractCommitTitle, getCommitTypes, normalizeAIOutput } from '../utils/commit-helpers.js'
@@ -197,7 +197,7 @@ async function attemptCommit(titleStr: string, bodyStr?: string | null): Promise
     ])
 
     if (action === 'edit') {
-      const edited = await editInline(`${titleStr}\n\n${bodyStr ?? ''}`)
+      const edited = await editMultiline('Edit Commit Message', `${titleStr}\n\n${bodyStr ?? ''}`)
       if (!edited?.trim()) {
         return false
       }
@@ -240,7 +240,7 @@ async function handleManualCommitFlow(state: GeetoState): Promise<boolean> {
   if (mode === 'manual') {
     // Freeform manual commit: open inline editor
     log.info('Write your commit message below:')
-    const edited = await editInline('')
+    const edited = await editMultiline('Commit Message', '')
     if (!edited?.trim()) {
       log.error('Commit message cannot be empty!')
       process.exit(1)
@@ -310,7 +310,7 @@ async function handleManualCommitFlow(state: GeetoState): Promise<boolean> {
 
   let finalMsg = commitMsg
   if (reviewChoice === 'edit') {
-    const edited = await editInline(commitMsg)
+    const edited = await editMultiline('Edit Commit Message', commitMsg)
     if (!edited?.trim()) {
       log.warn('Commit cancelled.')
       process.exit(0)
@@ -961,7 +961,7 @@ export const handleCommitWorkflow = async (
         case 'edit': {
           // Open inline editor for multi-line editing
           const initial = commitMessage
-          const edited = await editInline(initial)
+          const edited = await editMultiline('Edit Commit Message', initial)
           if (edited?.trim()) {
             const editedMessage = edited.trim()
 

@@ -54,10 +54,17 @@ export const select = async (question: string, options: SelectOption[]): Promise
       return options.filter((opt) => opt.label.toLowerCase().includes(query.toLowerCase()))
     }
 
+    const getSectionStart = (idx: number): number => {
+      for (let i = idx - 1; i >= 0; i--) {
+        if (filteredOptions[i]?.disabled) return i
+      }
+      return idx
+    }
+
     const getVisibleRange = () => {
       // Keep selected item in view
       if (selectedIndex < scrollOffset) {
-        scrollOffset = selectedIndex
+        scrollOffset = getSectionStart(selectedIndex)
       } else if (selectedIndex >= scrollOffset + maxVisibleItems) {
         scrollOffset = selectedIndex - maxVisibleItems + 1
       }

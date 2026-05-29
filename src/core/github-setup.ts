@@ -3,9 +3,10 @@
  */
 
 import fs from 'node:fs'
+import path from 'node:path'
 
 import { askQuestion, confirm } from '../cli/input.js'
-import { ensureGeetoIgnored, getGithubConfigPath } from '../utils/config.js'
+import { GLOBAL_GEETO_DIR, resolveConfigPath } from '../utils/config.js'
 import { exec, openBrowser } from '../utils/exec.js'
 import { log } from '../utils/logging.js'
 
@@ -32,6 +33,12 @@ const detectGhToken = (): string | null => {
  * Setup GitHub config interactively
  */
 export const setupGithubConfigInteractive = (): boolean => {
+  try {
+    if (fs.existsSync(resolveConfigPath('github.toml'))) return true
+  } catch {
+    // fall through to interactive setup
+  }
+
   log.info('GitHub integration is not configured for this project.\n')
 
   log.info('To enable GitHub features (create PR, issues), you need:')
@@ -89,11 +96,8 @@ export const setupGithubConfigInteractive = (): boolean => {
     }
   }
 
-  const path = getGithubConfigPath()
-  const configDir = path.slice(0, path.lastIndexOf('/'))
-
-  // Ensure .geeto is in .gitignore
-  ensureGeetoIgnored()
+  const configDir = GLOBAL_GEETO_DIR
+  const configPath = path.join(configDir, 'github.toml')
 
   try {
     if (!fs.existsSync(configDir)) {
@@ -112,8 +116,8 @@ token = "${token}"
 `
 
   try {
-    fs.writeFileSync(path, configContent, 'utf8')
-    log.success(`GitHub config saved to: ${path}`)
+    fs.writeFileSync(configPath, configContent, 'utf8')
+    log.success(`GitHub config saved to: ${configPath}`)
     return true
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error)

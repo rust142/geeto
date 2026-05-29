@@ -8,7 +8,7 @@ import type { GeminiModel } from '../api/gemini.js'
 import type { OpenRouterModel } from '../api/openrouter.js'
 
 import { getPlatformAPI } from '../api/platform.js'
-import { askQuestion, confirm, editInline } from '../cli/input.js'
+import { askQuestion, confirm, editMultiline } from '../cli/input.js'
 import { select } from '../cli/menu.js'
 import { getModelForProvider, showAIPreview, updateModelInState } from '../utils/ai-workflow.js'
 import { colors } from '../utils/colors.js'
@@ -331,7 +331,7 @@ export const handleCreatePR = async (): Promise<void> => {
           continue
         }
         case 'edit': {
-          const editedBody = await editInline(prBody, `Edit ${prLabel} Body`, '.md')
+          const editedBody = await editMultiline(`Edit ${prLabel} Body`, prBody)
           if (editedBody !== null) prBody = editedBody
           if (process.stdin.isTTY) process.stdin.setRawMode(false)
           const editedTitle = askQuestion('Edit title (Enter to keep): ').trim()
@@ -413,7 +413,7 @@ export const handleCreatePR = async (): Promise<void> => {
           break
         }
         case 'custom': {
-          const edited = await editInline('', `${prLabel} Description`, '.md')
+          const edited = await editMultiline(`${prLabel} Description`, '')
           prBody = edited?.trim() ?? ''
           break
         }
@@ -423,7 +423,7 @@ export const handleCreatePR = async (): Promise<void> => {
         }
       }
     } else {
-      const edited = await editInline('', `${prLabel} Description`, '.md')
+      const edited = await editMultiline(`${prLabel} Description`, '')
       prBody = edited?.trim() ?? ''
     }
   }
